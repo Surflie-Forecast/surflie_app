@@ -1,0 +1,465 @@
+:root {
+  /* Surflie Light Theme (Matches Reference) */
+  --bg-dark: #ffffff;
+  /* White background */
+  --bg-gradient: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  --accent-blue: #0077be;
+  /* Ocean blue */
+  --accent-teal: #131929;
+  /* Navy as accent */
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(19, 25, 41, 0.1);
+  --glass-shine: rgba(255, 255, 255, 0.5);
+
+  --text-primary: #131929;
+  /* Navy Text */
+  --text-secondary: #475569;
+
+  --font-main: 'Rubik', sans-serif;
+  /* Chunky rounded sans */
+
+  --card-radius: 24px;
+  --card-shadow: 0 10px 40px -10px rgba(19, 25, 41, 0.15);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg-dark);
+  /* Premium Ocean Palette - Surflie */
+  background-image: var(--bg-gradient);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  overflow-x: hidden;
+}
+
+.app-container {
+  width: 100%;
+  max-width: 1200px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 5rem;
+  /* Increased from 3rem */
+}
+
+/* Header */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  animation: fadeInDown 1s ease-out;
+}
+
+.brand {
+  font-family: 'Rubik', sans-serif;
+  font-size: 2.2rem;
+  font-weight: 900;
+  /* Black weight */
+  font-style: italic;
+  /* Italic to match Surfline */
+  letter-spacing: -0.03em;
+  color: #131929;
+  /* Solid Navy */
+  text-transform: capitalize;
+  /* "Surflie" not uppercase */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.date-display {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Hero Section */
+.hero {
+  text-align: center;
+  padding: 2rem 1rem;
+  /* Reduced from 4rem */
+  position: relative;
+  /* Glass Card style for hero */
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  animation: fadeInUp 0.8s ease-out 0.2s backwards;
+}
+
+.hero h1 {
+  font-size: 4rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.hero p {
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.pulse-badge {
+  display: inline-block;
+  margin-bottom: 1rem;
+  padding: 0.5rem 1rem;
+  background: rgba(56, 189, 248, 0.1);
+  color: var(--accent-blue);
+  border-radius: 50px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+/* Search Bar */
+.search-container {
+  margin-top: 2rem;
+  position: relative;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+  display: flex;
+  gap: 10px;
+  z-index: 100;
+  /* Ensure search results appear above other content */
+}
+
+.search-container input {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  border-radius: 50px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.5);
+  /* Semi-transparent white */
+  color: var(--text-primary);
+  /* Dark text */
+  font-size: 1rem;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  outline: none;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.search-container input:focus {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+}
+
+.search-container input::placeholder {
+  color: var(--text-secondary);
+  /* Visible placeholder */
+}
+
+.search-container button {
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: white;
+  /* Icon color */
+  transition: transform 0.2s ease;
+}
+
+.search-container button:hover {
+  transform: scale(1.05);
+}
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  /* Light background */
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  overflow: hidden;
+  display: none;
+  z-index: 10;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+}
+
+.search-result-item {
+  padding: 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  /* Light border */
+  transition: background 0.2s;
+  color: var(--text-primary);
+}
+
+.search-result-item:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+/* Forecast Grid */
+.forecast-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.forecast-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 2rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.8s ease-out 0.4s backwards;
+}
+
+.forecast-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  border-color: var(--glass-shine);
+}
+
+.forecast-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+/* Forecast Content Layout */
+.forecast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+  padding-bottom: 16px;
+}
+
+.metric-row.main-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  padding-bottom: 16px;
+}
+
+.metric-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.metric-group.highlight .value {
+  color: var(--accent-blue);
+  font-weight: 800;
+}
+
+.metric-group .value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-group .value.large {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.metric-group .value.small {
+  font-size: 0.9rem;
+}
+
+.metric-group .unit {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.metric-group .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
+
+.direction-arrow {
+  color: var(--accent-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.direction-arrow.wind-arrow {
+  color: var(--text-secondary);
+  transform-origin: center;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--glass-border);
+  padding-bottom: 1rem;
+}
+
+.day-label {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.date-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swell-arrow {
+  display: inline-block;
+  font-size: 1.2rem;
+  color: var(--accent);
+  transition: transform 0.3s ease;
+}
+
+.direction-text {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
+
+.metric-unit {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Hero Section */
+.hero {
+  text-align: center;
+  padding: 2rem 1rem;
+  /* Reduced padding */
+  position: relative;
+  /* Glass Card style for hero */
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow);
+  animation: fadeInUp 0.8s ease-out 0.2s backwards;
+  margin-bottom: 2rem;
+  /* Ensure space before gap takes over or adds to it */
+}
+
+/* ... existing hero styles ... */
+
+.rating-badge {
+  margin-top: 2rem;
+  /* Increased spacing */
+  text-align: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  color: white;
+  /* White text */
+  /* background will be set inline by JS */
+  font-size: 1rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Animations */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile check */
+@media (max-width: 768px) {
+  .hero h1 {
+    font-size: 2.5rem;
+  }
+
+  .app-container {
+    padding: 1rem;
+  }
+}
