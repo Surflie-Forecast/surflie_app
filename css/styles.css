@@ -410,6 +410,8 @@ header {
   animation: fadeInUp 0.8s ease-out 0.2s backwards;
   margin-bottom: 2rem;
   /* Ensure space before gap takes over or adds to it */
+  z-index: 20;
+  /* Ensure hero (and search dropdown) stacks above forecast grid */
 }
 
 /* ... existing hero styles ... */
