@@ -89,8 +89,12 @@ def get_forecast():
             rating = "Fair"
             color = "#eab308" # Yellow
 
+        # Check if this date is today
+        today = datetime.datetime.now().date()
+        day_label = "Today" if dt_obj.date() == today else dt_obj.strftime('%A')
+        
         forecast.append({
-            'day': dt_obj.strftime('%A'),
+            'day': day_label,
             'date': dt_obj.strftime('%b %d'),
             'swell': {
                 'height': row['swell_height'],
@@ -111,10 +115,61 @@ def get_forecast():
             'color': color
         })
 
+    # Load region map
+    locations_file = os.path.join(os.path.dirname(__file__), '../data/locations.csv')
+    region = "Unknown"
+    if os.path.exists(locations_file):
+         try:
+            with open(locations_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['site_name'] == spot_name:
+                        region = row['region']
+                        break
+         except:
+             pass
+
     return jsonify({
         "spotName": spot_name,
+        "region": region,
         "forecast": forecast
     })
+
+@app.route('/api/spots', methods=['GET'])
+def get_spots():
+    data_file = os.path.join(os.path.dirname(__file__), '../data/daily_forecast.csv')
+    locations_file = os.path.join(os.path.dirname(__file__), '../data/locations.csv')
+    
+    if not os.path.exists(data_file):
+        return jsonify([]), 200
+    
+    # helper: load region map
+    region_map = {}
+    if os.path.exists(locations_file):
+        try:
+            with open(locations_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    region_map[row['site_name']] = row['region']
+        except:
+             pass
+
+    try:
+        spots_list = []
+        seen = set()
+        with open(data_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                name = row['spot_name']
+                if name not in seen:
+                    spots_list.append({
+                        "name": name,
+                        "region": region_map.get(name, "Unknown Region")
+                    })
+                    seen.add(name)
+        return jsonify(spots_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

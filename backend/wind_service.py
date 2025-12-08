@@ -3,21 +3,10 @@ import datetime
 import math
 import csv
 import os
-from swell_service import SPOTS # Reuse spots definition
-
-def get_wind_data(spot_key, output_csv_path):
+def get_wind_data(lat, lon, name, output_csv_path):
     """
     Fetches 3-day wind forecast (speed/direction) for a specific spot and appends to CSV.
     """
-    spot = SPOTS.get(spot_key)
-    if not spot:
-        print(f"Spot {spot_key} not found for wind.")
-        return
-
-    lat = spot['lat']
-    lon = spot['lon']
-    name = spot['name']
-
     # Define location
     point = ee.Geometry.Point([lon, lat])
     

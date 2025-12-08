@@ -17,7 +17,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const spotNameTitle = document.getElementById('spotName');
 
     // Initial Load
-    renderForecast("Devereaux Beach");
+    let availableSpots = []; // Array of {name, region}
+
+    async function init() {
+        try {
+            // Fetch available spots
+            const spotsRes = await fetch('api/spots');
+            if (spotsRes.ok) {
+                availableSpots = await spotsRes.json();
+            } else {
+                console.error("Failed to fetch spots list");
+            }
+        } catch (e) {
+            console.error("Error fetching spots:", e);
+        }
+
+        // Determine initial spot
+        const initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
+        renderForecast(initialSpotName);
+    }
+
+    init();
 
     // Search Logic
     searchInput.addEventListener('input', (e) => {
@@ -29,17 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const spots = Object.keys(window.forecastData);
-        const matches = spots.filter(spot => spot.toLowerCase().includes(query));
+        // Filter by name OR region
+        const matches = availableSpots.filter(spot =>
+            spot.name.toLowerCase().includes(query) ||
+            spot.region.toLowerCase().includes(query)
+        );
 
         if (matches.length > 0) {
             searchResults.style.display = 'block';
             matches.forEach(match => {
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
-                item.textContent = match;
+                // Display: Name, Region
+                item.textContent = `${match.name}, ${match.region}`;
                 item.onclick = () => {
-                    renderForecast(match);
+                    renderForecast(match.name);
                     searchInput.value = '';
                     searchResults.style.display = 'none';
                 };
@@ -54,10 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             const query = searchInput.value.toLowerCase();
-            const spots = Object.keys(window.forecastData);
-            const match = spots.find(spot => spot.toLowerCase().includes(query));
+            const match = availableSpots.find(spot =>
+                spot.name.toLowerCase().includes(query) ||
+                spot.region.toLowerCase().includes(query)
+            );
             if (match) {
-                renderForecast(match);
+                renderForecast(match.name);
                 searchInput.value = '';
                 searchResults.style.display = 'none';
             }
@@ -81,8 +107,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
 
-            // Update title with canonical name from backend
-            spotNameTitle.textContent = data.spotName;
+            // Update title with "Name, Region"
+            spotNameTitle.textContent = `${data.spotName}, ${data.region}`;
+
+            // Update Hero Background
+            const heroSection = document.querySelector('.hero');
+            if (data.region && heroSection) {
+                // Try to load region image, fallback handled if needed via CSS or error event? 
+                // For now assumes images exist as per requirement.
+                // Using encodeURIComponent to handle spaces in filenames
+                heroSection.style.backgroundImage = `url('images/${data.region}.jpg')`;
+                heroSection.style.backgroundSize = 'cover';
+                heroSection.style.backgroundPosition = 'center';
+            }
+
             container.innerHTML = ''; // Clear loading
 
             if (!data.forecast || data.forecast.length === 0) {

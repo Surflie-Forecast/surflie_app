@@ -3,20 +3,6 @@ import datetime
 import csv
 import os
 
-# Coordinates map
-SPOTS = {
-    "ventura": {
-        "lat": 34.26343870100869,
-        "lon": -119.30167128264623,
-        "name": "Ventura C-Street"
-    },
-    "devereaux": {
-        "lat": 34.40313812226568,
-        "lon": -119.8780802047039,
-        "name": "Devereaux Beach"
-    }
-}
-
 def initialize_gee():
     try:
         ee.Initialize()
@@ -25,19 +11,10 @@ def initialize_gee():
         print("Please run 'earthengine authenticate' in your terminal.")
         raise e
 
-def fetch_swell_data(spot_key, output_csv_path):
+def fetch_swell_data(lat, lon, name, output_csv_path):
     """
     Fetches 3-day swell forecast for a specific spot and appends to CSV.
     """
-    spot = SPOTS.get(spot_key)
-    if not spot:
-        print(f"Spot {spot_key} not found.")
-        return
-
-    lat = spot['lat']
-    lon = spot['lon']
-    name = spot['name']
-    
     # Dataset ID
     collection_id = 'COPERNICUS/MARINE/WAV/ANFC_0_083DEG_PT3H'
     

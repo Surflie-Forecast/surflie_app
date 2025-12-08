@@ -48,8 +48,8 @@ body {
   padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 5rem;
-  /* Increased from 3rem */
+  gap: 3rem;
+  /* Reduced gap between header and hero */
 }
 
 /* Header */
@@ -132,7 +132,7 @@ header {
 .search-container {
   margin-top: 2rem;
   position: relative;
-  max-width: 500px;
+  max-width: 900px;
   margin-left: auto;
   margin-right: auto;
   display: flex;
@@ -396,22 +396,39 @@ header {
 
 /* Hero Section */
 .hero {
+  flex: 0 0 auto;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   text-align: center;
-  padding: 2rem 1rem;
-  /* Reduced padding */
+  padding: 4rem 2rem;
   position: relative;
-  /* Glass Card style for hero */
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
   border-radius: var(--card-radius);
+  color: white;
+  overflow: hidden;
   box-shadow: var(--card-shadow);
   animation: fadeInUp 0.8s ease-out 0.2s backwards;
   margin-bottom: 2rem;
-  /* Ensure space before gap takes over or adds to it */
   z-index: 20;
-  /* Ensure hero (and search dropdown) stacks above forecast grid */
+  /* Default gradient fallback */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Background image layer with optional overlay */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: var(--hero-overlay, none), var(--hero-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: -1;
 }
 
 /* ... existing hero styles ... */
