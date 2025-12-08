@@ -3,13 +3,14 @@ import datetime
 import csv
 import os
 
-def initialize_gee():
-    try:
-        ee.Initialize()
-    except Exception as e:
-        print(f"GEE Initialization failed: {e}")
-        print("Please run 'earthengine authenticate' in your terminal.")
-        raise e
+# Do NOT pass credentials manually. 
+# ee.Initialize() will automatically find the GOOGLE_APPLICATION_CREDENTIALS file.
+try:
+    ee.Initialize(project='surflie') 
+except Exception as e:
+    # Fallback to authenticate if not running in CI (optional)
+    ee.Authenticate()
+    ee.Initialize(project='surflie')
 
 def fetch_swell_data(lat, lon, name, output_csv_path):
     """
