@@ -10,6 +10,10 @@ jobs:
   update-data:
     runs-on: ubuntu-latest
     
+    # Global environment variable for the whole job
+    env:
+      GOOGLE_APPLICATION_CREDENTIALS: ./gee_key.json
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -23,12 +27,13 @@ jobs:
         run: |
           pip install -r backend/requirements.txt
       
-      - name: Set up Google Earth Engine credentials
+      - name: Create Google Earth Engine credentials file
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         run: |
           echo "$GEE_SERVICE_ACCOUNT_KEY" > gee_key.json
-          earthengine authenticate --key-file=gee_key.json
+          # Note: We removed 'earthengine authenticate' here. 
+          # The GOOGLE_APPLICATION_CREDENTIALS env var above handles auth for Python.
       
       - name: Run scheduler to fetch data
         run: python3 backend/scheduler.py
@@ -41,5 +46,6 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
           git add data/*.csv api/
+          # The '||' ensures the workflow doesn't fail if there are no changes to commit
           git diff --staged --quiet || git commit -m "Auto-update forecast data - $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
