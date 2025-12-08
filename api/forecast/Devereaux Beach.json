@@ -4,17 +4,17 @@
   "forecast": [
     {
       "day": "Today",
-      "date": "Dec 07",
-      "date_iso": "2025-12-07",
+      "date": "Dec 08",
+      "date_iso": "2025-12-08",
       "swell": {
-        "height": "0.77",
-        "period": "10.2",
-        "direction": "285",
+        "height": "0.62",
+        "period": "9.7",
+        "direction": "284",
         "unit": "m"
       },
       "wind": {
-        "speed": "3.7",
-        "direction": "104",
+        "speed": "4.4",
+        "direction": "200",
         "unit": "kts"
       },
       "tide": {
@@ -25,27 +25,6 @@
     },
     {
       "day": "Tomorrow",
-      "date": "Dec 08",
-      "date_iso": "2025-12-08",
-      "swell": {
-        "height": "0.68",
-        "period": "9.7",
-        "direction": "284",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "4.8",
-        "direction": "198",
-        "unit": "kts"
-      },
-      "tide": {
-        "height": "1.0m"
-      },
-      "rating": "Fair",
-      "color": "#eab308"
-    },
-    {
-      "day": "Tuesday",
       "date": "Dec 09",
       "date_iso": "2025-12-09",
       "swell": {
@@ -56,7 +35,7 @@
       },
       "wind": {
         "speed": "3.0",
-        "direction": "205",
+        "direction": "202",
         "unit": "kts"
       },
       "tide": {
@@ -70,14 +49,14 @@
       "date": "Dec 10",
       "date_iso": "2025-12-10",
       "swell": {
-        "height": "0.54",
-        "period": "9.3",
+        "height": "0.56",
+        "period": "9.4",
         "direction": "296",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.6",
-        "direction": "188",
+        "speed": "2.3",
+        "direction": "58",
         "unit": "kts"
       },
       "tide": {
@@ -85,6 +64,27 @@
       },
       "rating": "Poor",
       "color": "#ef4444"
+    },
+    {
+      "day": "Thursday",
+      "date": "Dec 11",
+      "date_iso": "2025-12-11",
+      "swell": {
+        "height": "0.77",
+        "period": "10.5",
+        "direction": "296",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "1.7",
+        "direction": "107",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Fair",
+      "color": "#eab308"
     }
   ]
 }
