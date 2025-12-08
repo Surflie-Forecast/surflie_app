@@ -1,0 +1,90 @@
+{
+  "spotName": "C st.",
+  "region": "Ventura",
+  "forecast": [
+    {
+      "day": "Today",
+      "date": "Dec 07",
+      "date_iso": "2025-12-07",
+      "swell": {
+        "height": "0.58",
+        "period": "10.5",
+        "direction": "279",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "2.7",
+        "direction": "86",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Tomorrow",
+      "date": "Dec 08",
+      "date_iso": "2025-12-08",
+      "swell": {
+        "height": "0.54",
+        "period": "9.8",
+        "direction": "279",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "5.9",
+        "direction": "114",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Tuesday",
+      "date": "Dec 09",
+      "date_iso": "2025-12-09",
+      "swell": {
+        "height": "0.41",
+        "period": "8.8",
+        "direction": "279",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "9.9",
+        "direction": "88",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Wednesday",
+      "date": "Dec 10",
+      "date_iso": "2025-12-10",
+      "swell": {
+        "height": "0.38",
+        "period": "7.4",
+        "direction": "280",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "6.2",
+        "direction": "101",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    }
+  ]
+}

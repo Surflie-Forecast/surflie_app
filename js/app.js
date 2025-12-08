@@ -21,8 +21,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function init() {
         try {
-            // Fetch available spots
-            const spotsRes = await fetch('api/spots');
+            // Fetch available spots from static JSON
+            const spotsRes = await fetch('api/spots.json');
             if (spotsRes.ok) {
                 availableSpots = await spotsRes.json();
             } else {
@@ -39,12 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     init();
 
-    // Search Logic
+    // Search logic
     searchInput.addEventListener('input', (e) => {
         const query = e.target.value.toLowerCase();
         searchResults.innerHTML = '';
 
-        if (query.length === 0) {
+        if (!query) {
             searchResults.style.display = 'none';
             return;
         }
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Enter key support
+    // Trigger search on Enter key
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
             const query = searchInput.value.toLowerCase();
@@ -95,13 +95,13 @@ document.addEventListener('DOMContentLoaded', () => {
         spotNameTitle.textContent = "Loading...";
 
         const container = document.getElementById('forecastContainer');
-        container.innerHTML = '<div style="text-align:center; width:100%; margin-top:2rem;">Fetching GEE Data...</div>';
+        container.innerHTML = '<div style="text-align:center; width:100%; margin-top:2rem;">Fetching forecast data...</div>';
 
         try {
-            // Call local backend
-            const response = await fetch(`api/forecast?spot=${encodeURIComponent(spotName)}`);
+            // Fetch from static JSON file
+            const response = await fetch(`api/forecast/${encodeURIComponent(spotName)}.json`);
             if (!response.ok) {
-                const err = await response.json();
+                const err = await response.json().catch(() => ({ error: "Failed to fetch data" }));
                 throw new Error(err.error || "Failed to fetch data");
             }
 

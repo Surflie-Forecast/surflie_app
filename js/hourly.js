@@ -13,7 +13,8 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
     detailsDiv.innerHTML = '<div style="text-align:center; padding:1rem;">Loading hourly data...</div>';
 
     try {
-        const response = await fetch(`api/hourly?spot=${encodeURIComponent(spotName)}&date=${dateISO}`);
+        // Fetch from static JSON file organized by spot and date
+        const response = await fetch(`api/hourly/${encodeURIComponent(spotName)}/${dateISO}.json`);
         if (!response.ok) {
             throw new Error('Failed to load hourly data');
         }

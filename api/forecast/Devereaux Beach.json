@@ -1,0 +1,90 @@
+{
+  "spotName": "Devereaux Beach",
+  "region": "Santa Barbara",
+  "forecast": [
+    {
+      "day": "Today",
+      "date": "Dec 07",
+      "date_iso": "2025-12-07",
+      "swell": {
+        "height": "0.77",
+        "period": "10.2",
+        "direction": "285",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "3.7",
+        "direction": "104",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Tomorrow",
+      "date": "Dec 08",
+      "date_iso": "2025-12-08",
+      "swell": {
+        "height": "0.68",
+        "period": "9.7",
+        "direction": "284",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "4.8",
+        "direction": "198",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Tuesday",
+      "date": "Dec 09",
+      "date_iso": "2025-12-09",
+      "swell": {
+        "height": "0.55",
+        "period": "8.0",
+        "direction": "286",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "3.0",
+        "direction": "205",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Wednesday",
+      "date": "Dec 10",
+      "date_iso": "2025-12-10",
+      "swell": {
+        "height": "0.54",
+        "period": "9.3",
+        "direction": "296",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "2.6",
+        "direction": "188",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    }
+  ]
+}
