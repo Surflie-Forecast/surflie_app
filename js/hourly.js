@@ -30,7 +30,9 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
         html += '<div class="hourly-header"><span>Time</span><span></span><span>Swell</span><span>Wind</span></div>';
 
         hourlyData.forEach(hour => {
-            const time = new Date(hour.datetime).toLocaleTimeString('en-US', { hour: 'numeric', hour12: true });
+            const timeObj = new Date(hour.datetime);
+            const timeHour = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[0];
+            const timePeriod = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[1];
             const swellHeight = hour.swell.height.toFixed(1);
             const swellPeriod = Math.round(hour.swell.period);
             const swellDir = Math.round(hour.swell.direction);
@@ -55,10 +57,14 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
 
             html += `
                 <div class="hourly-row">
-                    <div class="hourly-time">${time}</div>
+                    <div class="hourly-time">
+                        <span class="time-hour">${timeHour}</span>
+                        <span class="time-period">${timePeriod}</span>
+                    </div>
                     <div class="hourly-rating-bar" style="background-color: ${color};"></div>
                     <div class="hourly-swell">
-                        <span>${swellHeight}m ${swellPeriod}s</span>
+                        <span>${swellHeight}m</span>
+                        <span>${swellPeriod}s</span>
                         <div class="direction-indicator">
                             <span class="swell-arrow-small" style="transform: rotate(${swellDir + 90}deg)">➤</span>
                             <span class="direction-degrees">${swellDir}°</span>
