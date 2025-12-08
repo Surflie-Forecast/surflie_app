@@ -31,8 +31,7 @@ jobs:
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         run: |
-          echo "$GEE_SERVICE_ACCOUNT_KEY" > gee_key.json
-          earthengine authenticate --service_account_file gee_key.json    
+          "$GEE_SERVICE_ACCOUNT_KEY" > gee_key.json chmod 600 gee_key.json earthengine authenticate --service_account_file=gee_key.json rm -f gee_key.jsonn    
       
       - name: Run scheduler to fetch data
         run: python3 backend/scheduler.py
