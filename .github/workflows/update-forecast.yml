@@ -32,8 +32,7 @@ jobs:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         run: |
           echo "$GEE_SERVICE_ACCOUNT_KEY" > gee_key.json
-          # Note: We removed 'earthengine authenticate' here. 
-          # The GOOGLE_APPLICATION_CREDENTIALS env var above handles auth for Python.
+          earthengine authenticate --service_account_file gee_key.json    
       
       - name: Run scheduler to fetch data
         run: python3 backend/scheduler.py
