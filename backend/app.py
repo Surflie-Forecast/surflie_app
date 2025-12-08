@@ -96,6 +96,7 @@ def get_forecast():
         forecast.append({
             'day': day_label,
             'date': dt_obj.strftime('%b %d'),
+            'date_iso': row['date'],  # ISO format for API calls
             'swell': {
                 'height': row['swell_height'],
                 'unit': 'm',
@@ -168,6 +169,62 @@ def get_spots():
                     })
                     seen.add(name)
         return jsonify(spots_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/hourly', methods=['GET'])
+def get_hourly():
+    spot = request.args.get('spot', '').strip()
+    date_str = request.args.get('date', '').strip()  # Expected format: YYYY-MM-DD
+    
+    if not spot or not date_str:
+        return jsonify({"error": "Missing spot or date parameter"}), 400
+    
+    swell_file = os.path.join(os.path.dirname(__file__), '../data/swell_raw.csv')
+    wind_file = os.path.join(os.path.dirname(__file__), '../data/wind_raw.csv')
+    
+    hourly_data = []
+    
+    try:
+        # Read swell data
+        swell_dict = {}
+        if os.path.exists(swell_file):
+            with open(swell_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['spot_name'].lower() == spot.lower() and row['datetime'].startswith(date_str):
+                        dt = row['datetime']
+                        swell_dict[dt] = {
+                            'height': float(row['swell_height']),
+                            'period': float(row['swell_period']),
+                            'direction': float(row['swell_direction'])
+                        }
+        
+        # Read wind data and combine
+        if os.path.exists(wind_file):
+            with open(wind_file, 'r') as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    if row['spot_name'].lower() == spot.lower() and row['datetime'].startswith(date_str):
+                        dt = row['datetime']
+                        wind_data = {
+                            'speed': float(row['wind_speed']),
+                            'direction': float(row['wind_direction'])
+                        }
+                        
+                        # Combine with swell if exists
+                        if dt in swell_dict:
+                            hourly_data.append({
+                                'datetime': dt,
+                                'swell': swell_dict[dt],
+                                'wind': wind_data
+                            })
+        
+        # Sort by datetime
+        hourly_data.sort(key=lambda x: x['datetime'])
+        
+        return jsonify(hourly_data)
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

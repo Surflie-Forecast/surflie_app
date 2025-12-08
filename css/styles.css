@@ -407,7 +407,8 @@ header {
   position: relative;
   border-radius: var(--card-radius);
   color: white;
-  overflow: hidden;
+  overflow: visible;
+  /* Allow dropdown to extend beyond */
   box-shadow: var(--card-shadow);
   animation: fadeInUp 0.8s ease-out 0.2s backwards;
   margin-bottom: 2rem;
@@ -481,4 +482,94 @@ header {
   .app-container {
     padding: 1rem;
   }
+}
+
+/* Hourly Details */
+.hourly-container {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0;
+  font-size: 0.9rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hourly-header {
+  display: grid;
+  grid-template-columns: 0.8fr 6px 2fr 2fr;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.hourly-header span {
+  padding: 0.5rem 0.4rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hourly-header span:nth-child(2) {
+  padding: 0;
+  border-right: none;
+}
+
+.hourly-header span:last-child {
+  border-right: none;
+}
+
+.hourly-row {
+  display: grid;
+  grid-template-columns: 0.8fr 6px 2fr 2fr;
+  align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hourly-rating-bar {
+  height: 100%;
+  min-height: 1.8rem;
+}
+
+.hourly-row>div {
+  padding: 0.5rem 0.4rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hourly-row>div:nth-child(2) {
+  padding: 0;
+}
+
+.hourly-row>div:last-child {
+  border-right: none;
+}
+
+.hourly-time {
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.hourly-swell,
+.hourly-wind {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.swell-arrow-small,
+.wind-arrow-small {
+  display: inline-block;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.direction-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.direction-degrees {
+  font-size: 0.7rem;
+  font-weight: 500;
 }

@@ -133,6 +133,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.className = 'forecast-card';
                 // Stagger animation delay
                 card.style.animationDelay = `${0.2 + (index * 0.1)}s`;
+                card.style.cursor = 'pointer';
+
+                // Store data for hourly view
+                card.dataset.date = day.date_iso;  // We'll need to pass this from backend
+                card.dataset.spot = data.spotName;
 
                 card.innerHTML = `
                     <div class="card-header">
@@ -179,7 +184,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="rating-badge" style="background-color: ${day.color}; margin-top: auto; align-self: center; width: 100%;">
                         ${day.rating}
                     </div>
+                    
+                    <div class="hourly-details" style="display:none; margin-top: 1rem;"></div>
                 `;
+
+                // Add click handler
+                card.addEventListener('click', function (e) {
+                    // Don't toggle if clicking on the hourly details themselves
+                    if (e.target.closest('.hourly-details')) return;
+
+                    toggleHourlyDetails(card, day.date_iso, data.spotName);
+                });
+
                 container.appendChild(card);
             });
         } catch (e) {
