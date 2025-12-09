@@ -80,16 +80,16 @@ def get_forecast():
         
         # Swell height check for "Insanely Big" (Purple)
         # Assuming > 2.0m is big for this context, or maybe high rating? 
-        if height > 2.5:
+        if height > 2.5 and period > 12:
              rating = "Epic"
              color = "#a855f7" # Purple
-        elif rating_val > 18: 
+        elif rating_val > 13: 
             rating = "Excellent"
             color = "#15803d" # Dark Green
-        elif rating_val > 12: 
+        elif rating_val > 9: 
             rating = "Good"
             color = "#22c55e" # Green
-        elif rating_val > 6: 
+        elif rating_val > 4: 
             rating = "Fair"
             color = "#eab308" # Yellow
 

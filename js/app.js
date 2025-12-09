@@ -1,6 +1,6 @@
 // Data is loaded from mockData.js
 // State for units: 'metric' (default) or 'imperial'
-let currentUnit = localStorage.getItem('surfForecastUnit') || 'metric';
+let currentUnit = localStorage.getItem('surfForecastUnit') || 'imperial';
 
 // Unit Conversion Helpers
 const toFeet = (meters) => (meters * 3.28084).toFixed(1);
