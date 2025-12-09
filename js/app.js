@@ -10,31 +10,45 @@ const getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
 // Function to update all displayed units in DOM without re-rendering
 function updateDisplayedUnits() {
-    // 1. Update Swell Heights (Main Cards)
-    document.querySelectorAll('.metric-value[data-type="swell-height"]').forEach(el => {
-        const valM = parseFloat(el.dataset.valM);
-        if (!isNaN(valM)) {
-            el.innerHTML = `${formatHeight(valM, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>`;
-        }
-    });
+    // Collect all elements
+    const swellHeights = document.querySelectorAll('.metric-value[data-type="swell-height"]');
+    const tideHeights = document.querySelectorAll('.metric-value[data-type="tide-height"]');
+    const hourlySwell = document.querySelectorAll('.hourly-swell-val');
 
-    // 2. Update Tide Heights (Main Cards)
-    document.querySelectorAll('.metric-value[data-type="tide-height"]').forEach(el => {
-        const valM = parseFloat(el.dataset.valM);
-        if (!isNaN(valM)) {
-            // Tide often has "m" in the string if we didn't strip it, but here we rebuild it
-            el.innerHTML = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
-        }
-    });
+    // Add updating class for soft fade effect
+    [...swellHeights, ...tideHeights].forEach(el => el.classList.add('updating'));
 
-    // 3. Update Hourly Swell Heights (if any are open)
-    // We need to look for elements in hourly details that we will mark
-    document.querySelectorAll('.hourly-swell-val').forEach(el => {
-        const valM = parseFloat(el.dataset.valM);
-        if (!isNaN(valM)) {
-            el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
-        }
-    });
+    // Wait for soft fade, then update
+    setTimeout(() => {
+        // 1. Update Swell Heights (Main Cards)
+        swellHeights.forEach(el => {
+            const valM = parseFloat(el.dataset.valM);
+            if (!isNaN(valM)) {
+                el.innerHTML = `${formatHeight(valM, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>`;
+            }
+        });
+
+        // 2. Update Tide Heights (Main Cards)
+        tideHeights.forEach(el => {
+            const valM = parseFloat(el.dataset.valM);
+            if (!isNaN(valM)) {
+                el.innerHTML = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+            }
+        });
+
+        // 3. Update Hourly Swell Heights
+        hourlySwell.forEach(el => {
+            const valM = parseFloat(el.dataset.valM);
+            if (!isNaN(valM)) {
+                el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+            }
+        });
+
+        // Remove updating class for fade back in
+        setTimeout(() => {
+            [...swellHeights, ...tideHeights].forEach(el => el.classList.remove('updating'));
+        }, 50);
+    }, 150);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
