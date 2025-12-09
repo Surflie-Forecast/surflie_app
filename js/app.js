@@ -8,6 +8,35 @@ const toMeters = (feet) => (feet / 3.28084).toFixed(2); // Not really used but g
 const formatHeight = (val, unit) => unit === 'imperial' ? toFeet(val) : val;
 const getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
+// Function to update all displayed units in DOM without re-rendering
+function updateDisplayedUnits() {
+    // 1. Update Swell Heights (Main Cards)
+    document.querySelectorAll('.metric-value[data-type="swell-height"]').forEach(el => {
+        const valM = parseFloat(el.dataset.valM);
+        if (!isNaN(valM)) {
+            el.innerHTML = `${formatHeight(valM, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>`;
+        }
+    });
+
+    // 2. Update Tide Heights (Main Cards)
+    document.querySelectorAll('.metric-value[data-type="tide-height"]').forEach(el => {
+        const valM = parseFloat(el.dataset.valM);
+        if (!isNaN(valM)) {
+            // Tide often has "m" in the string if we didn't strip it, but here we rebuild it
+            el.innerHTML = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+        }
+    });
+
+    // 3. Update Hourly Swell Heights (if any are open)
+    // We need to look for elements in hourly details that we will mark
+    document.querySelectorAll('.hourly-swell-val').forEach(el => {
+        const valM = parseFloat(el.dataset.valM);
+        if (!isNaN(valM)) {
+            el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     // Set current date in header
     const dateElement = document.getElementById('currentDate');
@@ -36,21 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         unitToggle.addEventListener('change', (e) => {
             currentUnit = e.target.checked ? 'imperial' : 'metric';
             localStorage.setItem('surfForecastUnit', currentUnit);
-            // Re-render current forecast if available
-            const currentSpotName = spotNameTitle.textContent.split(',')[0].trim();
-            if (currentSpotName && currentSpotName !== "Loading..." && currentSpotName !== "Surflie") {
-                // Use the stored data to re-render without re-fetching if possible,
-                // but for simplicity we can just re-trigger renderForecast
-                // Actually, we need the raw data. To avoid refetching, we could store it.
-                // For now, let's just refetch/re-process which is fast for static JSON.
-                // We need to know the 'raw' spot name. The title might have region appended.
-                // Best to just grab the raw name from the first card if available?
-                // Or we can assume availableSpots has loaded.
-                // Let's rely on the last successfully rendered spot name stored in a variable maybe?
-            }
-            // For simplicity, just reload or better yet, make renderForecast globally accessible?
-            // Or easier:
-            renderForecast(lastRenderedSpot || "Devereaux Beach");
+            updateDisplayedUnits();
         });
 
         try {
@@ -184,7 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="metric-row main-row">
                         <div class="metric">
                             <span class="metric-label">Wave Height</span>
-                            <span class="metric-value">${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span></span>
+                            <span class="metric-value" data-type="swell-height" data-val-m="${day.swell.height}">
+                                ${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>
+                            </span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">Period</span>
@@ -213,7 +230,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="metric">
                             <span class="metric-label">Tide</span>
-                            <span class="metric-value">${day.tide.height}</span>
+                            <span class="metric-value" data-type="tide-height" data-val-m="${parseFloat(day.tide.height)}">
+                                ${formatHeight(parseFloat(day.tide.height), currentUnit)}${getHeightUnit(currentUnit)}
+                            </span>
                         </div>
                     </div>
 

@@ -64,7 +64,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
                     </div>
                     <div class="hourly-rating-bar" style="background-color: ${color};"></div>
                     <div class="hourly-swell">
-                        <span>${swellHeight}${getHeightUnit(currentUnit)}</span>
+                        <span class="hourly-swell-val" data-val-m="${hour.swell.height}">${swellHeight}${getHeightUnit(currentUnit)}</span>
                         <span>${swellPeriod}s</span>
                         <div class="direction-indicator">
                             <span class="swell-arrow-small" style="transform: rotate(${swellDir + 90}deg)">➤</span>
