@@ -5,8 +5,24 @@ import csv
 import os
 
 def initialize_gee():
+    """Initialize Google Earth Engine with service account or user credentials."""
     try:
-        ee.Initialize()
+        # Check if running in GitHub Actions or with service account
+        credentials_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+        
+        if credentials_file and os.path.exists(credentials_file):
+            # Use service account authentication (for GitHub Actions)
+            print(f"Authenticating with service account: {credentials_file}")
+            credentials = ee.ServiceAccountCredentials(
+                email=None,  # Will be read from the JSON file
+                key_file=credentials_file
+            )
+            ee.Initialize(credentials)
+        else:
+            # Use standard user authentication (for local development)
+            ee.Initialize()
+            
+        print("✓ GEE initialized successfully")
     except Exception as e:
         print(f"GEE Initialization failed: {e}")
         print("Please run 'earthengine authenticate' in your terminal.")
