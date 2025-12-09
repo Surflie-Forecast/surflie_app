@@ -3,13 +3,13 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Today",
+      "day": "Monday",
       "date": "Dec 08",
       "date_iso": "2025-12-08",
       "swell": {
-        "height": "0.61",
-        "period": "9.6",
-        "direction": "278",
+        "height": "0.00",
+        "period": "0.0",
+        "direction": "0",
         "unit": "m"
       },
       "wind": {
@@ -24,7 +24,7 @@
       "color": "#ef4444"
     },
     {
-      "day": "Tomorrow",
+      "day": "Today",
       "date": "Dec 09",
       "date_iso": "2025-12-09",
       "swell": {
@@ -45,7 +45,7 @@
       "color": "#ef4444"
     },
     {
-      "day": "Wednesday",
+      "day": "Tomorrow",
       "date": "Dec 10",
       "date_iso": "2025-12-10",
       "swell": {
@@ -57,6 +57,27 @@
       "wind": {
         "speed": "3.4",
         "direction": "90",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Thursday",
+      "date": "Dec 11",
+      "date_iso": "2025-12-11",
+      "swell": {
+        "height": "0.43",
+        "period": "10.4",
+        "direction": "287",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "0.0",
+        "direction": "0",
         "unit": "kts"
       },
       "tide": {
