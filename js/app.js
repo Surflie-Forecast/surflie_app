@@ -276,12 +276,42 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="hourly-details" style="display:none; margin-top: 1rem;"></div>
                 `;
 
-                // Add click handler
+                // Add click handler to toggle ALL cards at once
                 card.addEventListener('click', function (e) {
                     // Don't toggle if clicking on the hourly details themselves
                     if (e.target.closest('.hourly-details')) return;
 
-                    toggleHourlyDetails(card, day.date_iso, data.spotName);
+                    // Get all forecast cards
+                    const allCards = document.querySelectorAll('.forecast-card');
+
+                    // Check if any cards are currently open
+                    let anyOpen = false;
+                    allCards.forEach(c => {
+                        const details = c.querySelector('.hourly-details');
+                        if (details && details.style.display === 'block') {
+                            anyOpen = true;
+                        }
+                    });
+
+                    // Toggle: if any are open, close all. Otherwise, open all.
+                    if (anyOpen) {
+                        // Close all
+                        allCards.forEach(c => {
+                            const details = c.querySelector('.hourly-details');
+                            if (details) {
+                                details.style.display = 'none';
+                            }
+                        });
+                    } else {
+                        // Open all
+                        allCards.forEach((c, idx) => {
+                            const dateIso = c.dataset.date;
+                            const spot = c.dataset.spot;
+                            if (dateIso && spot) {
+                                toggleHourlyDetails(c, dateIso, spot);
+                            }
+                        });
+                    }
                 });
 
                 container.appendChild(card);
