@@ -3,71 +3,60 @@ import datetime
 import math
 import csv
 import os
+import pytz
 
 def initialize_gee():
-    """Initialize Google Earth Engine with service account or user credentials."""
     try:
-        # Check if running in GitHub Actions or with service account
         credentials_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        
         if credentials_file and os.path.exists(credentials_file):
-            # Use service account authentication (for GitHub Actions)
-            print(f"Authenticating with service account: {credentials_file}")
-            credentials = ee.ServiceAccountCredentials(
-                email=None,  # Will be read from the JSON file
-                key_file=credentials_file
-            )
-            ee.Initialize(credentials)
+            ee.Initialize(ee.ServiceAccountCredentials(None, key_file=credentials_file))
         else:
-            # Use standard user authentication (for local development)
             ee.Initialize()
-            
-        print("✓ GEE initialized successfully")
+        print("✓ GEE initialized")
     except Exception as e:
-        print(f"GEE Initialization failed: {e}")
-        print("Please run 'earthengine authenticate' in your terminal.")
+        print(f"GEE Init failed: {e}")
         raise e
 
 def fetch_wind_data(lat, lon, name, output_csv_path):
-    # Dataset ID
+    # --- 1. TIMEZONE SETUP ---
+    la_tz = pytz.timezone('America/Los_Angeles')
+    now_la = datetime.datetime.now(la_tz)
+    
+    # Define exact Start/End of the requested days
+    start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=3)
+    
+    # Calculate GEE Request Window (UTC) with a BUFFER
+    # We ask GEE for 3 hours BEFORE midnight to ensure we don't miss edge cases
+    # (e.g., if a timestamp is 23:59:59 or if we need to interpolate later)
+    buffer_hours = 3
+    
+    req_start_utc = (start_of_today_la - datetime.timedelta(hours=buffer_hours)).astimezone(datetime.timezone.utc)
+    req_end_utc = end_of_window_la.astimezone(datetime.timezone.utc)
+
+    print(f"Target Window (LA): {start_of_today_la} to {end_of_window_la}")
+    
+    # --- 2. SELECT FORECAST RUN ---
     collection_id = 'ECMWF/NRT_FORECAST/IFS/OPER'
-    point = ee.Geometry.Point([lon, lat])
     
-    # --- 1. FORCE THE 00:00 UTC RUN (START OF DAY) ---
-    # This ensures your CSV always starts at midnight, capturing the "whole day"
-    
-    # Get today's date in UTC
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
-    start_of_today = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Create a small window to catch the 00:00 run
-    # (We look from 00:00 to 00:01 to grab that exact run)
-    target_run_start = start_of_today
-    target_run_end = start_of_today + datetime.timedelta(minutes=1)
+    # Find the 00:00 UTC run for the current calendar date
+    run_date_str = start_of_today_la.strftime('%Y-%m-%d')
+    target_run_start = datetime.datetime.strptime(run_date_str, '%Y-%m-%d').replace(tzinfo=datetime.timezone.utc)
+    target_run_end = target_run_start + datetime.timedelta(minutes=1)
 
     raw_collection = ee.ImageCollection(collection_id)
-    
-    # Check if the 00:00 run exists for today yet
-    # (If you run this very early in the morning, it might not be uploaded yet)
     forecast_run = raw_collection.filterDate(target_run_start, target_run_end)
     
-    # Fallback: If today's 00:00 run isn't ready, use Yesterday's 00:00 run
-    # and just show the forecast hours 24-96 (which is effectively "Today")
     if forecast_run.size().getInfo() == 0:
-        print("Today's 00:00 UTC run not ready yet. Using previous run...")
-        # Go back 24 hours
-        target_run_start = target_run_start - datetime.timedelta(days=1)
-        target_run_end = target_run_end - datetime.timedelta(days=1)
+        print(f"Run for {run_date_str} not ready. Using previous day...")
+        target_run_start -= datetime.timedelta(days=1)
+        target_run_end -= datetime.timedelta(days=1)
         forecast_run = raw_collection.filterDate(target_run_start, target_run_end)
-    
-    # Select the images (Filter up to 120 hours to be safe)
-    forecast_images = forecast_run.first() # This is the ImageCollection for that run? 
-    # Actually ECMWF collection is flat. We filtered to images with that specific start time.
-    # So 'forecast_run' contains all 0h, 3h, 6h... images for that run.
-    
-    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 72))
 
-    # --- 2. PROCESS IMAGES (Standard) ---
+    # Get enough forecast hours to cover the timezone offset + 3 days
+    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 100))
+
+    # --- 3. PROCESS IMAGES ---
     def process_wind(image):
         u = image.select('u_component_of_wind_10m_sfc')
         v = image.select('v_component_of_wind_10m_sfc')
@@ -76,56 +65,72 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
         radToDeg = 180 / math.pi
         direction = u.atan2(v).multiply(radToDeg).add(180).mod(360).rename('wind_direction')
         
-        forecast_ts = image.get('forecast_time')
-        return image.addBands([speed, direction]).set('system:time_start', forecast_ts)
+        # Add timestamp and variables
+        return image.addBands([speed, direction]) \
+                    .set('system:time_start', image.get('forecast_time'))
 
-    processed = collection.map(process_wind)
+    # Filter processed images by our Buffered UTC window
+    processed = collection.map(process_wind) \
+                          .filter(ee.Filter.date(req_start_utc, req_end_utc))
 
-    print(f"Fetching WIND data for {name} from the 00:00 UTC run...")
-    
-    # --- 3. EXTRACT DATA ---
-    # (Standard Snap and Extract logic)
-    reference_image = processed.first().select('wind_speed')
-    available_points = reference_image.sample(region=point.buffer(30000), scale=11000, geometries=True)
-    
-    # ... [Same Snap Logic as before] ...
-    # Simplified for brevity here (assume points found):
-    target_point = available_points.first().geometry() 
+    # --- 4. EXTRACT DATA ---
+    point = ee.Geometry.Point([lon, lat])
+    # Snap logic (simplified for reliability)
+    sample_image = processed.first()
+    # If buffer found no images (very unlikely), exit
+    if not sample_image:
+         print("No images found in window.")
+         return
 
+    # Using reduceRegion directly on the point (efficient for single point)
     def extract_data(image):
-        date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd HH:mm:ss')
-        stats = image.reduceRegion(reducer=ee.Reducer.mean(), geometry=target_point, scale=11000)
+        stats = image.reduceRegion(
+            reducer=ee.Reducer.mean(), 
+            geometry=point, 
+            scale=11000  # ECMWF resolution ~9-11km
+        )
         return ee.Feature(None, {
-            'date': date,
+            'time_millis': image.get('system:time_start'),
             'wind_speed': stats.get('wind_speed'),
             'wind_direction': stats.get('wind_direction')
         })
 
     features = processed.map(extract_data).getInfo()['features']
-    
-    # --- 4. SAVE (Ensure we filter for "From Now On" if you want, or keep all) ---
+
+    # --- 5. CLEAN & SAVE ---
     results = []
     for f in features:
         props = f['properties']
         if props.get('wind_speed') is not None:
-             results.append({
-                'spot_name': name,
-                'datetime': props['date'],
-                'wind_speed': round(float(props['wind_speed']) * 1.94384, 2),
-                'wind_direction': int(props['wind_direction'])
-            })
+            # Convert to LA Time
+            dt_utc = datetime.datetime.fromtimestamp(props['time_millis'] / 1000.0, tz=datetime.timezone.utc)
+            dt_la = dt_utc.astimezone(la_tz)
             
+            # STRICT FILTERING: 
+            # We fetched a buffer (-3h), but now we only save rows that are 
+            # actually >= Today's Midnight.
+            # (Remove this 'if' statement if you prefer to see the hours leading up to midnight)
+            if dt_la >= start_of_today_la:
+                results.append({
+                    'spot_name': name,
+                    'datetime': dt_la.strftime('%Y-%m-%d %H:%M:%S'),
+                    'wind_speed': round(float(props['wind_speed']) * 1.94384, 2),
+                    'wind_direction': int(props['wind_direction'])
+                })
+
     results.sort(key=lambda x: x['datetime'])
     
-    # [CSV Writing Logic Here]
-    file_exists = os.path.isfile(output_csv_path)
+    # Save
     headers = ['spot_name', 'datetime', 'wind_speed', 'wind_direction']
+    file_exists = os.path.isfile(output_csv_path)
+    
     with open(output_csv_path, 'a', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         if not file_exists: writer.writeheader()
         writer.writerows(results)
-    print(f"Saved {len(results)} rows.")
+    
+    print(f"Saved {len(results)} rows. (First: {results[0]['datetime'] if results else 'None'})")
 
 if __name__ == "__main__":
     initialize_gee()
-    # fetch_wind_data(34.27, -119.29, "Ventura", "wind_fixed.csv")
+    # fetch_wind_data(34.27, -119.29, "Ventura", "wind_buffered.csv")

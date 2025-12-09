@@ -3,39 +3,18 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Monday",
+      "day": "Today",
       "date": "Dec 08",
       "date_iso": "2025-12-08",
       "swell": {
-        "height": "0.00",
-        "period": "0.0",
-        "direction": "0",
+        "height": "0.59",
+        "period": "9.4",
+        "direction": "280",
         "unit": "m"
       },
       "wind": {
-        "speed": "4.4",
-        "direction": "108",
-        "unit": "kts"
-      },
-      "tide": {
-        "height": "1.0m"
-      },
-      "rating": "Poor",
-      "color": "#ef4444"
-    },
-    {
-      "day": "Today",
-      "date": "Dec 09",
-      "date_iso": "2025-12-09",
-      "swell": {
-        "height": "0.47",
-        "period": "7.7",
-        "direction": "278",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "4.0",
-        "direction": "90",
+        "speed": "8.8",
+        "direction": "104",
         "unit": "kts"
       },
       "tide": {
@@ -46,17 +25,17 @@
     },
     {
       "day": "Tomorrow",
-      "date": "Dec 10",
-      "date_iso": "2025-12-10",
+      "date": "Dec 09",
+      "date_iso": "2025-12-09",
       "swell": {
-        "height": "0.43",
-        "period": "7.4",
-        "direction": "279",
+        "height": "0.48",
+        "period": "8.0",
+        "direction": "282",
         "unit": "m"
       },
       "wind": {
-        "speed": "3.4",
-        "direction": "90",
+        "speed": "7.6",
+        "direction": "102",
         "unit": "kts"
       },
       "tide": {
@@ -66,18 +45,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Thursday",
-      "date": "Dec 11",
-      "date_iso": "2025-12-11",
+      "day": "Wednesday",
+      "date": "Dec 10",
+      "date_iso": "2025-12-10",
       "swell": {
-        "height": "0.43",
-        "period": "10.4",
-        "direction": "287",
+        "height": "0.57",
+        "period": "9.0",
+        "direction": "286",
         "unit": "m"
       },
       "wind": {
-        "speed": "0.0",
-        "direction": "0",
+        "speed": "3.2",
+        "direction": "114",
         "unit": "kts"
       },
       "tide": {

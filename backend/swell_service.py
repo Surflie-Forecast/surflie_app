@@ -2,88 +2,67 @@ import ee
 import datetime
 import csv
 import os
+import pytz
 
 def initialize_gee():
-    """Initialize Google Earth Engine with service account or user credentials."""
     try:
-        # Check if running in GitHub Actions or with service account
         credentials_file = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        
         if credentials_file and os.path.exists(credentials_file):
-            # Use service account authentication (for GitHub Actions)
-            print(f"Authenticating with service account: {credentials_file}")
-            credentials = ee.ServiceAccountCredentials(
-                email=None,  # Will be read from the JSON file
-                key_file=credentials_file
-            )
-            ee.Initialize(credentials)
+            ee.Initialize(ee.ServiceAccountCredentials(None, key_file=credentials_file))
         else:
-            # Use standard user authentication (for local development)
             ee.Initialize()
-            
-        print("✓ GEE initialized successfully")
+        print("✓ GEE initialized")
     except Exception as e:
-        print(f"GEE Initialization failed: {e}")
-        print("Please run 'earthengine authenticate' in your terminal.")
+        print(f"GEE Init failed: {e}")
         raise e
 
 def fetch_swell_data(lat, lon, name, output_csv_path):
-    """
-    Fetches 3-day swell forecast for a specific spot and appends to CSV.
-    """
-    # Dataset ID
-    collection_id = 'COPERNICUS/MARINE/WAV/ANFC_0_083DEG_PT3H'
+    # --- 1. TIMEZONE & DATE SETUP ---
+    la_tz = pytz.timezone('America/Los_Angeles')
+    now_la = datetime.datetime.now(la_tz)
     
-    # Define the point of interest
+    # Define exact Start (Midnight Today LA) and End (Midnight + 3 Days)
+    start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=3)
+    
+    # Request Buffer (-4 hours) to catch early model runs
+    buffer_hours = 4
+    req_start_utc = (start_of_today_la - datetime.timedelta(hours=buffer_hours)).astimezone(datetime.timezone.utc)
+    req_end_utc = end_of_window_la.astimezone(datetime.timezone.utc)
+    
+    print(f"Fetching swell data for {name}...")
+
+    # --- 2. FETCH COLLECTION ---
+    collection_id = 'COPERNICUS/MARINE/WAV/ANFC_0_083DEG_PT3H'
     point = ee.Geometry.Point([lon, lat])
     
-    # Time range: Now to +3 days
-    now = datetime.datetime.now()
-    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_date = start_date + datetime.timedelta(days=3)
-    
-    # Filter collection
     collection = ee.ImageCollection(collection_id) \
-        .filterDate(start_date, end_date) \
+        .filterDate(req_start_utc, req_end_utc) \
         .filterBounds(point) \
         .select(['VHM0_SW1', 'VTM01_SW1', 'VMDR_SW1'])
-        
-    print(f"Fetching swell data for {name}...")
-    
-    # Smart Snap: Find nearest valid ocean pixel (copied from generic service)
+
+    # --- 3. SMART SNAP (Find nearest ocean pixel) ---
+    # Attempt to find data within 30km
     reference_image = collection.first().select('VHM0_SW1')
     available_points = reference_image.sample(
-        region=point.buffer(30000),
-        scale=9000,
+        region=point.buffer(30000), 
+        scale=9000, 
         geometries=True
     )
     
-    def add_dist(feature):
-        dist = feature.geometry().distance(point)
-        return feature.set('dist', dist)
-        
-    points_with_dist = available_points.map(add_dist)
-    
-    count = points_with_dist.size().getInfo()
-    if count == 0:
-        print(f"WARNING: No valid ocean pixels found within 30km of {lat}, {lon}")
-        target_point = point 
+    if available_points.size().getInfo() > 0:
+        # Snap to closest valid point
+        target_point = available_points.first().geometry()
     else:
-        nearest_feature = points_with_dist.sort('dist', True).first()
-        target_point = nearest_feature.geometry()
-        dist = nearest_feature.get('dist').getInfo()
-        print(f"Snapped to valid pixel {dist:.0f}m away.")
+        # Fallback to requested point (might be null if on land)
+        target_point = point
 
-    # Helper to extracting data from an image
+    # --- 4. EXTRACT DATA ---
     def extract_data(image):
-        date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd HH:mm:ss')
-        stats = image.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=target_point, 
-            scale=9000
-        )
+        time_millis = image.get('system:time_start')
+        stats = image.reduceRegion(reducer=ee.Reducer.mean(), geometry=target_point, scale=9000)
         return ee.Feature(None, {
-            'date': date,
+            'time_millis': time_millis,
             'swell_height': stats.get('VHM0_SW1'),
             'swell_period': stats.get('VTM01_SW1'),
             'swell_direction': stats.get('VMDR_SW1')
@@ -91,33 +70,64 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
 
     features = collection.map(extract_data).getInfo()['features']
     
-    results = []
+    # --- 5. PROCESS NEW DATA ---
+    new_rows = []
+    seen_dates = set()
+
     for f in features:
         props = f['properties']
         if props.get('swell_height') is not None:
-             results.append({
-                'spot_name': name,
-                'datetime': props['date'],
-                'swell_height': props['swell_height'],
-                'swell_period': props['swell_period'],
-                'swell_direction': props['swell_direction']
-            })
+            # Convert UTC millis to LA Datetime
+            dt_utc = datetime.datetime.fromtimestamp(props['time_millis'] / 1000.0, tz=datetime.timezone.utc)
+            dt_la = dt_utc.astimezone(la_tz)
+            date_str = dt_la.strftime('%Y-%m-%d %H:%M:%S')
 
-    # Append to CSV
-    file_exists = os.path.isfile(output_csv_path)
+            # Filter 1: Strictly Today onwards (discard buffer)
+            if dt_la >= start_of_today_la:
+                # Filter 2: Deduplicate time steps
+                if date_str not in seen_dates:
+                    new_rows.append({
+                        'spot_name': name,
+                        'datetime': date_str,
+                        'swell_height': round(props['swell_height'], 2),
+                        'swell_period': round(props['swell_period'], 1),
+                        'swell_direction': int(props['swell_direction'])
+                    })
+                    seen_dates.add(date_str)
+
+    new_rows.sort(key=lambda x: x['datetime'])
+
+    # --- 6. UPSERT LOGIC (Update specific spot, keep others) ---
     headers = ['spot_name', 'datetime', 'swell_height', 'swell_period', 'swell_direction']
+    final_rows = []
     
-    with open(output_csv_path, 'a', newline='') as f:
+    # A. Read existing file if it exists
+    if os.path.exists(output_csv_path):
+        with open(output_csv_path, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            # KEEP rows that belong to OTHER spots
+            # DISCARD rows that belong to CURRENT spot (we are updating it)
+            for row in reader:
+                if row['spot_name'] != name:
+                    final_rows.append(row)
+    
+    # B. Add the NEW data for this spot
+    final_rows.extend(new_rows)
+    
+    # C. Write everything back to the file
+    with open(output_csv_path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerows(results)
+        writer.writeheader()
+        writer.writerows(final_rows)
     
-    print(f"Saved {len(results)} swell rows directly to {output_csv_path}")
+    print(f"  -> Updated {name}: {len(new_rows)} rows (Total in file: {len(final_rows)})")
 
 if __name__ == "__main__":
     initialize_gee()
-    # For testing, clear file first or just append?
-    # Ideally the orchestration script handles file clearing.
-    # verify_run just for one spot
-    # fetch_swell_data("ventura", "swell_raw.csv") # Example usage
+    
+    # --- Example of Consecutive Runs ---
+    # This will result in ONE file with both locations. 
+    # If you run it again, it updates them without duplicating rows.
+    
+    # fetch_swell_data(34.27, -119.29, "Ventura", "forecast.csv")
+    # fetch_swell_data(34.03, -118.77, "Malibu", "forecast.csv")
