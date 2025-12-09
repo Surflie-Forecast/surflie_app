@@ -1,4 +1,12 @@
 // Data is loaded from mockData.js
+// State for units: 'metric' (default) or 'imperial'
+let currentUnit = localStorage.getItem('surfForecastUnit') || 'metric';
+
+// Unit Conversion Helpers
+const toFeet = (meters) => (meters * 3.28084).toFixed(1);
+const toMeters = (feet) => (feet / 3.28084).toFixed(2); // Not really used but good for symmetry
+const formatHeight = (val, unit) => unit === 'imperial' ? toFeet(val) : val;
+const getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
 document.addEventListener('DOMContentLoaded', () => {
     // Set current date in header
@@ -20,6 +28,31 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableSpots = []; // Array of {name, region}
 
     async function init() {
+        // Setup Toggle Switch
+        const unitToggle = document.getElementById('unitToggle');
+        // If currentUnit is 'imperial', check the box
+        unitToggle.checked = currentUnit === 'imperial';
+
+        unitToggle.addEventListener('change', (e) => {
+            currentUnit = e.target.checked ? 'imperial' : 'metric';
+            localStorage.setItem('surfForecastUnit', currentUnit);
+            // Re-render current forecast if available
+            const currentSpotName = spotNameTitle.textContent.split(',')[0].trim();
+            if (currentSpotName && currentSpotName !== "Loading..." && currentSpotName !== "Surflie") {
+                // Use the stored data to re-render without re-fetching if possible,
+                // but for simplicity we can just re-trigger renderForecast
+                // Actually, we need the raw data. To avoid refetching, we could store it.
+                // For now, let's just refetch/re-process which is fast for static JSON.
+                // We need to know the 'raw' spot name. The title might have region appended.
+                // Best to just grab the raw name from the first card if available?
+                // Or we can assume availableSpots has loaded.
+                // Let's rely on the last successfully rendered spot name stored in a variable maybe?
+            }
+            // For simplicity, just reload or better yet, make renderForecast globally accessible?
+            // Or easier:
+            renderForecast(lastRenderedSpot || "Devereaux Beach");
+        });
+
         try {
             // Fetch available spots from static JSON
             const spotsRes = await fetch('api/spots.json');
@@ -36,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
         renderForecast(initialSpotName);
     }
+
+    let lastRenderedSpot = "";
 
     init();
 
@@ -106,6 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await response.json();
+            lastRenderedSpot = data.spotName;
 
             // Update title with "Name, Region"
             spotNameTitle.textContent = `${data.spotName}, ${data.region}`;
@@ -148,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="metric-row main-row">
                         <div class="metric">
                             <span class="metric-label">Wave Height</span>
-                            <span class="metric-value">${day.swell.height}<span class="metric-unit">${day.swell.unit}</span></span>
+                            <span class="metric-value">${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span></span>
                         </div>
                         <div class="metric">
                             <span class="metric-label">Period</span>

@@ -8,6 +8,7 @@ import csv
 import shutil
 from datetime import datetime, timedelta
 from collections import defaultdict
+import pytz
 
 # Paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
@@ -91,10 +92,12 @@ def generate_forecast_json(spot_name, locations):
         reader = csv.DictReader(f)
         for row in reader:
             if row['spot_name'] == spot_name:
-                # Parse date and generate day label
+                # Parse date and generate day label using LA time
                 try:
                     date_obj = datetime.strptime(row['date'], '%Y-%m-%d')
-                    today = datetime.now().date()
+                    # Get today in LA timezone
+                    la_tz = pytz.timezone('America/Los_Angeles')
+                    today = datetime.now(la_tz).date()
                     
                     if date_obj.date() == today:
                         day_label = 'Today'

@@ -34,7 +34,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
             const timeObj = new Date(hour.datetime);
             const timeHour = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[0];
             const timePeriod = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[1];
-            const swellHeight = hour.swell.height.toFixed(1);
+            const swellHeight = formatHeight(hour.swell.height, currentUnit);
             const swellPeriod = Math.round(hour.swell.period);
             const swellDir = Math.round(hour.swell.direction);
             const windSpeed = Math.round(hour.wind.speed);
@@ -64,7 +64,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
                     </div>
                     <div class="hourly-rating-bar" style="background-color: ${color};"></div>
                     <div class="hourly-swell">
-                        <span>${swellHeight}m</span>
+                        <span>${swellHeight}${getHeightUnit(currentUnit)}</span>
                         <span>${swellPeriod}s</span>
                         <div class="direction-indicator">
                             <span class="swell-arrow-small" style="transform: rotate(${swellDir + 90}deg)">➤</span>
