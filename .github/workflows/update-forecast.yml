@@ -2,18 +2,15 @@ name: Update Surf Forecast Data
 
 on:
   schedule:
-    # Run every 6 hours (at 00:00, 06:00, 12:00, 18:00 UTC)
     - cron: '0 */6 * * *'
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   update-data:
     runs-on: ubuntu-latest
-
-    # Global environment variable for the whole job
     env:
       GOOGLE_APPLICATION_CREDENTIALS: ./gee_key.json
 
@@ -21,8 +18,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          persist-credentials: false   # important: prevent use of GITHUB_TOKEN for pushes
           fetch-depth: 0
+          # We removed 'persist-credentials: false' so the checkout action 
+          # handles the authentication for us automatically.
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -46,19 +44,12 @@ jobs:
       - name: Build static JSON files
         run: python3 backend/build.py
 
-      - name: Set up Git
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+      # NO 'Set up Git' step needed here.
+      
+      - name: Commit and push updated data
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
-          # Use the PAT for authentication (x-access-token is safe for HTTPS)
-          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/pcarbomestre/surflie.git
-
-      - name: Commit and push updated data
-        run: |
           git add data/*.csv api/
-          # The '||' ensures the workflow doesn't fail if there are no changes to commit
           git diff --staged --quiet || git commit -m "Auto-update forecast data - $(date -u +'%Y-%m-%d %H:%M UTC')"
-          # Push to the default branch (replace 'main' if your default branch is different)
           git push origin HEAD:main --follow-tags
