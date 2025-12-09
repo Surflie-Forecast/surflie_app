@@ -7,44 +7,58 @@ on:
   workflow_dispatch:  # Allows manual trigger from GitHub UI
 
 permissions:
-  contents: write
-  
+  contents: read
+
 jobs:
   update-data:
     runs-on: ubuntu-latest
+
+    # Global environment variable for the whole job
     env:
       GOOGLE_APPLICATION_CREDENTIALS: ./gee_key.json
-    
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
-      
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false   # important: prevent use of GITHUB_TOKEN for pushes
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      
+
       - name: Install dependencies
         run: |
           pip install -r backend/requirements.txt
-      
+
       - name: Create Google Earth Engine credentials file
         env:
           GEE_SERVICE_ACCOUNT_KEY: ${{ secrets.GEE_SERVICE_ACCOUNT_KEY }}
         run: |
           echo "$GEE_SERVICE_ACCOUNT_KEY" > gee_key.json
           chmod 600 gee_key.json
-      
+
       - name: Run data fetch pipeline
         run: python3 backend/fetch_data.py
-      
+
       - name: Build static JSON files
         run: python3 backend/build.py
-      
-      - name: Commit and push updated data
+
+      - name: Set up Git
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@github.com"
+          # Use the PAT for authentication (x-access-token is safe for HTTPS)
+          git remote set-url origin https://x-access-token:${GH_PAT}@github.com/pcarbomestre/surflie.git
+
+      - name: Commit and push updated data
+        run: |
           git add data/*.csv api/
+          # The '||' ensures the workflow doesn't fail if there are no changes to commit
           git diff --staged --quiet || git commit -m "Auto-update forecast data - $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+          # Push to the default branch (replace 'main' if your default branch is different)
+          git push origin HEAD:main --follow-tags
