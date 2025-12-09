@@ -283,6 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Get all forecast cards
                     const allCards = document.querySelectorAll('.forecast-card');
+                    const heroSection = document.querySelector('.hero');
 
                     // Check if any cards are currently open
                     let anyOpen = false;
@@ -302,6 +303,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 details.style.display = 'none';
                             }
                         });
+                        // Expand hero back to normal
+                        if (heroSection) {
+                            heroSection.classList.remove('compact');
+                        }
                     } else {
                         // Open all
                         allCards.forEach((c, idx) => {
@@ -311,6 +316,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 toggleHourlyDetails(c, dateIso, spot);
                             }
                         });
+                        // Compact the hero
+                        if (heroSection) {
+                            heroSection.classList.add('compact');
+                        }
                     }
                 });
 

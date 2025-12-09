@@ -518,6 +518,31 @@ input:checked+.slider:before {
   z-index: -1;
 }
 
+/* Compact Hero State - when hourly details are shown */
+.hero.compact {
+  min-height: auto;
+  padding: 1.5rem 2rem;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+  transition: all 0.4s ease;
+}
+
+.hero.compact h1 {
+  font-size: 2rem;
+  margin-bottom: 0;
+  flex: 0 0 auto;
+}
+
+.hero.compact .search-container {
+  margin-top: 0;
+  max-width: 500px;
+  flex: 1;
+  margin-left: 2rem;
+  margin-right: 0;
+}
+
 /* ... existing hero styles ... */
 
 .rating-badge {
