@@ -48,8 +48,8 @@ body {
   padding: 2rem;
   display: flex;
   flex-direction: column;
-  gap: 3rem;
-  /* Reduced gap between header and hero */
+  gap: 0;
+  /* No gap - unit toggle provides spacing */
 }
 
 /* Header */
