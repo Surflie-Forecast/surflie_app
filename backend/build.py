@@ -5,6 +5,7 @@ Build script to convert CSV data into static JSON files for GitHub Pages deploym
 import os
 import json
 import csv
+import shutil
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -13,10 +14,28 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '../api')
 
 def ensure_dirs():
-    """Create output directories if they don't exist."""
+    """Create output directories after cleaning old JSON files."""
+    # Clean old JSON files by removing and recreating directories
+    forecast_dir = os.path.join(OUTPUT_DIR, 'forecast')
+    hourly_dir = os.path.join(OUTPUT_DIR, 'hourly')
+    
+    if os.path.exists(forecast_dir):
+        shutil.rmtree(forecast_dir)
+        print("✓ Cleaned old forecast files")
+    
+    if os.path.exists(hourly_dir):
+        shutil.rmtree(hourly_dir)
+        print("✓ Cleaned old hourly files")
+    
+    # Remove spots.json if it exists
+    spots_file = os.path.join(OUTPUT_DIR, 'spots.json')
+    if os.path.exists(spots_file):
+        os.remove(spots_file)
+    
+    # Recreate directories
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, 'forecast'), exist_ok=True)
-    os.makedirs(os.path.join(OUTPUT_DIR, 'hourly'), exist_ok=True)
+    os.makedirs(forecast_dir, exist_ok=True)
+    os.makedirs(hourly_dir, exist_ok=True)
 
 def load_locations():
     """Load locations from CSV."""

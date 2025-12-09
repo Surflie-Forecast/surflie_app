@@ -23,8 +23,8 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
     
     # Time range: Now to +3 days
     now = datetime.datetime.now()
-    start_date = now
-    end_date = now + datetime.timedelta(days=3)
+    start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_date = start_date + datetime.timedelta(days=3)
     
     # Filter collection
     collection = ee.ImageCollection(collection_id) \

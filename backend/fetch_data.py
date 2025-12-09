@@ -47,7 +47,7 @@ def fetch_all_data():
                     
                 # Fetch Wind
                 try:
-                    wind_service.get_wind_data(lat, lon, name, WIND_FILE)
+                    wind_service.fetch_wind_data(lat, lon, name, WIND_FILE)
                 except Exception as e:
                     print(f"Error fetching wind for {name}: {e}")
 
