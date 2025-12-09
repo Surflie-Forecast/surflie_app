@@ -2,3 +2,4 @@ flask
 flask-cors
 earthengine-api
 requests
+pytz
