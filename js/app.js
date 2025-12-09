@@ -204,9 +204,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.dataset.date = day.date_iso;  // We'll need to pass this from backend
                 card.dataset.spot = data.spotName;
 
+                // Dynamic Day Label Logic
+                const dateParts = day.date_iso.split('-');
+                const fileDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+                const diffTime = fileDate - today;
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+                let dayLabel = day.day;
+                if (diffDays === 0) {
+                    dayLabel = "Today";
+                } else if (diffDays === 1) {
+                    dayLabel = "Tomorrow";
+                } else {
+                    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    dayLabel = days[fileDate.getDay()];
+                }
+
                 card.innerHTML = `
                     <div class="card-header">
-                        <span class="day-label">${day.day}</span>
+                        <span class="day-label">${dayLabel}</span>
                         <span class="date-label">${day.date}</span>
                     </div>
                     

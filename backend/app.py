@@ -3,6 +3,7 @@ from flask_cors import CORS
 import os
 import csv
 import datetime
+import pytz
 # import swell_service # Not strictly needed if reading from CSV
 
 app = Flask(__name__, static_folder='../', static_url_path='')
@@ -45,7 +46,10 @@ def get_forecast():
     spot_name = spot_data[0]['spot_name']
 
     # Filter past days and sort
-    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    la_tz = pytz.timezone('America/Los_Angeles')
+    now_la = datetime.datetime.now(la_tz)
+    today_str = now_la.strftime('%Y-%m-%d')
+    
     future_data = []
     
     for row in spot_data:
@@ -60,7 +64,7 @@ def get_forecast():
     
     forecast = []
     for row in final_rows:
-        dt_obj = datetime.datetime.strptime(row['date'], '%Y-%m-%d')
+        dt_obj = datetime.datetime.strptime(row['date'], '%Y-%m-%d').date()
         
         # Rating Logic
         try:
@@ -69,13 +73,13 @@ def get_forecast():
             rating_val = height * period
         except:
             rating_val = 0
+            height = 0 # Added height = 0 here
         
         rating = "Poor"
         color = "#ef4444" # Red
         
         # Swell height check for "Insanely Big" (Purple)
         # Assuming > 2.0m is big for this context, or maybe high rating? 
-        # User said "insanely big the swell", implying height.
         if height > 2.5:
              rating = "Epic"
              color = "#a855f7" # Purple
@@ -89,13 +93,16 @@ def get_forecast():
             rating = "Fair"
             color = "#eab308" # Yellow
 
-        # Check if this date is today
-        today = datetime.datetime.now().date()
-        day_label = "Today" if dt_obj.date() == today else dt_obj.strftime('%A')
+        # Check if this date is today (in LA time)
+        today_la = now_la.date()
+        day_label = "Today" if dt_obj == today_la else dt_obj.strftime('%A')
         
+        # Re-format date object for display
+        date_display = dt_obj.strftime('%b %d')
+
         forecast.append({
             'day': day_label,
-            'date': dt_obj.strftime('%b %d'),
+            'date': date_display,
             'date_iso': row['date'],  # ISO format for API calls
             'swell': {
                 'height': row['swell_height'],
