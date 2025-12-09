@@ -3,7 +3,7 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Today",
+      "day": "Monday",
       "date": "Dec 08",
       "date_iso": "2025-12-08",
       "swell": {
@@ -24,7 +24,7 @@
       "color": "#ef4444"
     },
     {
-      "day": "Tomorrow",
+      "day": "Today",
       "date": "Dec 09",
       "date_iso": "2025-12-09",
       "swell": {
@@ -45,7 +45,7 @@
       "color": "#ef4444"
     },
     {
-      "day": "Wednesday",
+      "day": "Tomorrow",
       "date": "Dec 10",
       "date_iso": "2025-12-10",
       "swell": {
