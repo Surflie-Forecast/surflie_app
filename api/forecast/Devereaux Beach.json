@@ -3,27 +3,6 @@
   "region": "Santa Barbara",
   "forecast": [
     {
-      "day": "Monday",
-      "date": "Dec 08",
-      "date_iso": "2025-12-08",
-      "swell": {
-        "height": "0.55",
-        "period": "9.5",
-        "direction": "284",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "4.7",
-        "direction": "92",
-        "unit": "kts"
-      },
-      "tide": {
-        "height": "1.0m"
-      },
-      "rating": "Poor",
-      "color": "#ef4444"
-    },
-    {
       "day": "Today",
       "date": "Dec 09",
       "date_iso": "2025-12-09",
@@ -34,8 +13,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.5",
-        "direction": "136",
+        "speed": "4.0",
+        "direction": "148",
         "unit": "kts"
       },
       "tide": {
@@ -55,8 +34,29 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.9",
-        "direction": "103",
+        "speed": "4.1",
+        "direction": "108",
+        "unit": "kts"
+      },
+      "tide": {
+        "height": "1.0m"
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Thursday",
+      "date": "Dec 11",
+      "date_iso": "2025-12-11",
+      "swell": {
+        "height": "0.84",
+        "period": "10.0",
+        "direction": "294",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "3.0",
+        "direction": "174",
         "unit": "kts"
       },
       "tide": {
