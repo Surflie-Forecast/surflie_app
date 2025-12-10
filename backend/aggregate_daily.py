@@ -46,15 +46,30 @@ def aggregate_data():
                 except Exception as e:
                     print(f"Skipping bad wind row: {row} - {e}")
     
-    # 3. Aggregate
-    # Get all unique keys
-    all_keys = set(swell_data.keys()) | set(wind_data.keys())
+    # 3. Read Tide Data
+    tide_data = defaultdict(list)
+    TIDE_FILE = os.path.join(BASE_DIR, '../data/tide_raw.csv')
+    if os.path.exists(TIDE_FILE):
+        with open(TIDE_FILE, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    dt = row['datetime'].split(' ')[0]
+                    key = (row['spot_name'], dt)
+                    tide_data[key].append(row)
+                except Exception as e:
+                    print(f"Skipping bad tide row: {row} - {e}")
+
+    # 4. Aggregate
+    # Get all unique keys including tide
+    all_keys = set(swell_data.keys()) | set(wind_data.keys()) | set(tide_data.keys())
     
     daily_rows = []
     
     for spot, date in all_keys:
         s_rows = swell_data.get((spot, date), [])
         w_rows = wind_data.get((spot, date), [])
+        t_rows = tide_data.get((spot, date), [])
         
         # Swell Aggregates
         avg_height = 0.0
@@ -85,6 +100,29 @@ def aggregate_data():
             if dirs:
                 median_wind_dir = statistics.median(dirs)
         
+        # Tide Aggregates (Min/Max)
+        min_tide_val = 999.0
+        max_tide_val = -999.0
+        min_tide_time = ""
+        max_tide_time = ""
+        
+        if t_rows:
+            for r in t_rows:
+                val = parse_float(r['tide_height'])
+                if val is not None:
+                    # Parse time (HH:MM) from datetime "YYYY-MM-DD HH:MM:SS"
+                    time_part = r['datetime'].split(' ')[1][:5]
+                    
+                    if val < min_tide_val:
+                        min_tide_val = val
+                        min_tide_time = time_part
+                    if val > max_tide_val:
+                        max_tide_val = val
+                        max_tide_time = time_part
+        
+        if min_tide_val == 999.0: min_tide_val = 0.0
+        if max_tide_val == -999.0: max_tide_val = 0.0
+        
         daily_rows.append({
             'spot_name': spot,
             'date': date,
@@ -94,7 +132,10 @@ def aggregate_data():
             'avg_wind_speed': f"{avg_wind_speed:.1f}",
             'median_wind_speed': f"{median_wind_speed:.1f}",
             'wind_direction': f"{median_wind_dir:.0f}",
-            'tide_height': "1.0m" # Dummy
+            'tide_min': f"{min_tide_val:.2f}",
+            'tide_min_time': min_tide_time,
+            'tide_max': f"{max_tide_val:.2f}",
+            'tide_max_time': max_tide_time
         })
         
     # Sort by date then spot
@@ -105,7 +146,7 @@ def aggregate_data():
         'spot_name', 'date', 
         'swell_height', 'swell_period', 'swell_direction',
         'avg_wind_speed', 'median_wind_speed', 'wind_direction',
-        'tide_height'
+        'tide_min', 'tide_min_time', 'tide_max', 'tide_max_time'
     ]
     
     with open(OUTPUT_FILE, 'w', newline='') as f:

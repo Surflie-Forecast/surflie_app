@@ -83,8 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         try {
-            // Fetch available spots from static JSON
-            const spotsRes = await fetch('api/spots.json');
+            // Fetch available spots from dynamic API
+            const spotsRes = await fetch('/api/spots');
             if (spotsRes.ok) {
                 availableSpots = await spotsRes.json();
             } else {
@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div style="text-align:center; width:100%; margin-top:2rem;">Fetching forecast data...</div>';
 
         try {
-            // Fetch from static JSON file
-            const response = await fetch(`api/forecast/${encodeURIComponent(spotName)}.json`);
+            // Fetch from Dynamic Backend API
+            const response = await fetch(`/api/forecast?spot=${encodeURIComponent(spotName)}`);
             if (!response.ok) {
                 const err = await response.json().catch(() => ({ error: "Failed to fetch data" }));
                 throw new Error(err.error || "Failed to fetch data");
@@ -261,11 +261,32 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span class="direction-text">${day.wind.direction}°</span>
                             </div>
                         </div>
-                        <div class="metric">
-                            <span class="metric-label">Tide</span>
-                            <span class="metric-value" data-type="tide-height" data-val-m="${parseFloat(day.tide.height)}">
-                                ${formatHeight(parseFloat(day.tide.height), currentUnit)}${getHeightUnit(currentUnit)}
-                            </span>
+                        <div class="metric tide-metric" style="flex: 1.2;">
+                            <span class="metric-label">Tide (High / Low)</span>
+                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.05); padding: 6px 8px; border-radius: 8px;">
+                                <!-- High Tide -->
+                                <div class="tide-row" style="display: flex; justify-content: space-between; align-items: center; line-height: 1;">
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <span style="color: #6ee7b7; font-size: 0.8em;">▲</span>
+                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="font-weight:600;">
+                                            ${formatHeight(day.tide.max.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                        </span>
+                                    </div>
+                                    <span style="font-size: 0.85em; opacity: 0.8; font-family: monospace;">${day.tide.max.time}</span>
+                                </div>
+                                <!-- Divider -->
+                                <div style="height:1px; background: rgba(255,255,255,0.1);"></div>
+                                <!-- Low Tide -->
+                                <div class="tide-row" style="display: flex; justify-content: space-between; align-items: center; line-height: 1;">
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <span style="color: #fca5a5; font-size: 0.8em;">▼</span>
+                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="font-weight:600;">
+                                            ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                        </span>
+                                    </div>
+                                    <span style="font-size: 0.85em; opacity: 0.8; font-family: monospace;">${day.tide.min.time}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -329,7 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Forecast rendering error:", e);
             container.innerHTML = `<div style="text-align:center; width:100%; color:red; margin-top:2rem;">
                     Error loading data: ${e.message} <br><br>
-                        Make sure the backend is running on port 5000.
+                        Make sure the backend is running on port 8080.
                     </div>`;
             spotNameTitle.textContent = spotName; // revert title
         }

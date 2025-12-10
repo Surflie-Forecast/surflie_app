@@ -116,8 +116,14 @@ def get_forecast():
                 'direction': row.get('wind_direction', '0')
             },
             'tide': {
-                'time': 'noon',
-                'height': row.get('tide_height', '1.0m')
+                'max': {
+                    'height': row.get('tide_max', '0'),
+                    'time': row.get('tide_max_time', '--:--')
+                },
+                'min': {
+                    'height': row.get('tide_min', '0'),
+                    'time': row.get('tide_min_time', '--:--')
+                }
             },
             'rating': rating,
             'color': color
