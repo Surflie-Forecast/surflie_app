@@ -4,34 +4,6 @@
   "forecast": [
     {
       "day": "Today",
-      "date": "Dec 09",
-      "date_iso": "2025-12-09",
-      "swell": {
-        "height": "0.47",
-        "period": "8.8",
-        "direction": "288",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "4.0",
-        "direction": "148",
-        "unit": "kts"
-      },
-      "tide": {
-        "max": {
-          "height": "1.62",
-          "time": "12:11"
-        },
-        "min": {
-          "height": "-0.12",
-          "time": "19:42"
-        }
-      },
-      "rating": "Poor",
-      "color": "#ef4444"
-    },
-    {
-      "day": "Tomorrow",
       "date": "Dec 10",
       "date_iso": "2025-12-10",
       "swell": {
@@ -41,8 +13,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.1",
-        "direction": "108",
+        "speed": "4.3",
+        "direction": "143",
         "unit": "kts"
       },
       "tide": {
@@ -59,7 +31,7 @@
       "color": "#eab308"
     },
     {
-      "day": "Thursday",
+      "day": "Tomorrow",
       "date": "Dec 11",
       "date_iso": "2025-12-11",
       "swell": {
@@ -69,8 +41,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.0",
-        "direction": "174",
+        "speed": "3.3",
+        "direction": "97",
         "unit": "kts"
       },
       "tide": {
@@ -81,6 +53,34 @@
         "min": {
           "height": "0.21",
           "time": "21:27"
+        }
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Friday",
+      "date": "Dec 12",
+      "date_iso": "2025-12-12",
+      "swell": {
+        "height": "0.91",
+        "period": "10.9",
+        "direction": "290",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "3.5",
+        "direction": "113",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.42",
+          "time": "04:30"
+        },
+        "min": {
+          "height": "0.36",
+          "time": "22:14"
         }
       },
       "rating": "Fair",
