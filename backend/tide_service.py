@@ -126,7 +126,7 @@ def fetch_tide_data(lat, lon, name, output_raw_path):
     now_la = datetime.datetime.now(la_tz)
     
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window_la = start_of_today_la + datetime.timedelta(days=3)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=2)
     
     # 1. Find Stations
     print(f"Finding nearest tide stations for {name}...")

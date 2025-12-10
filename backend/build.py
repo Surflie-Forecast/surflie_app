@@ -148,7 +148,14 @@ def generate_forecast_json(spot_name, locations):
                         'unit': 'kts'
                     },
                     'tide': {
-                        'height': row.get('tide_height', 'N/A')
+                        'max': {
+                            'height': row.get('tide_max', '0'),
+                            'time': row.get('tide_max_time', '--:--')
+                        },
+                        'min': {
+                            'height': row.get('tide_min', '0'),
+                            'time': row.get('tide_min_time', '--:--')
+                        }
                     },
                     'rating': rating,
                     'color': color

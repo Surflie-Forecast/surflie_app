@@ -18,7 +18,14 @@
         "unit": "kts"
       },
       "tide": {
-        "height": "1.0m"
+        "max": {
+          "height": "1.62",
+          "time": "12:11"
+        },
+        "min": {
+          "height": "-0.12",
+          "time": "19:42"
+        }
       },
       "rating": "Poor",
       "color": "#ef4444"
@@ -39,7 +46,14 @@
         "unit": "kts"
       },
       "tide": {
-        "height": "1.0m"
+        "max": {
+          "height": "1.39",
+          "time": "13:18"
+        },
+        "min": {
+          "height": "0.05",
+          "time": "20:35"
+        }
       },
       "rating": "Fair",
       "color": "#eab308"
@@ -60,7 +74,14 @@
         "unit": "kts"
       },
       "tide": {
-        "height": "1.0m"
+        "max": {
+          "height": "1.33",
+          "time": "03:45"
+        },
+        "min": {
+          "height": "0.21",
+          "time": "21:27"
+        }
       },
       "rating": "Fair",
       "color": "#eab308"

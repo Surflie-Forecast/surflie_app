@@ -83,8 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         try {
-            // Fetch available spots from dynamic API
-            const spotsRes = await fetch('/api/spots');
+            // Fetch available spots from static JSON
+            const spotsRes = await fetch('api/spots.json');
             if (spotsRes.ok) {
                 availableSpots = await spotsRes.json();
             } else {
@@ -162,8 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div style="text-align:center; width:100%; margin-top:2rem;">Fetching forecast data...</div>';
 
         try {
-            // Fetch from Dynamic Backend API
-            const response = await fetch(`/api/forecast?spot=${encodeURIComponent(spotName)}`);
+            // Fetch from static JSON file
+            const response = await fetch(`api/forecast/${encodeURIComponent(spotName)}.json`);
             if (!response.ok) {
                 const err = await response.json().catch(() => ({ error: "Failed to fetch data" }));
                 throw new Error(err.error || "Failed to fetch data");

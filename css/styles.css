@@ -607,7 +607,7 @@ input:checked+.slider:before {
 
 .hourly-header {
   display: grid;
-  grid-template-columns: 0.8fr 6px 2fr 2fr;
+  grid-template-columns: 3.5rem 6px 1.5fr 1fr;
   font-weight: 600;
   background: rgba(255, 255, 255, 0.08);
   font-size: 0.75rem;
@@ -617,6 +617,7 @@ input:checked+.slider:before {
 .hourly-header span {
   padding: 0.5rem 0.4rem;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
 }
 
 .hourly-header span:nth-child(2) {
@@ -630,14 +631,20 @@ input:checked+.slider:before {
 
 .hourly-row {
   display: grid;
-  grid-template-columns: 0.8fr 6px 2fr 2fr;
+  grid-template-columns: 3.5rem 6px 1.5fr 1fr;
   align-items: center;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.hourly-row:last-child {
+  border-bottom: none;
 }
 
 .hourly-rating-bar {
-  height: 100%;
-  min-height: 1.8rem;
+  height: 60%;
+  min-height: 1.2rem;
+  border-radius: 4px;
   border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
 
@@ -687,7 +694,7 @@ input:checked+.slider:before {
 }
 
 .hourly-swell {
-  border-right: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-right: 1px solid rgba(0, 0, 0, 0.05) !important;
   padding-left: 0.8rem !important;
 }
 
