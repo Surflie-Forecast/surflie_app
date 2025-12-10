@@ -240,32 +240,32 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="metric-label">Period</span>
                             <span class="metric-value">${day.swell.period}</span>
                         </div>
-                        <div class="metric">
+                        <div class="metric" style="align-items: center;">
                             <span class="metric-label">Direction</span>
-                            <div class="metric-value">
+                            <div class="metric-value" style="margin-top: 0.30rem;">
                                 <span class="swell-arrow" style="transform: rotate(${parseInt(day.swell.direction) + 90}deg)">➤</span>
-                                <span class="direction-text">${day.swell.direction}°</span>
+                                <span class="direction-text">${day.swell.direction}</span>
                             </div>
                         </div>
                     </div>
 
-                    <div class="metric-row" style="padding-top: 1rem;">
-                        <div class="metric">
+                    <div class="metric-row" style="padding-top: 1rem; align-items: flex-start; gap: 8px;">
+                        <div class="metric" style="flex: 1; align-items: center;">
                             <span class="metric-label">Wind Speed</span>
                             <span class="metric-value">${day.wind.speed}<span class="metric-unit">${day.wind.unit}</span></span>
                         </div>
-                         <div class="metric">
+                         <div class="metric" style="flex: 1; align-items: center;">
                             <span class="metric-label">Wind Dir</span>
                              <div class="metric-value">
                                 <span class="direction-arrow wind-arrow" style="transform: rotate(${parseInt(day.wind.direction) + 90}deg)">➤</span>
                                 <span class="direction-text">${day.wind.direction}°</span>
                             </div>
                         </div>
-                        <div class="metric tide-metric" style="flex: 0.9; align-items: flex-end;">
-                            <span class="metric-label" style="text-align: right; width: 100%; font-size: 0.7em;">Tide <span style="font-size: 0.85em;">(High / Low)</span></span>
-                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 4px; padding: 4px 0; align-items: flex-end;">
+                        <div class="metric tide-metric" style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
+                            <span class="metric-label" style="text-align: right; width: 100%; font-size: 0.75em;">Tide <span style="font-size: 0.7em;">(High/Low)</span></span>
+                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 2px; padding: 4px 0; align-items: flex-end;">
                                 <!-- High Tide -->
-                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 6px;">
+                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
                                     <span style="color: #9ca3af; font-size: 0.8em;">▲</span>
                                     <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.max.time}</span>
                                     <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </span>
                                 </div>
                                 <!-- Low Tide -->
-                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 6px;">
+                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
                                     <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.min.time}</span>
                                     <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
                                         ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
