@@ -91,6 +91,41 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchResults = document.getElementById('searchResults');
     const spotNameTitle = document.getElementById('spotName');
 
+    // Random Logo Selection
+    function setRandomLogo() {
+        const logos = [
+            { src: 'images/logo.png', weight: 0.6 },
+            { src: 'images/logo2.png', weight: 0.133 },
+            { src: 'images/logo3.png', weight: 0.133 },
+            { src: 'images/logo4.png', weight: 0.133 }
+        ];
+
+        let random = Math.random();
+        let selectedLogo = logos[0].src;
+
+        for (const option of logos) {
+            if (random < option.weight) {
+                selectedLogo = option.src;
+                break;
+            }
+            random -= option.weight;
+        }
+
+        const brandImg = document.querySelector('.brand img');
+        if (brandImg) {
+            brandImg.src = selectedLogo;
+
+            // Check if it's an alternative logo
+            if (selectedLogo !== 'images/logo.png') {
+                brandImg.classList.add('alt-logo');
+            } else {
+                brandImg.classList.remove('alt-logo');
+            }
+        }
+    }
+
+    setRandomLogo();
+
     // Initial Load
     let availableSpots = []; // Array of {name, region}
 
@@ -276,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span class="metric-label">Direction</span>
                             <div class="metric-value" style="margin-top: 0.30rem;">
                                 <span class="swell-arrow" style="transform: rotate(${parseInt(day.swell.direction) + 90}deg)">➤</span>
-                                <span class="direction-text">${day.swell.direction}</span>
+                                <span class="direction-text">${day.swell.direction}°</span>
                             </div>
                         </div>
                     </div>

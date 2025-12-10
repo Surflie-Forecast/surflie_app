@@ -75,7 +75,12 @@ header {
   /* "Surflie" not uppercase */
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 3px;
+}
+
+.brand img.alt-logo {
+  height: 75px;
+  padding-bottom: 5px;
 }
 
 .header-right {
