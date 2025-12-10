@@ -261,30 +261,24 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span class="direction-text">${day.wind.direction}°</span>
                             </div>
                         </div>
-                        <div class="metric tide-metric" style="flex: 1.2;">
-                            <span class="metric-label">Tide (High / Low)</span>
-                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,0.05); padding: 6px 8px; border-radius: 8px;">
+                        <div class="metric tide-metric" style="flex: 0.9; align-items: flex-end;">
+                            <span class="metric-label" style="text-align: right; width: 100%; font-size: 0.7em;">Tide <span style="font-size: 0.85em;">(High / Low)</span></span>
+                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 4px; padding: 4px 0; align-items: flex-end;">
                                 <!-- High Tide -->
-                                <div class="tide-row" style="display: flex; justify-content: space-between; align-items: center; line-height: 1;">
-                                    <div style="display:flex; align-items:center; gap:4px;">
-                                        <span style="color: #6ee7b7; font-size: 0.8em;">▲</span>
-                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="font-weight:600;">
-                                            ${formatHeight(day.tide.max.height, currentUnit)}${getHeightUnit(currentUnit)}
-                                        </span>
-                                    </div>
-                                    <span style="font-size: 0.85em; opacity: 0.8; font-family: monospace;">${day.tide.max.time}</span>
+                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 6px;">
+                                    <span style="color: #9ca3af; font-size: 0.8em;">▲</span>
+                                    <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.max.time}</span>
+                                    <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
+                                        ${formatHeight(day.tide.max.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                    </span>
                                 </div>
-                                <!-- Divider -->
-                                <div style="height:1px; background: rgba(255,255,255,0.1);"></div>
                                 <!-- Low Tide -->
-                                <div class="tide-row" style="display: flex; justify-content: space-between; align-items: center; line-height: 1;">
-                                    <div style="display:flex; align-items:center; gap:4px;">
-                                        <span style="color: #fca5a5; font-size: 0.8em;">▼</span>
-                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="font-weight:600;">
-                                            ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
-                                        </span>
-                                    </div>
-                                    <span style="font-size: 0.85em; opacity: 0.8; font-family: monospace;">${day.tide.min.time}</span>
+                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 6px;">
+                                    <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.min.time}</span>
+                                    <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
+                                        ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                    </span>
+                                    <span style="color: #9ca3af; font-size: 0.8em;">▼</span>
                                 </div>
                             </div>
                         </div>

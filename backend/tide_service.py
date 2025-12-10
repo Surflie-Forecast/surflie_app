@@ -67,12 +67,64 @@ def find_nearest_stations(target_lat, target_lon, limit=5):
 
 # --- 3. DATA FETCHING ---
 
-def fetch_tide_data(lat, lon, name, output_csv_path):
-    # Match timezone logic from swell_service.py
+# --- 3. DATA FETCHING ---
+
+def fetch_single_tide_type(station_id, start_date, end_date, interval, headers_ua):
+    """
+    Helper to fetch prediction data from NOAA for a specific interval.
+    interval=None -> High Res (6-min)
+    interval='hlo' -> High/Low Peaks
+    """
+    url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
+    params = {
+        "product": "predictions",
+        "station": station_id,
+        "begin_date": start_date.strftime("%Y%m%d"),
+        "end_date": end_date.strftime("%Y%m%d"),
+        "datum": "MLLW",
+        "time_zone": "lst_ldt",
+        "units": "metric",
+        "format": "json"
+    }
+    if interval:
+        params["interval"] = interval
+
+    response = requests.get(url, params=params, headers=headers_ua)
+    response.raise_for_status()
+    return response.json()
+
+def save_tide_csv(spot_name, rows, output_path, headers):
+    """
+    Helper to upsert tide data into a CSV.
+    """
+    final_rows = []
+    
+    # Read existing
+    if os.path.exists(output_path):
+        with open(output_path, 'r', newline='') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row['spot_name'] != spot_name:
+                    final_rows.append(row)
+    
+    # Append new
+    final_rows.extend(rows)
+    
+    # Write
+    with open(output_path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        writer.writerows(final_rows)
+
+def fetch_tide_data(lat, lon, name, output_raw_path):
+    # Determines peaks path based on raw path convention
+    # e.g. .../tide_raw.csv -> .../tide_peaks.csv
+    base_dir = os.path.dirname(output_raw_path)
+    output_peaks_path = os.path.join(base_dir, 'tide_peaks.csv')
+    
     la_tz = pytz.timezone('America/Los_Angeles')
     now_la = datetime.datetime.now(la_tz)
     
-    # Define exact Start (Midnight Today LA) and End (Midnight + 3 Days)
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
     end_of_window_la = start_of_today_la + datetime.timedelta(days=3)
     
@@ -84,96 +136,87 @@ def fetch_tide_data(lat, lon, name, output_csv_path):
         print(f"Could not find any tide stations for {name}")
         return
     
-    # 2. Try Candidates in Order
     success = False
     
+    headers_ua = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'}
+
     for station in candidates:
         station_id = station['id']
         station_name = station['name']
         dist = station['dist']
         print(f"  -> Trying {station_name} (ID: {station_id}, Dist: {dist:.1f} mi)...")
 
-        url = "https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-        params = {
-            "product": "predictions",
-            "station": station_id,
-            "begin_date": start_of_today_la.strftime("%Y%m%d"),
-            "end_date": end_of_window_la.strftime("%Y%m%d"),
-            "datum": "MLLW",
-            "time_zone": "lst_ldt", # Local Standard/Daylight Time
-            "units": "metric",      # Metric for consistency with 'm' (meters)
-            # "interval": "h",      # REMOVED to get 6-min resolution
-            "format": "json"
-        }
-
         try:
-            # Add User-Agent to avoid blocking
-            headers_ua = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'}
-            response = requests.get(url, params=params, headers=headers_ua)
-            response.raise_for_status()
-            data = response.json()
+            # --- A. FETCH HIGH RES (6-min) ---
+            data_raw = fetch_single_tide_type(station_id, start_of_today_la, end_of_window_la, None, headers_ua)
             
-            if 'predictions' not in data:
-                print(f"    x No prediction data available at {station_name}")
-                continue # Try next station
+            if 'predictions' not in data_raw:
+                print(f"    x No detail data available at {station_name}")
+                continue
 
-            predictions = data['predictions']
-            
-            # 3. Process Data
-            new_rows = []
+            # Process Raw
+            rows_raw = []
             seen_dates = set()
-            
-            for p in predictions:
-                # p['t'] is "YYYY-MM-DD HH:MM" in lst_ldt (Local Time)
+            for p in data_raw['predictions']:
                 time_str = p['t']
                 val = float(p['v'])
-                
-                # Parse naive and localize to LA
                 try:
                     dt_naive = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
                     dt_aware = la_tz.localize(dt_naive)
-                    
-                    # Filter: >= Today Midnight
                     if dt_aware >= start_of_today_la:
                         final_date_str = dt_aware.strftime('%Y-%m-%d %H:%M:%S')
-                        
                         if final_date_str not in seen_dates:
-                            new_rows.append({
+                            rows_raw.append({
                                 'spot_name': name,
                                 'datetime': final_date_str,
                                 'tide_height': f"{val:.2f}"
                             })
                             seen_dates.add(final_date_str)
-                except Exception as e:
-                    print(f"Error parsing date {time_str}: {e}")
-            
-            if not new_rows:
-                print(f"    x No valid future data found for {station_name}")
-                continue
+                except:
+                    pass
+            rows_raw.sort(key=lambda x: x['datetime'])
 
-            new_rows.sort(key=lambda x: x['datetime'])
+            # --- B. FETCH PEAKS (High/Low) ---
+            rows_peaks = []
+            try:
+                data_peaks = fetch_single_tide_type(station_id, start_of_today_la, end_of_window_la, 'hilo', headers_ua)
+                if 'predictions' in data_peaks:
+                    for p in data_peaks['predictions']:
+                        # type: 'H' or 'L'
+                        t_type = p.get('type', '')
+                        time_str = p['t']
+                        val = float(p['v'])
+                        
+                        try:
+                            dt_naive = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                            dt_aware = la_tz.localize(dt_naive)
+                            if dt_aware >= start_of_today_la:
+                                rows_peaks.append({
+                                    'spot_name': name,
+                                    'datetime': dt_aware.strftime('%Y-%m-%d %H:%M:%S'),
+                                    'tide_height': f"{val:.2f}",
+                                    'type': t_type # H or L
+                                })
+                        except:
+                            pass
+            except Exception as e:
+                print(f"    ! Warning: Could not fetch peaks for {station_name} ({e}). Using raw only?")
             
-            # 4. Upsert Logic (Remove old rows for this spot, append new)
-            headers = ['spot_name', 'datetime', 'tide_height']
-            final_rows = []
+            rows_peaks.sort(key=lambda x: x['datetime'])
+
+            # --- SAVE FILES ---
+            # 1. Save Raw
+            save_tide_csv(name, rows_raw, output_raw_path, ['spot_name', 'datetime', 'tide_height'])
             
-            if os.path.exists(output_csv_path):
-                with open(output_csv_path, 'r', newline='') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        if row['spot_name'] != name:
-                            final_rows.append(row)
-            
-            final_rows.extend(new_rows)
-            
-            with open(output_csv_path, 'w', newline='') as f:
-                writer = csv.DictWriter(f, fieldnames=headers)
-                writer.writeheader()
-                writer.writerows(final_rows)
-                
-            print(f"  -> CHECK: Saved {len(new_rows)} tide rows for {name} using station {station_name}")
+            # 2. Save Peaks (if any)
+            if rows_peaks:
+                save_tide_csv(name, rows_peaks, output_peaks_path, ['spot_name', 'datetime', 'tide_height', 'type'])
+                print(f"  -> CHECK: Saved {len(rows_raw)} raw pts & {len(rows_peaks)} peaks for {name} using {station_name}")
+            else:
+                 print(f"  -> CHECK: Saved {len(rows_raw)} raw pts (NO PEAKS FOUND) for {name}")
+
             success = True
-            break # Stop trying other stations
+            break
             
         except Exception as e:
             print(f"    x Error fetching tide for {station_name}: {e}")
