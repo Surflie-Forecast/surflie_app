@@ -55,12 +55,36 @@ document.addEventListener('DOMContentLoaded', () => {
     // Set current date in header
     const dateElement = document.getElementById('currentDate');
     const today = new Date();
-    dateElement.textContent = today.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
+
+    function updateDateDisplay() {
+        const isMobile = window.innerWidth <= 768;
+
+        if (isMobile) {
+            // Mobile: Stacked format
+            const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
+            const monthDay = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+            const year = today.getFullYear();
+
+            dateElement.innerHTML = `
+                <div style="text-align: right; line-height: 1.3;">
+                    <div style="font-size: 0.9rem; font-weight: 600;">${dayOfWeek}</div>
+                    <div style="font-size: 0.8rem;">${monthDay}</div>
+                    <div style="font-size: 0.7rem; opacity: 0.8;">${year}</div>
+                </div>
+            `;
+        } else {
+            // Desktop: Single line format
+            dateElement.textContent = today.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+    }
+
+    updateDateDisplay();
+    window.addEventListener('resize', updateDateDisplay);
 
     const searchInput = document.getElementById('spotSearch');
     const searchBtn = document.getElementById('searchBtn');
@@ -71,15 +95,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let availableSpots = []; // Array of {name, region}
 
     async function init() {
-        // Setup Toggle Switch
-        const unitToggle = document.getElementById('unitToggle');
-        // If currentUnit is 'imperial', check the box
-        unitToggle.checked = currentUnit === 'imperial';
+        // Setup Toggle Switches (Desktop & Mobile)
+        const unitToggles = document.querySelectorAll('.unit-toggle');
 
-        unitToggle.addEventListener('change', (e) => {
-            currentUnit = e.target.checked ? 'imperial' : 'metric';
-            localStorage.setItem('surfForecastUnit', currentUnit);
-            updateDisplayedUnits();
+        // Initial state for all
+        unitToggles.forEach(toggle => {
+            toggle.checked = currentUnit === 'imperial';
+
+            toggle.addEventListener('change', (e) => {
+                const newState = e.target.checked;
+                currentUnit = newState ? 'imperial' : 'metric';
+                localStorage.setItem('surfForecastUnit', currentUnit);
+
+                // Sync other toggles
+                unitToggles.forEach(t => t.checked = newState);
+
+                updateDisplayedUnits();
+            });
         });
 
         try {
