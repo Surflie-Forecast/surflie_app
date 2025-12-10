@@ -48,11 +48,11 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
             let color = '#ef4444'; // Red - Poor
             if (height > 2.5) {
                 color = '#a855f7'; // Purple - Epic
-            } else if (rating_val > 18) {
+            } else if (rating_val > 18 && windSpeed < 12) {
                 color = '#15803d'; // Dark Green - Excellent
-            } else if (rating_val > 12) {
+            } else if (rating_val > 12 && windSpeed < 12) {
                 color = '#22c55e'; // Green - Good
-            } else if (rating_val > 6) {
+            } else if (rating_val > 6 && windSpeed < 10) {
                 color = '#eab308'; // Yellow - Fair
             }
 

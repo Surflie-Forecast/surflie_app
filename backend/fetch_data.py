@@ -2,6 +2,7 @@ import os
 import datetime
 import swell_service
 import wind_service
+import tide_service
 import aggregate_daily
 import csv # Added for csv.DictReader
 
@@ -9,6 +10,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, '../data')
 SWELL_FILE = os.path.join(DATA_DIR, 'swell_raw.csv')
 WIND_FILE = os.path.join(DATA_DIR, 'wind_raw.csv')
+TIDE_FILE = os.path.join(DATA_DIR, 'tide_raw.csv')
 LOCATIONS_FILE = os.path.join(DATA_DIR, 'locations.csv')
 
 def fetch_all_data():
@@ -26,6 +28,8 @@ def fetch_all_data():
         os.remove(SWELL_FILE)
     if os.path.exists(WIND_FILE):
         os.remove(WIND_FILE)
+    if os.path.exists(TIDE_FILE):
+        os.remove(TIDE_FILE)
         
     # 3. Fetch data for each spot
     print(f"Reading locations from {LOCATIONS_FILE}...")
@@ -50,6 +54,12 @@ def fetch_all_data():
                     wind_service.fetch_wind_data(lat, lon, name, WIND_FILE)
                 except Exception as e:
                     print(f"Error fetching wind for {name}: {e}")
+
+                # Fetch Tide
+                try:
+                    tide_service.fetch_tide_data(lat, lon, name, TIDE_FILE)
+                except Exception as e:
+                    print(f"Error fetching tide for {name}: {e}")
 
     except FileNotFoundError:
         print(f"Error: Locations file not found at {LOCATIONS_FILE}")
