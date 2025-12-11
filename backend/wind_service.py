@@ -24,7 +24,7 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     
     # Define exact Start/End of the requested days
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window_la = start_of_today_la + datetime.timedelta(days=3)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=9)
     
     # Calculate GEE Request Window (UTC) with a BUFFER
     # We ask GEE for 3 hours BEFORE midnight to ensure we don't miss edge cases
@@ -37,7 +37,7 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     print(f"Target Window (LA): {start_of_today_la} to {end_of_window_la}")
     
     # --- 2. SELECT FORECAST RUN ---
-    collection_id = 'ECMWF/NRT_FORECAST/IFS/OPER'
+    collection_id = 'NOAA/GFS0P25'
     
     # Find the 00:00 UTC run for the current calendar date
     run_date_str = start_of_today_la.strftime('%Y-%m-%d')
@@ -53,13 +53,13 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
         target_run_end -= datetime.timedelta(days=1)
         forecast_run = raw_collection.filterDate(target_run_start, target_run_end)
 
-    # Get enough forecast hours to cover the timezone offset + 3 days
-    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 100))
+    # Get enough forecast hours to cover the timezone offset + 9 days
+    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 240))
 
     # --- 3. PROCESS IMAGES ---
     def process_wind(image):
-        u = image.select('u_component_of_wind_10m_sfc')
-        v = image.select('v_component_of_wind_10m_sfc')
+        u = image.select('u_component_of_wind_10m_above_ground')
+        v = image.select('v_component_of_wind_10m_above_ground')
         
         speed = u.hypot(v).rename('wind_speed')
         radToDeg = 180 / math.pi

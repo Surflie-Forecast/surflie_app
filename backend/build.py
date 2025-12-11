@@ -9,6 +9,7 @@ import shutil
 from datetime import datetime, timedelta
 from collections import defaultdict
 import pytz
+from rating_utils import get_daily_rating_from_hourly
 
 # Paths
 DATA_DIR = os.path.join(os.path.dirname(__file__), '../data')
@@ -111,26 +112,10 @@ def generate_forecast_json(spot_name, locations):
                     day_label = 'Unknown'
                     date_display = row['date']
                 
-                # Calculate rating and color
-                swell_height = float(row['swell_height'])
-                swell_period = float(row['swell_period'])
-                rating_val = swell_height * swell_period
-                
-                if swell_height > 2.5:
-                    rating = 'Epic'
-                    color = '#a855f7'  # Purple
-                elif rating_val > 18:
-                    rating = 'Excellent'
-                    color = '#15803d'  # Dark Green
-                elif rating_val > 12:
-                    rating = 'Good'
-                    color = '#22c55e'  # Green
-                elif rating_val > 6:
-                    rating = 'Fair'
-                    color = '#eab308'  # Yellow
-                else:
-                    rating = 'Poor'
-                    color = '#ef4444'  # Red
+                # Calculate rating and color based on hourly data (7am-7pm)
+                swell_file = os.path.join(DATA_DIR, 'swell_raw.csv')
+                wind_file = os.path.join(DATA_DIR, 'wind_raw.csv')
+                rating, color = get_daily_rating_from_hourly(spot_name, row['date'], swell_file, wind_file)
                 
                 forecast_data.append({
                     'day': day_label,

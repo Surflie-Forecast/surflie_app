@@ -63,20 +63,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Mobile: Stacked format
             const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' });
             const monthDay = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-            const year = today.getFullYear();
 
             dateElement.innerHTML = `
                 <div style="text-align: right; line-height: 1.3;">
                     <div style="font-size: 0.9rem; font-weight: 600;">${dayOfWeek}</div>
                     <div style="font-size: 0.8rem;">${monthDay}</div>
-                    <div style="font-size: 0.7rem; opacity: 0.8;">${year}</div>
                 </div>
             `;
         } else {
             // Desktop: Single line format
             dateElement.textContent = today.toLocaleDateString('en-US', {
                 weekday: 'long',
-                year: 'numeric',
                 month: 'long',
                 day: 'numeric'
             });
