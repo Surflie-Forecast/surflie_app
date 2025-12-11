@@ -8,6 +8,7 @@ import csv
 import json
 import os
 from collections import defaultdict
+from rating_utils import get_daily_rating_from_hourly
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, '../data')
@@ -33,38 +34,10 @@ def generate_spots_json():
     print(f"✓ Generated {output_file}")
     return spots
 
-def get_rating_and_color(swell_height, swell_period):
-    """Determine rating and color based on swell height and period (matches app.py logic)"""
-    try:
-        height = float(swell_height)
-        period = float(swell_period)
-        rating_val = height * period
-    except:
-        rating_val = 0
-        height = 0
-    
-    rating = "Poor"
-    color = "#ef4444"  # Red
-    
-    # Swell height check for "Epic" (Purple)
-    if height > 2.5 and period > 12:
-        rating = "Epic"
-        color = "#a855f7"  # Purple
-    elif rating_val > 13:
-        rating = "Excellent"
-        color = "#15803d"  # Dark Green
-    elif rating_val > 9:
-        rating = "Good"
-        color = "#22c55e"  # Green
-    elif rating_val > 4:
-        rating = "Fair"
-        color = "#eab308"  # Yellow
-    
-    return rating, color
-
 def generate_forecast_json(spot_name, region):
     """Generate api/forecast/{spot_name}.json from daily_forecast.csv"""
     daily_file = os.path.join(DATA_DIR, 'daily_forecast.csv')
+    swell_file = os.path.join(DATA_DIR, 'swell_raw.csv')
     forecast_dir = os.path.join(API_DIR, 'forecast')
     os.makedirs(forecast_dir, exist_ok=True)
     
@@ -76,7 +49,9 @@ def generate_forecast_json(spot_name, region):
         reader = csv.DictReader(f)
         for row in reader:
             if row['spot_name'] == spot_name:
-                rating, color = get_rating_and_color(row['swell_height'], row['swell_period'])
+                # Calculate rating and color based on hourly data (7am-7pm)
+                wind_file = os.path.join(DATA_DIR, 'wind_raw.csv')
+                rating, color = get_daily_rating_from_hourly(spot_name, row['date'], swell_file, wind_file)
                 
                 # Parse date for formatting
                 date_parts = row['date'].split('-')

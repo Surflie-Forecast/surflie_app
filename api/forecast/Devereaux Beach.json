@@ -85,6 +85,174 @@
       },
       "rating": "Fair",
       "color": "#eab308"
+    },
+    {
+      "day": "Saturday",
+      "date": "Dec 13",
+      "date_iso": "2025-12-13",
+      "swell": {
+        "height": "0.63",
+        "period": "10.3",
+        "direction": "288",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "8.1",
+        "direction": "179",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.51",
+          "time": "05:08"
+        },
+        "min": {
+          "height": "0.39",
+          "time": "12:03"
+        }
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Sunday",
+      "date": "Dec 14",
+      "date_iso": "2025-12-14",
+      "swell": {
+        "height": "0.49",
+        "period": "9.6",
+        "direction": "285",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "8.7",
+        "direction": "178",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.59",
+          "time": "05:41"
+        },
+        "min": {
+          "height": "0.22",
+          "time": "12:53"
+        }
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Monday",
+      "date": "Dec 15",
+      "date_iso": "2025-12-15",
+      "swell": {
+        "height": "0.60",
+        "period": "8.8",
+        "direction": "288",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "4.3",
+        "direction": "160",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.65",
+          "time": "06:12"
+        },
+        "min": {
+          "height": "0.07",
+          "time": "13:34"
+        }
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Tuesday",
+      "date": "Dec 16",
+      "date_iso": "2025-12-16",
+      "swell": {
+        "height": "0.64",
+        "period": "7.8",
+        "direction": "288",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "0.0",
+        "direction": "0",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.71",
+          "time": "06:41"
+        },
+        "min": {
+          "height": "-0.04",
+          "time": "14:10"
+        }
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
+    },
+    {
+      "day": "Wednesday",
+      "date": "Dec 17",
+      "date_iso": "2025-12-17",
+      "swell": {
+        "height": "0.86",
+        "period": "8.4",
+        "direction": "290",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "0.0",
+        "direction": "0",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.75",
+          "time": "07:11"
+        },
+        "min": {
+          "height": "-0.12",
+          "time": "14:43"
+        }
+      },
+      "rating": "Fair",
+      "color": "#eab308"
+    },
+    {
+      "day": "Thursday",
+      "date": "Dec 18",
+      "date_iso": "2025-12-18",
+      "swell": {
+        "height": "0.78",
+        "period": "7.9",
+        "direction": "289",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "0.0",
+        "direction": "0",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.78",
+          "time": "07:42"
+        },
+        "min": {
+          "height": "-0.18",
+          "time": "15:16"
+        }
+      },
+      "rating": "Fair",
+      "color": "#eab308"
     }
   ]
 }

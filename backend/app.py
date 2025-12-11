@@ -4,6 +4,7 @@ import os
 import csv
 import datetime
 import pytz
+from rating_utils import get_daily_rating_from_hourly
 # import swell_service # Not strictly needed if reading from CSV
 
 app = Flask(__name__, static_folder='../', static_url_path='')
@@ -59,39 +60,17 @@ def get_forecast():
     # Sort by date (should be sorted by agg script, but double check)
     future_data.sort(key=lambda x: x['date'])
     
-    # Take top 3 days
-    final_rows = future_data[:3]
+    # Take top 6 days
+    final_rows = future_data[:6]
     
     forecast = []
     for row in final_rows:
         dt_obj = datetime.datetime.strptime(row['date'], '%Y-%m-%d').date()
         
-        # Rating Logic
-        try:
-            height = float(row['swell_height'])
-            period = float(row['swell_period'])
-            rating_val = height * period
-        except:
-            rating_val = 0
-            height = 0 # Added height = 0 here
-        
-        rating = "Poor"
-        color = "#ef4444" # Red
-        
-        # Swell height check for "Insanely Big" (Purple)
-        # Assuming > 2.0m is big for this context, or maybe high rating? 
-        if height > 2.5 and period > 12:
-             rating = "Epic"
-             color = "#a855f7" # Purple
-        elif rating_val > 13: 
-            rating = "Excellent"
-            color = "#15803d" # Dark Green
-        elif rating_val > 9: 
-            rating = "Good"
-            color = "#22c55e" # Green
-        elif rating_val > 4: 
-            rating = "Fair"
-            color = "#eab308" # Yellow
+        # Calculate rating and color based on hourly data (7am-7pm)
+        swell_file = os.path.join(os.path.dirname(__file__), '../data/swell_raw.csv')
+        wind_file = os.path.join(os.path.dirname(__file__), '../data/wind_raw.csv')
+        rating, color = get_daily_rating_from_hourly(spot_name, row['date'], swell_file, wind_file)
 
         # Check if this date is today (in LA time)
         today_la = now_la.date()
