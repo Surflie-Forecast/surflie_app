@@ -218,6 +218,59 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Scroll Indicator Setup
+    const forecastContainer = document.getElementById('forecastContainer');
+    const scrollDotLeft = document.getElementById('scrollDotLeft');
+    const scrollBar = document.getElementById('scrollBar');
+    const scrollDotRight = document.getElementById('scrollDotRight');
+
+    function updateScrollIndicator() {
+        if (!forecastContainer || !scrollDotLeft || !scrollBar || !scrollDotRight) return;
+
+        const scrollLeft = forecastContainer.scrollLeft;
+        const scrollWidth = forecastContainer.scrollWidth;
+        const clientWidth = forecastContainer.clientWidth;
+        const maxScroll = scrollWidth - clientWidth;
+
+        // If there's no scrollable content, hide the indicator
+        if (maxScroll <= 0) {
+            scrollDotLeft.classList.remove('active');
+            scrollBar.classList.remove('active');
+            scrollDotRight.classList.remove('active');
+            return;
+        }
+
+        // Calculate scroll percentage (0 to 1)
+        const scrollPercentage = scrollLeft / maxScroll;
+
+        // Left dot: active when at the start (0-10%)
+        if (scrollPercentage <= 0.1) {
+            scrollDotLeft.classList.add('active');
+        } else {
+            scrollDotLeft.classList.remove('active');
+        }
+
+        // Middle bar: active when in the middle (10%-90%)
+        if (scrollPercentage > 0.1 && scrollPercentage < 0.9) {
+            scrollBar.classList.add('active');
+        } else {
+            scrollBar.classList.remove('active');
+        }
+
+        // Right dot: active when at the end (90-100%)
+        if (scrollPercentage >= 0.9) {
+            scrollDotRight.classList.add('active');
+        } else {
+            scrollDotRight.classList.remove('active');
+        }
+    }
+
+    // Listen for scroll events
+    if (forecastContainer) {
+        forecastContainer.addEventListener('scroll', updateScrollIndicator);
+        window.addEventListener('resize', updateScrollIndicator);
+    }
+
     async function renderForecast(spotName) {
         // Update Title
         spotNameTitle.textContent = "Loading...";
@@ -404,6 +457,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 container.appendChild(card);
             });
+
+            // Update scroll indicator after rendering
+            setTimeout(() => {
+                updateScrollIndicator();
+            }, 100);
         } catch (e) {
             console.error("Forecast rendering error:", e);
             container.innerHTML = `<div style="text-align:center; width:100%; color:red; margin-top:2rem;">

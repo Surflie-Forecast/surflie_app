@@ -372,32 +372,59 @@ input:checked+.slider:before {
 .forecast-container {
   display: flex;
   overflow-x: auto;
-  overflow-y: visible;
   gap: 2rem;
 
   /* Align first card with hero - left padding counters wrapper's negative margin */
-  padding: 2rem 12rem 4rem 12rem;
+  /* Extra vertical padding to accommodate hover shadow */
+  padding: 2rem 12rem 3rem 12rem;
 
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
 
-  /* Hide scrollbar for clean look but verify usability */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(142, 141, 141, 0.469) rgba(0, 0, 0, 0.05);
+  /* Hide scrollbar completely for custom indicator */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .forecast-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom Scroll Indicator */
+.scroll-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0rem 0 0.5rem 0;
+  margin: -2rem 0 0 0;
+  position: relative;
+  z-index: 10;
+}
+
+.scroll-dot {
+  width: 8px;
   height: 8px;
+  border-radius: 50%;
+  background-color: rgba(19, 25, 41, 0.2);
+  transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
-.forecast-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+.scroll-dot.active {
+  background-color: rgba(19, 25, 41, 0.8);
+  transform: scale(1.2);
 }
 
-.forecast-container::-webkit-scrollbar-thumb {
-  background-color: var(--accent-blue);
-  border-radius: 4px;
+.scroll-bar {
+  width: 40px;
+  height: 7px;
+  border-radius: 6px;
+  background-color: rgba(19, 25, 41, 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.scroll-bar.active {
+  background-color: rgba(19, 25, 41, 0.8);
 }
 
 .forecast-card {
@@ -415,12 +442,14 @@ input:checked+.slider:before {
   position: relative;
   overflow: hidden;
   animation: fadeInUp 0.8s ease-out 0.4s backwards;
+  z-index: 1;
 }
 
 .forecast-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
   border-color: var(--glass-shine);
+  z-index: 10;
 }
 
 .forecast-card::before {
@@ -583,7 +612,7 @@ input:checked+.slider:before {
 /* Hero Section */
 .hero {
   flex: 0 0 auto;
-  min-height: 400px;
+  min-height: 300px;
   display: flex;
   flex-direction: column;
   justify-content: center;
