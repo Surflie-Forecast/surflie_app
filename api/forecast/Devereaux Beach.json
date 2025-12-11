@@ -4,34 +4,6 @@
   "forecast": [
     {
       "day": "Day",
-      "date": "Dec 10",
-      "date_iso": "2025-12-10",
-      "swell": {
-        "height": "0.68",
-        "period": "9.9s",
-        "direction": "298\u00b0",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "3.3",
-        "direction": "185",
-        "unit": "kts"
-      },
-      "tide": {
-        "max": {
-          "height": "1.39",
-          "time": "13:18"
-        },
-        "min": {
-          "height": "0.05",
-          "time": "20:35"
-        }
-      },
-      "rating": "Fair",
-      "color": "#eab308"
-    },
-    {
-      "day": "Day",
       "date": "Dec 11",
       "date_iso": "2025-12-11",
       "swell": {
@@ -41,8 +13,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.4",
-        "direction": "184",
+        "speed": "3.2",
+        "direction": "194",
         "unit": "kts"
       },
       "tide": {
@@ -69,8 +41,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.2",
-        "direction": "208",
+        "speed": "3.0",
+        "direction": "206",
         "unit": "kts"
       },
       "tide": {
@@ -97,8 +69,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.0",
-        "direction": "182",
+        "speed": "4.8",
+        "direction": "186",
         "unit": "kts"
       },
       "tide": {
@@ -125,8 +97,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "6.0",
-        "direction": "181",
+        "speed": "6.3",
+        "direction": "190",
         "unit": "kts"
       },
       "tide": {
@@ -153,8 +125,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.5",
-        "direction": "192",
+        "speed": "4.6",
+        "direction": "184",
         "unit": "kts"
       },
       "tide": {
@@ -181,8 +153,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.7",
-        "direction": "163",
+        "speed": "2.1",
+        "direction": "178",
         "unit": "kts"
       },
       "tide": {
@@ -209,8 +181,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.1",
-        "direction": "142",
+        "speed": "3.8",
+        "direction": "168",
         "unit": "kts"
       },
       "tide": {
@@ -237,8 +209,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.8",
-        "direction": "136",
+        "speed": "6.6",
+        "direction": "148",
         "unit": "kts"
       },
       "tide": {
@@ -253,6 +225,34 @@
       },
       "rating": "Fair",
       "color": "#eab308"
+    },
+    {
+      "day": "Day",
+      "date": "Dec 19",
+      "date_iso": "2025-12-19",
+      "swell": {
+        "height": "0.00",
+        "period": "0.0s",
+        "direction": "0\u00b0",
+        "unit": "m"
+      },
+      "wind": {
+        "speed": "14.4",
+        "direction": "166",
+        "unit": "kts"
+      },
+      "tide": {
+        "max": {
+          "height": "1.80",
+          "time": "08:13"
+        },
+        "min": {
+          "height": "-0.21",
+          "time": "15:49"
+        }
+      },
+      "rating": "Poor",
+      "color": "#ef4444"
     }
   ]
 }
