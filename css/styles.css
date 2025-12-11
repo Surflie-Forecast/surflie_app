@@ -50,6 +50,47 @@ body {
   flex-direction: column;
   gap: 0;
   /* No gap - unit toggle provides spacing */
+  position: relative;
+}
+
+/* Left lateral gradient overlay - full height */
+.app-container::before {
+  content: '';
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 15rem;
+
+  /* Same vertical gradient as background */
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+
+  /* Horizontal fade mask from left edge to transparent - non-linear easing */
+  -webkit-mask-image: linear-gradient(to right, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  mask-image: linear-gradient(to right, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Right lateral gradient overlay - full height */
+.app-container::after {
+  content: '';
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 15rem;
+
+  /* Same vertical gradient as background */
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+
+  /* Horizontal fade mask from right edge to transparent - non-linear easing */
+  -webkit-mask-image: linear-gradient(to left, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  mask-image: linear-gradient(to left, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+
+  pointer-events: none;
+  z-index: 100;
 }
 
 /* Header */
@@ -275,7 +316,7 @@ input:checked+.slider:before {
   background: var(--accent-blue);
   border: none;
   border-radius: 50%;
-  width: 50px;
+  width: 60px;
   height: 50px;
   display: flex;
   align-items: center;
@@ -283,7 +324,7 @@ input:checked+.slider:before {
   cursor: pointer;
   color: white;
   /* Icon color */
-  transition: transform 0.2s ease;
+  transition: transform 0.3s ease;
 }
 
 .search-container button:hover {
@@ -319,14 +360,51 @@ input:checked+.slider:before {
   background: rgba(56, 189, 248, 0.1);
 }
 
-/* Forecast Grid */
+/* Forecast Wrapper & Horizontal Scroll */
+.forecast-wrapper {
+  position: relative;
+  /* Extend beyond app container padding */
+  margin-left: -15rem;
+  margin-right: -15rem;
+  z-index: 5;
+}
+
 .forecast-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  display: flex;
+  overflow-x: auto;
+  overflow-y: visible;
   gap: 2rem;
+
+  /* Align first card with hero - left padding counters wrapper's negative margin */
+  padding: 2rem 4rem 4rem 12rem;
+
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+
+  /* Hide scrollbar for clean look but verify usability */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(142, 141, 141, 0.469) rgba(0, 0, 0, 0.05);
+}
+
+.forecast-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.forecast-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.forecast-container::-webkit-scrollbar-thumb {
+  background-color: var(--accent-blue);
+  border-radius: 4px;
 }
 
 .forecast-card {
+  /* Calculation: (100% width - (2 gaps * 2rem)) / 3 cards */
+  flex: 0 0 calc((100% - 12rem) / 3);
+  scroll-snap-align: center;
+
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -519,7 +597,7 @@ input:checked+.slider:before {
   /* Allow dropdown to extend beyond */
   box-shadow: var(--card-shadow);
   animation: fadeInUp 0.8s ease-out 0.2s backwards;
-  margin-bottom: 2rem;
+  /* margin-bottom: 2rem; */
   z-index: 20;
   /* Default gradient fallback */
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -674,6 +752,12 @@ input:checked+.slider:before {
 
   .app-container {
     padding: 0.8rem;
+  }
+
+  /* Mobile: Show 1 card + bit of next one */
+  .forecast-card {
+    flex: 0 0 calc(85%);
+    /* 85% width to show next card peeking */
   }
 }
 
