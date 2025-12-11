@@ -754,11 +754,31 @@ input:checked+.slider:before {
     padding: 0.8rem;
   }
 
-  /* Mobile: Show 1 card + bit of next one */
+  /* Mobile: Show 1 card fully */
   .forecast-card {
-    flex: 0 0 calc(85%);
-    /* 85% width to show next card peeking */
+    flex: 0 0 100%;
   }
+
+  /* Fix lateral gradients on mobile */
+  .app-container::before,
+  .app-container::after {
+    width: 1.2rem;
+    /* Much tighter fade on mobile */
+  }
+
+  /* Reset wrapper margins */
+  .forecast-wrapper {
+    margin-left: -1rem;
+    margin-right: -1rem;
+  }
+
+  /* Reset container padding */
+  .forecast-container {
+    padding: 1rem 1rem;
+    /* Balanced padding to match wrapper margin */
+    gap: 1rem;
+  }
+
 }
 
 /* Hourly Details */
