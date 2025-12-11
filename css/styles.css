@@ -60,7 +60,7 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  width: 15rem;
+  width: 10rem;
 
   /* Same vertical gradient as background */
   background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
@@ -80,7 +80,7 @@ body {
   right: 0;
   top: 0;
   bottom: 0;
-  width: 15rem;
+  width: 10rem;
 
   /* Same vertical gradient as background */
   background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
@@ -376,7 +376,7 @@ input:checked+.slider:before {
   gap: 2rem;
 
   /* Align first card with hero - left padding counters wrapper's negative margin */
-  padding: 2rem 4rem 4rem 12rem;
+  padding: 2rem 12rem 4rem 12rem;
 
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
