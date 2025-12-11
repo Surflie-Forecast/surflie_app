@@ -808,6 +808,12 @@ input:checked+.slider:before {
     gap: 1rem;
   }
 
+  /* Increase scroll indicator distance on mobile */
+  .scroll-indicator {
+    margin-top: 0rem;
+    padding: 0rem 0 0.5rem 0;
+  }
+
 }
 
 /* Hourly Details */
