@@ -23,7 +23,7 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
     
     # Define exact Start (Midnight Today LA) and End (Midnight + 6 Days)
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window_la = start_of_today_la + datetime.timedelta(days=9)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=12)
     
     # Request Buffer (-4 hours) to catch early model runs
     buffer_hours = 4
@@ -97,7 +97,31 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
 
     new_rows.sort(key=lambda x: x['datetime'])
 
-    # --- 6. UPSERT LOGIC (Update specific spot, keep others) ---
+    # --- 6. PERSISTENCE FILL (Fix truncation) ---
+    # GEE wave models often end at 18:00 or 21:00 UTC, leaving late night 
+    # hours missing in local time. We fill the last few hours of the 
+    # LAST DAY ONLY by persisting the final value.
+    if new_rows:
+        last_row = new_rows[-1]
+        last_dt = datetime.datetime.strptime(last_row['datetime'], '%Y-%m-%d %H:%M:%S')
+        
+        # Define target end time: 22:00 of the last day we have data for
+        # (or the 9th day, but let's just complete the day of the last row)
+        target_end_of_day = last_dt.replace(hour=22, minute=0, second=0)
+        
+        current_dt = last_dt
+        while current_dt < target_end_of_day:
+            current_dt += datetime.timedelta(hours=3)
+            print(f"  -> Filling missing slot: {current_dt} with persistence")
+            new_rows.append({
+                'spot_name': name,
+                'datetime': current_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                'swell_height': last_row['swell_height'],
+                'swell_period': last_row['swell_period'],
+                'swell_direction': last_row['swell_direction']
+            })
+
+    # --- 7. UPSERT LOGIC (Update specific spot, keep others) ---
     headers = ['spot_name', 'datetime', 'swell_height', 'swell_period', 'swell_direction']
     final_rows = []
     

@@ -60,8 +60,8 @@ def get_forecast():
     # Sort by date (should be sorted by agg script, but double check)
     future_data.sort(key=lambda x: x['date'])
     
-    # Take top 6 days
-    final_rows = future_data[:6]
+    # Take top 9 days
+    final_rows = future_data[:9]
     
     forecast = []
     for row in final_rows:

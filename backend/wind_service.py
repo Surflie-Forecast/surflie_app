@@ -37,7 +37,7 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     print(f"Target Window (LA): {start_of_today_la} to {end_of_window_la}")
     
     # --- 2. SELECT FORECAST RUN ---
-    collection_id = 'ECMWF/NRT_FORECAST/IFS/OPER'
+    collection_id = 'NOAA/GFS0P25'
     
     # Find the 00:00 UTC run for the current calendar date
     run_date_str = start_of_today_la.strftime('%Y-%m-%d')
@@ -53,13 +53,13 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
         target_run_end -= datetime.timedelta(days=1)
         forecast_run = raw_collection.filterDate(target_run_start, target_run_end)
 
-    # Get enough forecast hours to cover the timezone offset + 6 days
-    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 150))
+    # Get enough forecast hours to cover the timezone offset + 9 days
+    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 240))
 
     # --- 3. PROCESS IMAGES ---
     def process_wind(image):
-        u = image.select('u_component_of_wind_10m_sfc')
-        v = image.select('v_component_of_wind_10m_sfc')
+        u = image.select('u_component_of_wind_10m_above_ground')
+        v = image.select('v_component_of_wind_10m_above_ground')
         
         speed = u.hypot(v).rename('wind_speed')
         radToDeg = 180 / math.pi
