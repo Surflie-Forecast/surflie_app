@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials and Secrets
+setup_env.sh
+.env
+*.pem
+*.key
+gee_key.json
+
+# Data files (optional - comment out if you want to track them)
+# data/*.csv
+
+# Temporary files
+temp_*.nc
+*.nc

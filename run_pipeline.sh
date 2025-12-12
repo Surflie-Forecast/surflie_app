@@ -8,6 +8,14 @@ set -e  # Exit on error
 echo "🌊 Starting Surf Forecast Pipeline..."
 echo "======================================"
 
+# Load environment variables if setup_env.sh exists
+if [ -f "setup_env.sh" ]; then
+    echo "🔐 Loading credentials from setup_env.sh..."
+    source setup_env.sh
+else
+    echo "⚠️  setup_env.sh not found - using system environment variables"
+fi
+
 # Activate virtual environment
 source .venv/bin/activate
 

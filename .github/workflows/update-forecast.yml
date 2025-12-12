@@ -39,6 +39,9 @@ jobs:
           chmod 600 gee_key.json
 
       - name: Run data fetch pipeline
+        env:
+          COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+          COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
         run: python3 backend/fetch_data.py
 
       - name: Build static JSON files

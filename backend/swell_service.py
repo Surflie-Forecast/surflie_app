@@ -8,11 +8,24 @@ import os
 import pytz
 
 # --- CONFIGURATION ---
-USERNAME = os.environ.get('COPERNICUS_USERNAME', 'pcarbomestre') 
-PASSWORD = os.environ.get('COPERNICUS_PASSWORD', '3zR#j#WYwAYYQK')
+# Copernicus credentials should be set as environment variables
+# For GitHub Actions: Set as repository secrets (COPERNICUS_USERNAME, COPERNICUS_PASSWORD)
+# For local development: Set in your shell or .env file
+USERNAME = os.environ.get('COPERNICUS_USERNAME') 
+PASSWORD = os.environ.get('COPERNICUS_PASSWORD')
 
 def initialize_copernicus():
     """Checks for credentials and performs auto-login if needed."""
+    # Validate credentials are set
+    if not USERNAME or not PASSWORD:
+        raise EnvironmentError(
+            "Copernicus credentials not found. Please set environment variables:\n"
+            "  - COPERNICUS_USERNAME\n"
+            "  - COPERNICUS_PASSWORD\n"
+            "For GitHub Actions, add these as repository secrets.\n"
+            "For local development, export them in your shell or use a .env file."
+        )
+    
     creds_path = os.path.expanduser("~/.copernicusmarine/.copernicusmarine-credentials")
     
     if os.path.exists(creds_path):

@@ -1,5 +1,12 @@
 flask
 flask-cors
-earthengine-api
 requests
 pytz
+# Copernicus Marine Service (for swell data)
+copernicusmarine
+xarray
+pandas
+numpy
+# NOAA NOMADS (for wind data)
+netCDF4
+pydap
