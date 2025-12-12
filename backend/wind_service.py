@@ -24,7 +24,7 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     
     # Define exact Start/End of the requested days
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window_la = start_of_today_la + datetime.timedelta(days=9)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=8)
     
     # Calculate GEE Request Window (UTC) with a BUFFER
     # We ask GEE for 3 hours BEFORE midnight to ensure we don't miss edge cases
@@ -53,8 +53,8 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
         target_run_end -= datetime.timedelta(days=1)
         forecast_run = raw_collection.filterDate(target_run_start, target_run_end)
 
-    # Get enough forecast hours to cover the timezone offset + 9 days
-    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 240))
+    # Get enough forecast hours to cover the timezone offset + 8 days (~200 hours)
+    collection = forecast_run.filter(ee.Filter.lt('forecast_hours', 200))
 
     # --- 3. PROCESS IMAGES ---
     def process_wind(image):

@@ -45,7 +45,7 @@ body {
 .app-container {
   width: 100%;
   max-width: 1200px;
-  padding: 2rem;
+  padding: 0 2rem 2rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -377,6 +377,7 @@ input:checked+.slider:before {
   /* Align first card with hero - left padding counters wrapper's negative margin */
   /* Extra vertical padding to accommodate hover shadow */
   padding: 2rem 12rem 3rem 12rem;
+  /* No top padding */
 
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
@@ -732,28 +733,18 @@ input:checked+.slider:before {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 0;
-    /* Remove padding, controls bar takes space */
+    padding-bottom: 1rem;
+    /* Restore padding */
   }
 
-  /* Right side: Only Date now */
+  /* Right side: Toggle only now (Date hidden) */
   .header-right {
     width: auto;
     flex-direction: row;
     align-items: center;
   }
 
-  .date-display {
-    text-align: right;
-    font-size: 0.9rem;
-  }
-
-  /* Controls Bar (Mobile Only Switch) */
-  .controls-bar {
-    justify-content: flex-end;
-    margin-bottom: 0.5rem;
-    padding: 0 0.5rem;
-  }
+  /* Date is handled by desktop-only class */
 
   /* Hero Section */
   .hero {
@@ -786,6 +777,26 @@ input:checked+.slider:before {
   /* Mobile: Show 1 card fully */
   .forecast-card {
     flex: 0 0 100%;
+    padding: 1.25rem;
+  }
+
+  .forecast-card .card-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .forecast-card .metric-row {
+    padding-bottom: 0.75rem;
+  }
+
+  .forecast-card .metric-row.main-row {
+    padding-bottom: 0.75rem;
+  }
+
+  .forecast-card .rating-badge {
+    margin-top: 0.75rem;
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
   }
 
   /* Fix lateral gradients on mobile */
@@ -812,6 +823,11 @@ input:checked+.slider:before {
   .scroll-indicator {
     margin-top: 0rem;
     padding: 0rem 0 0.5rem 0;
+  }
+
+  /* Reduce chart padding-top on mobile */
+  .chart-container {
+    padding-top: 30px !important;
   }
 
 }
@@ -941,15 +957,11 @@ input:checked+.slider:before {
 /* Wave Height Chart */
 .chart-section {
   width: 100%;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--card-radius);
-  padding: 1.5rem;
-  box-shadow: var(--card-shadow);
+  margin-top: 0;
+  /* No space between hero and chart */
+  margin-bottom: 0;
+  /* No space between chart and forecast */
+  background: transparent;
   overflow: hidden;
   animation: fadeInUp 0.8s ease-out 0.3s backwards;
 }
@@ -957,13 +969,14 @@ input:checked+.slider:before {
 .chart-container {
   display: flex;
   align-items: flex-end;
-  justify-content: center;
-  /* Center the chart */
-  height: 150px;
+  justify-content: flex-start;
+  /* Start from left to ensure first day is visible */
+  height: 100%;
   /* Max height for bars */
   width: 100%;
   gap: 2px;
   overflow-x: auto;
+  padding-top: 5px;
   padding-bottom: 5px;
 
   /* Hide scrollbar */
@@ -982,8 +995,10 @@ input:checked+.slider:before {
   align-items: center;
   justify-content: flex-end;
   height: 100%;
-  width: 12px;
-  /* Fixed width for consistency */
+  min-width: 15px;
+  /* Ensure readability */
+  max-width: 50px;
+  /* Prevent looking absurd on wide screens */
   position: relative;
   cursor: pointer;
 }
@@ -1047,30 +1062,12 @@ input:checked+.slider:before {
 /* Mobile adjustments */
 @media (max-width: 768px) {
   .chart-bar-wrapper {
-    width: 8px;
-    /* Thinner bars on mobile */
+    min-width: 15px;
+    /* Wider bars to force scrolling on mobile */
+    width: auto;
   }
 }
 
-/* Refined Wave Height Chart */
-
-.chart-section {
-  width: 100%;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--card-radius);
-  padding: 0;
-  box-shadow: var(--card-shadow);
-  overflow: hidden;
-  animation: fadeInUp 0.8s ease-out 0.3s backwards;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
 
 .chart-headers {
   display: flex;
@@ -1201,21 +1198,7 @@ input:checked+.slider:before {
   /* Center on line */
 }
 
-/* Bars */
-.chart-bar-wrapper {
-  flex: 0 0 14px;
-  /* Fixed width */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  height: 100%;
-  position: relative;
-  cursor: pointer;
-  z-index: 2;
-  border-right: 1px solid rgba(255, 255, 255, 0.1);
-  /* Subtle separator */
-}
+
 
 .chart-bar {
   width: 90%;
@@ -1288,27 +1271,6 @@ input:checked+.slider:before {
   top: -20px;
 }
 
-/* Simplified Chart Styles */
-
-.chart-section {
-  width: 100%;
-  margin-top: 2rem;
-  margin-bottom: 2rem;
-  background: var(--glass-bg);
-  /* Keep base styling */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--card-radius);
-  padding: 1rem 0 0 0;
-  /* Top padding for visual space */
-  box-shadow: var(--card-shadow);
-  display: flex;
-  flex-direction: column;
-  animation: fadeInUp 0.8s ease-out 0.3s backwards;
-  height: 250px;
-  /* Fixed height for consistency */
-}
 
 /* Remove old headers logic if any */
 .chart-headers {

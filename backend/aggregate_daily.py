@@ -76,8 +76,9 @@ def aggregate_data():
                 except: pass
 
     # 4. Aggregate
-    # Get all unique keys
-    all_keys = set(swell_data.keys()) | set(wind_data.keys()) | set(tide_raw_data.keys())
+    # ONLY create rows for dates that have swell data (8-day limit)
+    # Wind and tide data may extend further, but we ignore those extra days
+    all_keys = set(swell_data.keys())
     
     daily_rows = []
     

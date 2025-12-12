@@ -21,9 +21,9 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
     la_tz = pytz.timezone('America/Los_Angeles')
     now_la = datetime.datetime.now(la_tz)
     
-    # Define exact Start (Midnight Today LA) and End (Midnight + 6 Days)
+    # Define exact Start (Midnight Today LA) and End (Midnight + 8 Days)
     start_of_today_la = now_la.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window_la = start_of_today_la + datetime.timedelta(days=12)
+    end_of_window_la = start_of_today_la + datetime.timedelta(days=8)
     
     # Request Buffer (-4 hours) to catch early model runs
     buffer_hours = 4

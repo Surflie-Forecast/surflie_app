@@ -8,8 +8,8 @@
       "date_iso": "2025-12-11",
       "swell": {
         "height": "0.75",
-        "period": "9.7",
-        "direction": "287",
+        "period": "9.7s",
+        "direction": "287\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -31,13 +31,13 @@
       "color": "#eab308"
     },
     {
-      "day": "Tomorrow",
+      "day": "Day",
       "date": "Dec 12",
       "date_iso": "2025-12-12",
       "swell": {
         "height": "0.87",
-        "period": "11.2",
-        "direction": "284",
+        "period": "11.2s",
+        "direction": "284\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -59,13 +59,13 @@
       "color": "#eab308"
     },
     {
-      "day": "Saturday",
+      "day": "Day",
       "date": "Dec 13",
       "date_iso": "2025-12-13",
       "swell": {
         "height": "0.67",
-        "period": "10.5",
-        "direction": "283",
+        "period": "10.5s",
+        "direction": "283\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -87,13 +87,13 @@
       "color": "#eab308"
     },
     {
-      "day": "Sunday",
+      "day": "Day",
       "date": "Dec 14",
       "date_iso": "2025-12-14",
       "swell": {
         "height": "0.51",
-        "period": "9.7",
-        "direction": "280",
+        "period": "9.7s",
+        "direction": "280\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -115,13 +115,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Monday",
+      "day": "Day",
       "date": "Dec 15",
       "date_iso": "2025-12-15",
       "swell": {
         "height": "0.60",
-        "period": "8.8",
-        "direction": "280",
+        "period": "8.8s",
+        "direction": "280\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -143,13 +143,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Tuesday",
+      "day": "Day",
       "date": "Dec 16",
       "date_iso": "2025-12-16",
       "swell": {
         "height": "0.64",
-        "period": "7.7",
-        "direction": "278",
+        "period": "7.7s",
+        "direction": "278\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -171,13 +171,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Wednesday",
+      "day": "Day",
       "date": "Dec 17",
       "date_iso": "2025-12-17",
       "swell": {
         "height": "0.89",
-        "period": "7.9",
-        "direction": "278",
+        "period": "7.9s",
+        "direction": "278\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -199,13 +199,13 @@
       "color": "#eab308"
     },
     {
-      "day": "Thursday",
+      "day": "Day",
       "date": "Dec 18",
       "date_iso": "2025-12-18",
       "swell": {
         "height": "0.67",
-        "period": "8.7",
-        "direction": "270",
+        "period": "8.7s",
+        "direction": "270\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -225,34 +225,6 @@
       },
       "rating": "Fair",
       "color": "#eab308"
-    },
-    {
-      "day": "Day",
-      "date": "Dec 19",
-      "date_iso": "2025-12-19",
-      "swell": {
-        "height": "0.00",
-        "period": "0.0s",
-        "direction": "0\u00b0",
-        "unit": "m"
-      },
-      "wind": {
-        "speed": "13.4",
-        "direction": "156",
-        "unit": "kts"
-      },
-      "tide": {
-        "max": {
-          "height": "1.82",
-          "time": "08:11"
-        },
-        "min": {
-          "height": "-0.22",
-          "time": "15:44"
-        }
-      },
-      "rating": "Poor",
-      "color": "#ef4444"
     }
   ]
 }

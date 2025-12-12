@@ -92,9 +92,12 @@ function renderChart(hourlyData) {
 
         const label = document.createElement('div');
         label.className = 'bar-label';
+        label.dataset.valM = valMeters; // Store meters for unit conversion
+        label.dataset.period = period; // Store period
+        label.dataset.time = timeStr; // Store time
         label.innerHTML = `<div style="text-align:center; line-height:1.3;">
             <div style="font-size:0.65rem; opacity:0.8;">${timeStr}</div>
-            <div style="font-weight:700;">${formattedVal}${unit}  ${period}s</div>
+            <div style="font-weight:700;" class="chart-height-value">${formattedVal}${unit}  ${period}s</div>
         </div>`;
 
         wrapper.appendChild(label);
@@ -127,6 +130,10 @@ function renderChart(hourlyData) {
             wrapper.appendChild(timeLabel);
         }
     });
+
+    // Ensure we start at the beginning (left) so the first day is visible,
+    // especially on mobile where it scrolls.
+    chartContainer.scrollLeft = 0;
 }
 
 window.renderWaveHeightChart = renderWaveHeightChart;

@@ -49,8 +49,15 @@ function updateDisplayedUnits() {
         const chartLabels = document.querySelectorAll('.bar-label');
         chartLabels.forEach(el => {
             const valM = parseFloat(el.dataset.valM);
-            if (!isNaN(valM)) {
-                el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+            const period = el.dataset.period;
+            const timeStr = el.dataset.time;
+            if (!isNaN(valM) && period && timeStr) {
+                const formattedVal = formatHeight(valM, currentUnit);
+                const unit = getHeightUnit(currentUnit);
+                el.innerHTML = `<div style="text-align:center; line-height:1.3;">
+                    <div style="font-size:0.65rem; opacity:0.8;">${timeStr}</div>
+                    <div style="font-weight:700;">${formattedVal}${unit}  ${period}s</div>
+                </div>`;
             }
         });
 
