@@ -225,6 +225,6 @@ def fetch_tide_data(lat, lon, name, output_raw_path):
     if not success:
         print(f"FAILED to fetch tide data for {name} from any nearby station.")
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # Test execution
     # fetch_tide_data(34.403, -119.880, "Test_Devereaux", "test_tide.csv")

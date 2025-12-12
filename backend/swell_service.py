@@ -196,7 +196,7 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
     
     print(f"  -> Success. Updated {len(new_rows)} rows for {name} to {output_csv_path}")
 
-if __name__ == "__main__":
-    initialize_copernicus()
-    # Example usage for testing
-    # fetch_swell_data(34.41, -119.85, "Campus Point", "test_forecast.csv")
+# if __name__ == "__main__":
+#     initialize_copernicus()
+#     # Example usage for testing
+#     fetch_swell_data(34.41, -119.85, "Campus Point", "test_forecast.csv")

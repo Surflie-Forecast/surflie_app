@@ -143,7 +143,7 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     except Exception as e:
         print(f"Error writing to CSV: {e}")
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     # Example Usage
     # fetch_wind_data(34.27, -119.29, "Ventura", "wind_forecast.csv")
     # fetch_wind_data(34.41, -119.85, "Campus Point", "wind_forecast.csv")
