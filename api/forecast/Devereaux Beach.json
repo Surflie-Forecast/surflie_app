@@ -7,9 +7,9 @@
       "date": "Dec 12",
       "date_iso": "2025-12-12",
       "swell": {
-        "height": "1.00",
+        "height": "1.07",
         "period": "11.2s",
-        "direction": "287\u00b0",
+        "direction": "286\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -27,15 +27,15 @@
           "time": "22:14"
         }
       },
-      "rating": "Fair",
-      "color": "#eab308"
+      "rating": "Good",
+      "color": "#22c55e"
     },
     {
       "day": "Day",
       "date": "Dec 13",
       "date_iso": "2025-12-13",
       "swell": {
-        "height": "0.67",
+        "height": "0.69",
         "period": "10.2s",
         "direction": "284\u00b0",
         "unit": "m"
@@ -63,7 +63,7 @@
       "date": "Dec 14",
       "date_iso": "2025-12-14",
       "swell": {
-        "height": "0.52",
+        "height": "0.55",
         "period": "9.7s",
         "direction": "282\u00b0",
         "unit": "m"
@@ -91,7 +91,7 @@
       "date": "Dec 15",
       "date_iso": "2025-12-15",
       "swell": {
-        "height": "0.51",
+        "height": "0.52",
         "period": "8.1s",
         "direction": "276\u00b0",
         "unit": "m"
@@ -119,9 +119,9 @@
       "date": "Dec 16",
       "date_iso": "2025-12-16",
       "swell": {
-        "height": "0.62",
+        "height": "0.55",
         "period": "6.1s",
-        "direction": "281\u00b0",
+        "direction": "284\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -147,9 +147,9 @@
       "date": "Dec 17",
       "date_iso": "2025-12-17",
       "swell": {
-        "height": "1.06",
+        "height": "1.07",
         "period": "9.6s",
-        "direction": "282\u00b0",
+        "direction": "280\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -175,9 +175,9 @@
       "date": "Dec 18",
       "date_iso": "2025-12-18",
       "swell": {
-        "height": "1.01",
+        "height": "0.99",
         "period": "8.5s",
-        "direction": "278\u00b0",
+        "direction": "279\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -203,9 +203,9 @@
       "date": "Dec 19",
       "date_iso": "2025-12-19",
       "swell": {
-        "height": "0.74",
+        "height": "0.82",
         "period": "7.2s",
-        "direction": "280\u00b0",
+        "direction": "282\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -231,9 +231,9 @@
       "date": "Dec 20",
       "date_iso": "2025-12-20",
       "swell": {
-        "height": "0.90",
+        "height": "0.71",
         "period": "7.8s",
-        "direction": "286\u00b0",
+        "direction": "285\u00b0",
         "unit": "m"
       },
       "wind": {
@@ -251,17 +251,17 @@
           "time": "16:24"
         }
       },
-      "rating": "Fair",
-      "color": "#eab308"
+      "rating": "Poor",
+      "color": "#ef4444"
     },
     {
       "day": "Day",
       "date": "Dec 21",
       "date_iso": "2025-12-21",
       "swell": {
-        "height": "1.04",
+        "height": "0.93",
         "period": "8.1s",
-        "direction": "279\u00b0",
+        "direction": "278\u00b0",
         "unit": "m"
       },
       "wind": {

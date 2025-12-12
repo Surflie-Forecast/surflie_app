@@ -59,9 +59,16 @@ def generate_spots_json(locations):
     
     # Read from daily_forecast.csv to get available spots
     forecast_file = os.path.join(DATA_DIR, 'daily_forecast.csv')
+    print(f"DEBUG: Reading forecast from {forecast_file}")
     
     if os.path.exists(forecast_file):
         with open(forecast_file, 'r') as f:
+            lines = f.readlines()
+            print(f"DEBUG: Found {len(lines)} lines in CSV (including header)")
+            if len(lines) > 0:
+                print(f"DEBUG: Header: {lines[0].strip()}")
+                
+            f.seek(0) # Reset pointer
             reader = csv.DictReader(f)
             for row in reader:
                 spot_name = row['spot_name']

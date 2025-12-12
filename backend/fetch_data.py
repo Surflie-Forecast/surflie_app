@@ -80,5 +80,20 @@ def fetch_all_data():
 
     print("Data pipeline completed.")
 
+    # 5. Final Verification
+    # If files are empty or missing, fail the pipeline so GitHub Actions turns RED
+    error_found = False
+    
+    if not os.path.exists(SWELL_FILE) or os.path.getsize(SWELL_FILE) < 100:
+        print(f"❌ ERROR: Swell file is missing or empty: {SWELL_FILE}")
+        error_found = True
+        
+    if not os.path.exists(WIND_FILE) or os.path.getsize(WIND_FILE) < 100:
+        print(f"❌ ERROR: Wind file is missing or empty: {WIND_FILE}")
+        error_found = True
+
+    if error_found:
+        raise RuntimeError("Pipeline failed: One or more data files are empty.")
+
 if __name__ == "__main__":
     fetch_all_data()

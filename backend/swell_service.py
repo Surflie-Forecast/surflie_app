@@ -38,8 +38,8 @@ def initialize_copernicus():
         copernicusmarine.login(username=USERNAME, password=PASSWORD)
         print("✓ Successfully logged in to Copernicus Marine.")
     except Exception as e:
-        print(f"⚠ WARNING: Auto-login failed: {e}")
-        print("Please ensure your credentials are correct or run 'copernicusmarine login' manually.")
+        # CRITICAL: Raise exception to fail the pipeline if login fails
+        raise RuntimeError(f"Copernicus Login Failed: {e}. Check your COPERNICUS_USERNAME and COPERNICUS_PASSWORD secrets.")
 
 def get_smart_snap_pixel(ds, target_lat, target_lon):
     """Finds the nearest VALID (water) pixel to the target lat/lon."""
