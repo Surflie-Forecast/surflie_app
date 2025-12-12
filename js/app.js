@@ -54,10 +54,7 @@ function updateDisplayedUnits() {
             if (!isNaN(valM) && period && timeStr) {
                 const formattedVal = formatHeight(valM, currentUnit);
                 const unit = getHeightUnit(currentUnit);
-                el.innerHTML = `<div style="text-align:center; line-height:1.3;">
-                    <div style="font-size:0.65rem; opacity:0.8;">${timeStr}</div>
-                    <div style="font-weight:700;">${formattedVal}${unit}  ${period}s</div>
-                </div>`;
+                el.innerHTML = `<span style="font-size: 0.85rem; font-weight: 700;">${timeStr} &bull; ${formattedVal}${unit} ${period}s</span>`;
             }
         });
 
@@ -292,22 +289,60 @@ document.addEventListener('DOMContentLoaded', () => {
         const cards = forecastContainer.querySelectorAll('.forecast-card');
         const containerRect = forecastContainer.getBoundingClientRect();
 
+        // Defined "Active Zone" to narrow what is considered "seen" on desktop
+        // This prevents cards at the very edges from inclusion, reducing fluctuation.
+        // On mobile (narrow screen), we use a smaller margin or just full width?
+        // User asked "for the full screen narrow what is considered".
+
+        let marginPct = 0;
+        if (window.innerWidth > 768) {
+            marginPct = 0.07; // 15% margin (active zone is 70% of screen)
+        } else {
+            marginPct = 0.0; // on mobile we need the fallback logic mainly
+        }
+
+        const margin = containerRect.width * marginPct;
+        const activeLeft = containerRect.left + margin;
+        const activeRight = containerRect.right - margin;
+
         const visibleDates = [];
+        let maxVisibleRatio = 0;
+        let mostVisibleCardDate = null;
 
         cards.forEach(card => {
             const rect = card.getBoundingClientRect();
 
-            // Check overlap relative to viewport (since getBoundingClientRect is viewport relative)
-            // But containerRect is also viewport relative.
-
-            const visibleWidth = Math.min(rect.right, containerRect.right) - Math.max(rect.left, containerRect.left);
+            // Check visibility against ACTIVE ZONE
+            // Cards must be FULLY inside the active zone to count as 'seen' for the main list
+            const visibleWidth = Math.min(rect.right, activeRight) - Math.max(rect.left, activeLeft);
             const cardWidth = rect.width;
 
-            // If more than 40% of the card is visible
-            if (visibleWidth > cardWidth * 0.4) {
+            // Handle divide by zero if width is 0 (hidden)
+            if (cardWidth === 0) return;
+
+            // Calculate ratio relative to CARD width
+            // If visibleWidth <= 0, it's outside active zone.
+            const ratio = Math.max(0, visibleWidth) / cardWidth;
+
+            // Strict visibility logic
+            if (ratio >= 0.99) {
                 visibleDates.push(card.dataset.date);
             }
+
+            // Fallback tracking (use FULL container visibility for fallback choice)
+            const fullVisibleWidth = Math.min(rect.right, containerRect.right) - Math.max(rect.left, containerRect.left);
+            const fullRatio = Math.max(0, fullVisibleWidth) / cardWidth;
+
+            if (fullRatio > maxVisibleRatio) {
+                maxVisibleRatio = fullRatio;
+                mostVisibleCardDate = card.dataset.date;
+            }
         });
+
+        // Fallback: If no cards are sufficiently inside the active zone
+        if (visibleDates.length === 0 && mostVisibleCardDate && maxVisibleRatio > 0.1) {
+            visibleDates.push(mostVisibleCardDate);
+        }
 
         // Update Chart
         const overlay = document.getElementById('chartHighlightOverlay');
@@ -322,8 +357,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const firstDate = visibleDates[0];
         const lastDate = visibleDates[visibleDates.length - 1];
 
-        const startEl = container.querySelector(`.chart-day-group[data-date="${firstDate}"]`);
-        const endEl = container.querySelector(`.chart-day-group[data-date="${lastDate}"]`);
+        // Since data is sorted, first wrapper of first date is START.
+        // Last wrapper of last date is END.
+        // But querySelector finds the FIRST match.
+        // START is easy: querySelector with firstDate.
+        // END is tricky: querySelector with lastDate gets the FIRST hour of the last day. We need the LAST hour.
+
+        // We can use querySelectorAll for the last date and take the last one.
+
+        const startEl = container.querySelector(`.chart-bar-wrapper[data-date="${firstDate}"]`);
+
+        const endEls = container.querySelectorAll(`.chart-bar-wrapper[data-date="${lastDate}"]`);
+        const endEl = endEls.length > 0 ? endEls[endEls.length - 1] : null;
 
         if (startEl && endEl) {
             // Calculate range
