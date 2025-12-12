@@ -103,12 +103,26 @@ def fetch_swell_data(lat, lon, name, output_csv_path):
             overwrite=True
         )
         
-        # Open the downloaded NetCDF file
-        ds = xr.open_dataset(temp_nc)
+        # DEBUG: Check file size
+        if os.path.exists(temp_nc):
+            size_kb = os.path.getsize(temp_nc) / 1024
+            print(f"  -> File downloaded. Size: {size_kb:.2f} KB")
+            if size_kb < 1:
+                raise RuntimeError(f"Downloaded file is empty or too small ({size_kb:.2f} KB)")
+        else:
+             raise RuntimeError("Downloaded file not found on disk.")
+
+        # Open the downloaded NetCDF file - Try h5netcdf first, then default
+        try:
+            ds = xr.open_dataset(temp_nc, engine='h5netcdf')
+        except Exception:
+            print("  -> 'h5netcdf' engine failed, retrying with default/netcdf4...")
+            ds = xr.open_dataset(temp_nc)
         
     except Exception as e:
         print(f"  X Download/Open Failed: {e}")
-        return
+        # IMPORTANT: Propagate error to fetch_data.py to fail the pipeline
+        raise e
 
     # --- 3. SMART SNAP ---
     try:
