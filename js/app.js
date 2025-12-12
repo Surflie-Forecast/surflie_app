@@ -3,10 +3,11 @@
 let currentUnit = localStorage.getItem('surfForecastUnit') || 'imperial';
 
 // Unit Conversion Helpers
-const toFeet = (meters) => (meters * 3.28084).toFixed(1);
-const toMeters = (feet) => (feet / 3.28084).toFixed(2); // Not really used but good for symmetry
-const formatHeight = (val, unit) => unit === 'imperial' ? toFeet(val) : val;
-const getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
+// Unit Conversion Helpers
+window.toFeet = (meters) => (meters * 3.28084).toFixed(1);
+window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
+window.formatHeight = (val, unit) => unit === 'imperial' ? window.toFeet(val) : val;
+window.getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
 // Function to update all displayed units in DOM without re-rendering
 function updateDisplayedUnits() {
@@ -38,6 +39,15 @@ function updateDisplayedUnits() {
 
         // 3. Update Hourly Swell Heights
         hourlySwell.forEach(el => {
+            const valM = parseFloat(el.dataset.valM);
+            if (!isNaN(valM)) {
+                el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
+            }
+        });
+
+        // 4. Update Chart Labels
+        const chartLabels = document.querySelectorAll('.bar-label');
+        chartLabels.forEach(el => {
             const valM = parseFloat(el.dataset.valM);
             if (!isNaN(valM)) {
                 el.textContent = `${formatHeight(valM, currentUnit)}${getHeightUnit(currentUnit)}`;
@@ -308,6 +318,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!data.forecast || data.forecast.length === 0) {
                 container.innerHTML = `<div style="text-align:center; width:100%;">No wave data found for "${spotName}"</div>`;
                 return;
+            }
+
+            // Render Chart
+            if (window.renderWaveHeightChart) {
+                renderWaveHeightChart(spotName, data.forecast);
             }
 
             data.forecast.forEach((day, index) => {

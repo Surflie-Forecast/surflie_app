@@ -937,3 +937,538 @@ input:checked+.slider:before {
   font-size: 0.75rem;
   font-weight: 500;
 }
+
+/* Wave Height Chart */
+.chart-section {
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1.5rem;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  animation: fadeInUp 0.8s ease-out 0.3s backwards;
+}
+
+.chart-container {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* Center the chart */
+  height: 150px;
+  /* Max height for bars */
+  width: 100%;
+  gap: 2px;
+  overflow-x: auto;
+  padding-bottom: 5px;
+
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.chart-container::-webkit-scrollbar {
+  display: none;
+}
+
+.chart-bar-wrapper {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  width: 12px;
+  /* Fixed width for consistency */
+  position: relative;
+  cursor: pointer;
+}
+
+.chart-bar {
+  width: 100%;
+  background: #38bdf8;
+  /* Light blue base */
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease, background-color 0.2s;
+  position: relative;
+}
+
+.chart-bar:hover {
+  background: var(--accent-blue);
+}
+
+.chart-bar.is-night {
+  opacity: 0.5;
+}
+
+/* Tooltip/Label on top of bar */
+.bar-label {
+  position: absolute;
+  top: -20px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.chart-bar-wrapper:hover .bar-label {
+  opacity: 1;
+}
+
+/* Persistent labels for peaks */
+.bar-label.peak {
+  opacity: 1;
+  font-weight: 700;
+  top: -22px;
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  padding: 0 5px;
+  border-top: 1px solid rgba(0, 0, 0, 0.05);
+  padding-top: 5px;
+}
+
+.axis-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .chart-bar-wrapper {
+    width: 8px;
+    /* Thinner bars on mobile */
+  }
+}
+
+/* Refined Wave Height Chart */
+
+.chart-section {
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 0;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  animation: fadeInUp 0.8s ease-out 0.3s backwards;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-headers {
+  display: flex;
+  justify-content: flex-start;
+  /* Items have width based on day proportion */
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  width: 100%;
+  /* Must match chart container scroll width? 
+       Actually, chart-container scrolls independently.
+       Headers should ideally scroll with it if they are wide.
+       Better: Put headers INSIDE the scroll container or synced.
+       For simple implementation: Headers are static? No, charts are long.
+       User image shows headers fixed above specific days.
+       
+       Solution: Place headers absolute or relative INSIDE the scroll container 
+       so they move with bars.
+    */
+  overflow: hidden;
+  /* static header container? No, we will put day labels IN the chart container for simplicity */
+  display: none;
+  /* Hide top container if we move labels inside */
+}
+
+.chart-container {
+  display: flex;
+  align-items: flex-end;
+  height: 200px;
+  width: 100%;
+  gap: 0;
+  /* No gap, continuous bars */
+  overflow-x: auto;
+  position: relative;
+
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  /* Padding for labels */
+  padding-top: 30px;
+}
+
+.chart-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* Background shading container - Absolute behind bars */
+.chart-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.chart-bg-slice {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  /* width and left set by JS */
+}
+
+.bg-night {
+  background-color: rgba(19, 25, 41, 0.08);
+  /* Darker */
+}
+
+.bg-dawn,
+.bg-dusk {
+  background-color: rgba(19, 25, 41, 0.04);
+  /* Slightly dark */
+}
+
+.bg-day {
+  background-color: transparent;
+}
+
+/* Grid Lines */
+.chart-grid-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed rgba(0, 0, 0, 0.05);
+  /* Very subtle */
+  width: 100%;
+  /* Spans full scroll width? No, viewport. Use fixed position container? */
+}
+
+/* To keep grid static relative to viewport while bars scroll:
+   Grid lines should be in a separate container OVER/UNDER the scroll view 
+   that doesn't scroll. But chart-container handles scroll.
+   So grid container should be outside chart-container or fixed?
+   If grid is outside, it won't match potentially scaled content? 
+   No, heights are fixed px/percent.
+   Let's put grid-lines container effectively outside the scroll area but inside the section relative.
+*/
+.chart-grid-overlay {
+  position: absolute;
+  top: 30px;
+  /* Below header padding */
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.grid-line-label {
+  position: absolute;
+  right: 10px;
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.8);
+  padding: 0 4px;
+  border-radius: 4px;
+  margin-top: -8px;
+  /* Center on line */
+}
+
+/* Bars */
+.chart-bar-wrapper {
+  flex: 0 0 14px;
+  /* Fixed width */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+  z-index: 2;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  /* Subtle separator */
+}
+
+.chart-bar {
+  width: 90%;
+  background: #38bdf8;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease, background-color 0.2s;
+  position: relative;
+}
+
+.chart-bar:hover {
+  background: var(--accent-blue);
+}
+
+/* Header Labels inside chart */
+.day-header-label {
+  position: absolute;
+  top: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  width: 100px;
+  /* distinct width */
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.day-header-date {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.day-separator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid rgba(0, 0, 0, 0.1);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Tooltip */
+.bar-label {
+  position: absolute;
+  top: -24px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px 6px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.chart-bar-wrapper:hover .bar-label,
+.bar-label.peak {
+  opacity: 1;
+}
+
+.bar-label.peak {
+  background: transparent;
+  box-shadow: none;
+  top: -20px;
+}
+
+/* Simplified Chart Styles */
+
+.chart-section {
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  background: var(--glass-bg);
+  /* Keep base styling */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--card-radius);
+  padding: 1rem 0 0 0;
+  /* Top padding for visual space */
+  box-shadow: var(--card-shadow);
+  display: flex;
+  flex-direction: column;
+  animation: fadeInUp 0.8s ease-out 0.3s backwards;
+  height: 250px;
+  /* Fixed height for consistency */
+}
+
+/* Remove old headers logic if any */
+.chart-headers {
+  display: none;
+}
+
+.chart-labels {
+  display: none;
+}
+
+.chart-container {
+  flex: 1;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  /* Hide scrollbar */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-top: 40px;
+  /* Space for day headers inside */
+}
+
+.chart-container::-webkit-scrollbar {
+  display: none;
+}
+
+.chart-content-wrapper {
+  /* Set by JS: width, flex layout */
+  margin: 0 auto;
+  /* Center if smaller than viewport? */
+}
+
+.chart-bar {
+  background-color: #38bdf8;
+  /* Light blue */
+  border-radius: 2px 2px 0 0;
+  transition: background-color 0.2s;
+  /* No border or complex styling */
+}
+
+.chart-bar:hover {
+  background-color: var(--accent-blue);
+}
+
+/* Day Headers */
+.day-header {
+  position: absolute;
+  top: -30px;
+  /* Above bars, relative to wrapper content top? No, simplified. relative to wrapper bottom? */
+  /* Since wrapper is height 100% and align-items: flex-end, top: 0 is top of container */
+  /* Wait, wrapper is flex end. */
+  top: 0;
+  transform: translateX(-50%);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.day-name {
+  display: block;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.day-date {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+
+/* Peak Labels */
+.peak-label {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+  /* No background box, just text on top of bar */
+}
+
+/* Daily Chart Styles */
+
+.daily-chart-wrapper {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  justify-content: space-between;
+  /* distribute evenly */
+  padding: 0 1rem;
+  padding-bottom: 20px;
+  /* Space for bars at bottom if needed */
+}
+
+.daily-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* Header at top, barContainer at bottom */
+  align-items: center;
+  height: 100%;
+  position: relative;
+  margin: 0 4px;
+  /* Space between cols */
+}
+
+.daily-header {
+  text-align: center;
+  margin-top: 10px;
+  z-index: 5;
+}
+
+.d-name {
+  display: block;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.d-date {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.daily-bar-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  flex: 1;
+  /* fills remaining height */
+  padding-top: 40px;
+  /* Space below header */
+}
+
+.daily-bar {
+  width: 60%;
+  /* Wider bars */
+  max-width: 40px;
+  background-color: #38bdf8;
+  border-radius: 4px 4px 0 0;
+  transition: height 0.3s ease, background-color 0.2s;
+}
+
+.daily-bar:hover {
+  background-color: var(--accent-blue);
+}
+
+.daily-val-label {
+  margin-bottom: 5px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* Update App to support label class update */
+/* We reused .daily-val-label, so we need to add logic in app.js or alias it */
