@@ -23,6 +23,12 @@ async function renderWaveHeightChart(spotName, forecastDays) {
                     if (!res.ok) return null;
                     return res.json();
                 })
+                .then(data => {
+                    if (Array.isArray(data)) {
+                        return data.map(h => ({ ...h, _sourceDate: day.date_iso }));
+                    }
+                    return null;
+                })
                 .catch(err => null);
         });
 
@@ -53,6 +59,12 @@ function renderChart(hourlyData) {
     const chartContainer = document.getElementById('waveChartContainer');
     chartContainer.innerHTML = '';
 
+    // Create Highlight Overlay
+    const overlay = document.createElement('div');
+    overlay.id = 'chartHighlightOverlay';
+    overlay.className = 'chart-highlight-overlay';
+    chartContainer.appendChild(overlay);
+
     // Find max wave height for scaling (Scale to 1.2x max)
     let maxVal = 0;
     hourlyData.forEach(h => {
@@ -61,78 +73,65 @@ function renderChart(hourlyData) {
     });
     const scaleMax = (maxVal > 0 ? maxVal : 1) * 1.2;
 
-    // Track the date of the previous iteration
-    let lastDateStr = null;
-
-    hourlyData.forEach((hour, index) => {
-        const valMeters = parseFloat(hour.swell.height);
-        const heightPct = (valMeters / scaleMax) * 100;
-
-        const dateObj = new Date(hour.datetime);
-
-        // Create a string ID for the day (e.g., "12") to compare changes
-        const currentDayNum = dateObj.getDate();
-        const isNewDay = lastDateStr !== currentDayNum;
-
-        // Update tracker
-        lastDateStr = currentDayNum;
-
-        const wrapper = document.createElement('div');
-        wrapper.className = 'chart-bar-wrapper';
-        wrapper.style.position = 'relative';
-
-        const bar = document.createElement('div');
-        bar.className = 'chart-bar';
-        bar.style.height = `${Math.max(heightPct, 5)}%`;
-
-        const formattedVal = formatHeight(valMeters, currentUnit);
-        const unit = getHeightUnit(currentUnit);
-        const timeStr = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-        const period = Math.round(parseFloat(hour.swell.period));
-
-        const label = document.createElement('div');
-        label.className = 'bar-label';
-        label.dataset.valM = valMeters; // Store meters for unit conversion
-        label.dataset.period = period; // Store period
-        label.dataset.time = timeStr; // Store time
-        label.innerHTML = `<div style="text-align:center; line-height:1.3;">
-            <div style="font-size:0.65rem; opacity:0.8;">${timeStr}</div>
-            <div style="font-weight:700;" class="chart-height-value">${formattedVal}${unit}  ${period}s</div>
-        </div>`;
-
-        wrapper.appendChild(label);
-        wrapper.appendChild(bar);
-        chartContainer.appendChild(wrapper);
-
-        // --- RENDER DATE LOGIC ---
-        // If the date number changed since the last loop, OR it's the very first item
-        if (isNewDay || index === 0) {
-
-            // 1. Add visual separator line
-            wrapper.style.borderLeft = '1px dashed rgba(0,0,0,0.15)';
-
-            // 2. Create the Date Label
-            const timeLabel = document.createElement('div');
-            timeLabel.className = 'axis-label';
-
-            // Format: "Mon 12"
-            timeLabel.textContent = dateObj.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
-
-            // Position at TOP
-            timeLabel.style.position = 'absolute';
-            timeLabel.style.top = '0px';
-            timeLabel.style.left = '6px';
-            timeLabel.style.whiteSpace = 'nowrap';
-            timeLabel.style.fontSize = '0.75rem';
-            timeLabel.style.fontWeight = 'bold';
-            timeLabel.style.color = 'var(--text-secondary)';
-
-            wrapper.appendChild(timeLabel);
-        }
+    // Group data by day
+    const days = {};
+    hourlyData.forEach(hour => {
+        const dateStr = hour._sourceDate || new Date(hour.datetime).toISOString().split('T')[0];
+        if (!days[dateStr]) days[dateStr] = [];
+        days[dateStr].push(hour);
     });
 
-    // Ensure we start at the beginning (left) so the first day is visible,
-    // especially on mobile where it scrolls.
+    Object.keys(days).sort().forEach((dateKey, dayIndex) => {
+        const dayData = days[dateKey];
+        const dateObj = new Date(dayData[0].datetime);
+
+        // Create Day Group Container
+        const dayGroup = document.createElement('div');
+        dayGroup.className = 'chart-day-group';
+        dayGroup.dataset.date = dateKey; // format YYYY-MM-DD
+
+        // Add Day Label inside the group (at the top)
+        const timeLabel = document.createElement('div');
+        timeLabel.className = 'axis-label';
+        // Format: "Mon 12"
+        timeLabel.textContent = dateObj.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+        dayGroup.appendChild(timeLabel);
+
+        dayData.forEach((hour, index) => {
+            const valMeters = parseFloat(hour.swell.height);
+            const heightPct = (valMeters / scaleMax) * 100;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'chart-bar-wrapper';
+
+            const bar = document.createElement('div');
+            bar.className = 'chart-bar';
+            bar.style.height = `${Math.max(heightPct, 5)}%`;
+
+            const formattedVal = formatHeight(valMeters, currentUnit);
+            const unit = getHeightUnit(currentUnit);
+            const timeStr = new Date(hour.datetime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+            const period = Math.round(parseFloat(hour.swell.period));
+
+            const label = document.createElement('div');
+            label.className = 'bar-label';
+            label.dataset.valM = valMeters; // Store meters for unit conversion
+            label.dataset.period = period; // Store period
+            label.dataset.time = timeStr; // Store time
+            label.innerHTML = `<div style="text-align:center; line-height:1.3;">
+                <div style="font-size:0.65rem; opacity:0.8;">${timeStr}</div>
+                <div style="font-weight:700;" class="chart-height-value">${formattedVal}${unit}  ${period}s</div>
+            </div>`;
+
+            wrapper.appendChild(label);
+            wrapper.appendChild(bar);
+            dayGroup.appendChild(wrapper);
+        });
+
+        chartContainer.appendChild(dayGroup);
+    });
+
+    // Ensure we start at the beginning (left)
     chartContainer.scrollLeft = 0;
 }
 

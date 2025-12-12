@@ -249,6 +249,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const clientWidth = forecastContainer.clientWidth;
         const maxScroll = scrollWidth - clientWidth;
 
+        // Update Chart Highlights always
+        updateChartHighlight();
+
         // If there's no scrollable content, hide the indicator
         if (maxScroll <= 0) {
             scrollDotLeft.classList.remove('active');
@@ -280,12 +283,96 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             scrollDotRight.classList.remove('active');
         }
+
+        // Update Chart Highlights
+        updateChartHighlight();
+    }
+
+    function updateChartHighlight() {
+        const cards = forecastContainer.querySelectorAll('.forecast-card');
+        const containerRect = forecastContainer.getBoundingClientRect();
+
+        const visibleDates = [];
+
+        cards.forEach(card => {
+            const rect = card.getBoundingClientRect();
+
+            // Check overlap relative to viewport (since getBoundingClientRect is viewport relative)
+            // But containerRect is also viewport relative.
+
+            const visibleWidth = Math.min(rect.right, containerRect.right) - Math.max(rect.left, containerRect.left);
+            const cardWidth = rect.width;
+
+            // If more than 40% of the card is visible
+            if (visibleWidth > cardWidth * 0.4) {
+                visibleDates.push(card.dataset.date);
+            }
+        });
+
+        // Update Chart
+        const overlay = document.getElementById('chartHighlightOverlay');
+        const container = document.getElementById('waveChartContainer');
+
+        if (!overlay || !container || visibleDates.length === 0) {
+            if (overlay) overlay.style.display = 'none';
+            return;
+        }
+
+        // We assume visibleDates are sorted by time as they come from DOM order
+        const firstDate = visibleDates[0];
+        const lastDate = visibleDates[visibleDates.length - 1];
+
+        const startEl = container.querySelector(`.chart-day-group[data-date="${firstDate}"]`);
+        const endEl = container.querySelector(`.chart-day-group[data-date="${lastDate}"]`);
+
+        if (startEl && endEl) {
+            // Calculate range
+            // offsetLeft is relative to the scrollable container (since it's relative/flex)
+            // We want to cover from startEl left to endEl right
+
+            // Adjust for margins if necessary, but offsetLeft usually includes margin if using standard box model? 
+            // No, offsetLeft is to the border box. 
+            // The visual gap is caused by margin. We probably want to cover the gap too.
+
+            // Add 5px padding on each side
+            const padding = 5;
+            const left = startEl.offsetLeft - padding;
+            const right = endEl.offsetLeft + endEl.offsetWidth + padding;
+            const width = right - left;
+
+            overlay.style.display = 'block';
+            overlay.style.left = `${left}px`;
+            overlay.style.width = `${width}px`;
+
+            // Auto-scroll logic
+            const containerCenter = container.clientWidth / 2;
+            const highlightCenter = left + (width / 2);
+
+            // Calculate target scroll position to center the highlight
+            const targetScroll = highlightCenter - containerCenter;
+
+            // Optional: Only scroll if it's actually out of view? 
+            // The user implies they want it to "scroll with it", which suggests continuous syncing.
+            // Using smooth behavior might be too laggy if called on every scroll event. 
+            // But let's try setting scrollLeft directly for responsiveness, or use scrollTo with behavior 'smooth' debounced.
+            // Since this is called on scroll, direct assignment is better for 1:1 feel, but smooth is nicer for "catch up".
+            // Let's try direct 'scrollTo' with smooth behavior first.
+
+            container.scrollTo({
+                left: targetScroll,
+                behavior: 'smooth'
+            });
+        } else {
+            overlay.style.display = 'none';
+        }
     }
 
     // Listen for scroll events
     if (forecastContainer) {
         forecastContainer.addEventListener('scroll', updateScrollIndicator);
         window.addEventListener('resize', updateScrollIndicator);
+        // Initial check
+        setTimeout(updateChartHighlight, 500);
     }
 
     async function renderForecast(spotName) {
@@ -329,7 +416,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Render Chart
             if (window.renderWaveHeightChart) {
-                renderWaveHeightChart(spotName, data.forecast);
+                renderWaveHeightChart(spotName, data.forecast).then(() => {
+                    // Trigger highlight update after chart is fully rendered
+                    updateChartHighlight();
+                });
             }
 
             data.forecast.forEach((day, index) => {
