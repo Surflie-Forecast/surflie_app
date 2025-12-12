@@ -3,7 +3,7 @@
     "datetime": "2025-12-13 01:00:00",
     "swell": {
       "height": 0.65,
-      "period": 10.6,
+      "period": 10.4,
       "direction": 279.0
     },
     "wind": {
@@ -15,7 +15,7 @@
     "datetime": "2025-12-13 04:00:00",
     "swell": {
       "height": 0.61,
-      "period": 10.4,
+      "period": 10.3,
       "direction": 278.0
     },
     "wind": {
@@ -27,7 +27,7 @@
     "datetime": "2025-12-13 07:00:00",
     "swell": {
       "height": 0.57,
-      "period": 10.3,
+      "period": 10.2,
       "direction": 278.0
     },
     "wind": {
@@ -87,7 +87,7 @@
     "datetime": "2025-12-13 22:00:00",
     "swell": {
       "height": 0.46,
-      "period": 10.0,
+      "period": 10.1,
       "direction": 277.0
     },
     "wind": {

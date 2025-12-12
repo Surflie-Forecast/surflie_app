@@ -3,7 +3,7 @@
     "datetime": "2025-12-13 01:00:00",
     "swell": {
       "height": 0.85,
-      "period": 10.5,
+      "period": 10.4,
       "direction": 286.0
     },
     "wind": {
@@ -15,7 +15,7 @@
     "datetime": "2025-12-13 04:00:00",
     "swell": {
       "height": 0.8,
-      "period": 10.2,
+      "period": 10.3,
       "direction": 286.0
     },
     "wind": {
@@ -51,7 +51,7 @@
     "datetime": "2025-12-13 13:00:00",
     "swell": {
       "height": 0.62,
-      "period": 10.8,
+      "period": 10.4,
       "direction": 281.0
     },
     "wind": {
@@ -63,7 +63,7 @@
     "datetime": "2025-12-13 16:00:00",
     "swell": {
       "height": 0.59,
-      "period": 10.2,
+      "period": 10.4,
       "direction": 281.0
     },
     "wind": {
@@ -75,7 +75,7 @@
     "datetime": "2025-12-13 19:00:00",
     "swell": {
       "height": 0.61,
-      "period": 10.0,
+      "period": 10.1,
       "direction": 284.0
     },
     "wind": {
@@ -87,7 +87,7 @@
     "datetime": "2025-12-13 22:00:00",
     "swell": {
       "height": 0.6,
-      "period": 9.9,
+      "period": 10.0,
       "direction": 283.0
     },
     "wind": {
