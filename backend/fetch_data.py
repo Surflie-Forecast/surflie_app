@@ -16,12 +16,14 @@ LOCATIONS_FILE = os.path.join(DATA_DIR, 'locations.csv')
 def fetch_all_data():
     print(f"[{datetime.datetime.now()}] Starting data pipeline...")
     
-    # 1. Initialize GEE
+    # 1. Initialize Copernicus
     try:
-        swell_service.initialize_gee()
+        swell_service.initialize_copernicus()
     except Exception as e:
-        print(f"GEE Init failed: {e}")
+        print(f"Copernicus Init failed: {e}")
         return
+
+
 
     # 2. Clear old raw files
     if os.path.exists(SWELL_FILE):
