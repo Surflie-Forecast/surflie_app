@@ -368,63 +368,65 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="date-label">${day.date}</span>
                     </div>
                     
-                    <div class="metric-row main-row">
-                        <div class="metric">
-                            <span class="metric-label">Wave Height</span>
-                            <span class="metric-value" data-type="swell-height" data-val-m="${day.swell.height}">
-                                ${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>
-                            </span>
-                        </div>
-                        <div class="metric">
-                            <span class="metric-label">Period</span>
-                            <span class="metric-value">${day.swell.period}</span>
-                        </div>
-                        <div class="metric" style="align-items: center;">
-                            <span class="metric-label">Direction</span>
-                            <div class="metric-value" style="margin-top: 0.30rem;">
-                                <span class="swell-arrow" style="transform: rotate(${parseInt(day.swell.direction) + 90}deg)">➤</span>
-                                <span class="direction-text">${day.swell.direction}°</span>
+                    <div class="daily-summary">
+                        <div class="metric-row main-row">
+                            <div class="metric">
+                                <span class="metric-label">Wave Height</span>
+                                <span class="metric-value" data-type="swell-height" data-val-m="${day.swell.height}">
+                                    ${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>
+                                </span>
                             </div>
-                        </div>
-                    </div>
-
-                    <div class="metric-row" style="padding-top: 1rem; align-items: flex-start; gap: 8px;">
-                        <div class="metric" style="flex: 1; align-items: center;">
-                            <span class="metric-label">Wind Speed</span>
-                            <span class="metric-value">${day.wind.speed}<span class="metric-unit">${day.wind.unit}</span></span>
-                        </div>
-                         <div class="metric" style="flex: 1; align-items: center;">
-                            <span class="metric-label">Wind Dir</span>
-                             <div class="metric-value">
-                                <span class="direction-arrow wind-arrow" style="transform: rotate(${parseInt(day.wind.direction) + 90}deg)">➤</span>
-                                <span class="direction-text">${day.wind.direction}°</span>
+                            <div class="metric">
+                                <span class="metric-label">Period</span>
+                                <span class="metric-value">${day.swell.period}</span>
                             </div>
-                        </div>
-                        <div class="metric tide-metric" style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
-                            <span class="metric-label" style="text-align: right; width: 100%; font-size: 0.75em;">Tide <span style="font-size: 0.7em;">(High/Low)</span></span>
-                            <div class="tide-container" style="display: flex; flex-direction: column; gap: 2px; padding: 4px 0; align-items: flex-end;">
-                                <!-- High Tide -->
-                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
-                                    <span style="color: #9ca3af; font-size: 0.8em;">▲</span>
-                                    <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.max.time}</span>
-                                    <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
-                                        ${formatHeight(day.tide.max.height, currentUnit)}${getHeightUnit(currentUnit)}
-                                    </span>
-                                </div>
-                                <!-- Low Tide -->
-                                <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
-                                    <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.min.time}</span>
-                                    <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
-                                        ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
-                                    </span>
-                                    <span style="color: #9ca3af; font-size: 0.8em;">▼</span>
+                            <div class="metric" style="align-items: center;">
+                                <span class="metric-label">Direction</span>
+                                <div class="metric-value" style="margin-top: 0.30rem;">
+                                    <span class="swell-arrow" style="transform: rotate(${parseInt(day.swell.direction) + 90}deg)">➤</span>
+                                    <span class="direction-text">${day.swell.direction}°</span>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="rating-badge" style="background-color: ${day.color}; margin-top: auto; align-self: center; width: 100%;">
-                        ${day.rating}
+                        <div class="metric-row" style="padding-top: 1rem; align-items: flex-start; gap: 8px;">
+                            <div class="metric" style="flex: 1; align-items: center;">
+                                <span class="metric-label">Wind Speed</span>
+                                <span class="metric-value">${day.wind.speed}<span class="metric-unit">${day.wind.unit}</span></span>
+                            </div>
+                            <div class="metric" style="flex: 1; align-items: center;">
+                                <span class="metric-label">Wind Dir</span>
+                                <div class="metric-value">
+                                    <span class="direction-arrow wind-arrow" style="transform: rotate(${parseInt(day.wind.direction) + 90}deg)">➤</span>
+                                    <span class="direction-text">${day.wind.direction}°</span>
+                                </div>
+                            </div>
+                            <div class="metric tide-metric" style="flex: 1; display: flex; flex-direction: column; align-items: flex-end;">
+                                <span class="metric-label" style="text-align: right; width: 100%; font-size: 0.75em;">Tide <span style="font-size: 0.7em;">(High/Low)</span></span>
+                                <div class="tide-container" style="display: flex; flex-direction: column; gap: 2px; padding: 4px 0; align-items: flex-end;">
+                                    <!-- High Tide -->
+                                    <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
+                                        <span style="color: #9ca3af; font-size: 0.8em;">▲</span>
+                                        <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.max.time}</span>
+                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.max.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
+                                            ${formatHeight(day.tide.max.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                        </span>
+                                    </div>
+                                    <!-- Low Tide -->
+                                    <div class="tide-row" style="display: flex; align-items: baseline; gap: 4px;">
+                                        <span style="color: #000; font-weight: 700; font-size: 0.9em; line-height: 1;">${day.tide.min.time}</span>
+                                        <span class="metric-value" data-type="tide-height" data-val-m="${day.tide.min.height}" style="color: #9ca3af; font-size: 0.65em; font-weight: 500;">
+                                            ${formatHeight(day.tide.min.height, currentUnit)}${getHeightUnit(currentUnit)}
+                                        </span>
+                                        <span style="color: #9ca3af; font-size: 0.8em;">▼</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="rating-badge" style="background-color: ${day.color}; margin-top: auto; align-self: center; width: 100%;">
+                            ${day.rating}
+                        </div>
                     </div>
                     
                     <div class="hourly-details" style="display:none; margin-top: 1rem;"></div>
@@ -439,23 +441,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const allCards = document.querySelectorAll('.forecast-card');
                     const heroSection = document.querySelector('.hero');
 
-                    // Check if any cards are currently open
-                    let anyOpen = false;
-                    allCards.forEach(c => {
-                        const details = c.querySelector('.hourly-details');
-                        if (details && details.style.display === 'block') {
-                            anyOpen = true;
-                        }
-                    });
+                    // Check if *this* card is already expanded
+                    const isExpanded = card.classList.contains('expanded');
 
-                    // Toggle: if any are open, close all. Otherwise, open all.
-                    if (anyOpen) {
+                    if (isExpanded) {
                         // Close all
                         allCards.forEach(c => {
+                            c.classList.remove('expanded');
                             const details = c.querySelector('.hourly-details');
-                            if (details) {
-                                details.style.display = 'none';
-                            }
+                            if (details) details.style.display = 'none';
                         });
                         // Expand hero back to normal
                         if (heroSection) {
@@ -463,10 +457,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     } else {
                         // Open all
-                        allCards.forEach((c, idx) => {
+                        allCards.forEach((c) => {
+                            c.classList.add('expanded');
+                            const details = c.querySelector('.hourly-details');
                             const dateIso = c.dataset.date;
                             const spot = c.dataset.spot;
-                            if (dateIso && spot) {
+
+                            // Only toggle if it's currently hidden
+                            if (details && details.style.display !== 'block' && dateIso && spot) {
                                 toggleHourlyDetails(c, dateIso, spot);
                             }
                         });
