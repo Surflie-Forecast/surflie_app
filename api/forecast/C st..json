@@ -3,7 +3,7 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Day",
+      "day": "Today",
       "date": "Dec 11",
       "date_iso": "2025-12-11",
       "swell": {
@@ -13,7 +13,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.7",
+        "speed": "4.5",
         "direction": "128",
         "unit": "kts"
       },
@@ -41,7 +41,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.9",
+        "speed": "3.7",
         "direction": "148",
         "unit": "kts"
       },
@@ -69,7 +69,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "5.1",
+        "speed": "5.8",
         "direction": "144",
         "unit": "kts"
       },
@@ -97,7 +97,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "8.9",
+        "speed": "9.1",
         "direction": "136",
         "unit": "kts"
       },
@@ -125,7 +125,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "8.3",
+        "speed": "8.1",
         "direction": "127",
         "unit": "kts"
       },
@@ -153,7 +153,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.8",
+        "speed": "4.3",
         "direction": "138",
         "unit": "kts"
       },
@@ -181,7 +181,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.1",
+        "speed": "6.8",
         "direction": "151",
         "unit": "kts"
       },
@@ -209,7 +209,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "7.6",
+        "speed": "8.2",
         "direction": "147",
         "unit": "kts"
       },
