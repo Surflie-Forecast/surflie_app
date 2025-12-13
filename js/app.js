@@ -9,6 +9,23 @@ window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
 window.formatHeight = (val, unit) => unit === 'imperial' ? window.toFeet(val) : val;
 window.getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
+window.scrollToForecastDate = (dateIso) => {
+    const container = document.getElementById('forecastContainer');
+    const card = container.querySelector(`.forecast-card[data-date="${dateIso}"]`);
+    if (card) {
+        const containerWidth = container.clientWidth;
+        const cardWidth = card.offsetWidth;
+        const cardLeft = card.offsetLeft;
+
+        const targetScroll = cardLeft - (containerWidth / 2) + (cardWidth / 2);
+
+        container.scrollTo({
+            left: targetScroll,
+            behavior: 'smooth'
+        });
+    }
+};
+
 // Function to update all displayed units in DOM without re-rendering
 function updateDisplayedUnits() {
     // Collect all elements

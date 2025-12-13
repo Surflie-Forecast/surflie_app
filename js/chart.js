@@ -175,6 +175,13 @@ function renderChart(hourlyData) {
             bar.dispatchEvent(event);
         }, { passive: true });
 
+        // Click to scroll to card
+        wrapper.addEventListener('click', () => {
+            if (window.scrollToForecastDate) {
+                window.scrollToForecastDate(dateIso);
+            }
+        });
+
 
         wrapper.appendChild(bar);
         chartContainer.appendChild(wrapper);
