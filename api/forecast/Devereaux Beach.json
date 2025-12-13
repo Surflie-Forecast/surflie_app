@@ -13,8 +13,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.5",
-        "direction": "62",
+        "speed": "2.2",
+        "direction": "203",
         "unit": "kts"
       },
       "tide": {
@@ -42,7 +42,7 @@
       },
       "wind": {
         "speed": "2.3",
-        "direction": "122",
+        "direction": "139",
         "unit": "kts"
       },
       "tide": {
@@ -97,8 +97,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.8",
-        "direction": "22",
+        "speed": "3.7",
+        "direction": "18",
         "unit": "kts"
       },
       "tide": {
@@ -125,8 +125,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.5",
-        "direction": "22",
+        "speed": "4.5",
+        "direction": "21",
         "unit": "kts"
       },
       "tide": {
@@ -153,8 +153,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.7",
-        "direction": "148",
+        "speed": "7.0",
+        "direction": "312",
         "unit": "kts"
       },
       "tide": {
@@ -181,8 +181,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "7.0",
-        "direction": "348",
+        "speed": "5.2",
+        "direction": "318",
         "unit": "kts"
       },
       "tide": {
@@ -209,8 +209,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.8",
-        "direction": "8",
+        "speed": "6.5",
+        "direction": "340",
         "unit": "kts"
       },
       "tide": {
@@ -237,8 +237,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.4",
-        "direction": "146",
+        "speed": "6.2",
+        "direction": "344",
         "unit": "kts"
       },
       "tide": {
@@ -265,8 +265,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "6.4",
-        "direction": "342",
+        "speed": "4.0",
+        "direction": "282",
         "unit": "kts"
       },
       "tide": {

@@ -13,8 +13,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.6",
-        "direction": "232",
+        "speed": "3.5",
+        "direction": "260",
         "unit": "kts"
       },
       "tide": {
@@ -41,8 +41,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.8",
-        "direction": "261",
+        "speed": "4.0",
+        "direction": "262",
         "unit": "kts"
       },
       "tide": {
@@ -69,8 +69,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "4.7",
-        "direction": "270",
+        "speed": "3.6",
+        "direction": "268",
         "unit": "kts"
       },
       "tide": {
@@ -98,7 +98,7 @@
       },
       "wind": {
         "speed": "2.8",
-        "direction": "288",
+        "direction": "276",
         "unit": "kts"
       },
       "tide": {
@@ -125,7 +125,7 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "3.4",
+        "speed": "2.7",
         "direction": "96",
         "unit": "kts"
       },
@@ -153,8 +153,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "1.8",
-        "direction": "163",
+        "speed": "2.6",
+        "direction": "93",
         "unit": "kts"
       },
       "tide": {
@@ -181,8 +181,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.4",
-        "direction": "164",
+        "speed": "1.9",
+        "direction": "231",
         "unit": "kts"
       },
       "tide": {
@@ -209,8 +209,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.6",
-        "direction": "174",
+        "speed": "3.2",
+        "direction": "145",
         "unit": "kts"
       },
       "tide": {
@@ -237,8 +237,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "2.2",
-        "direction": "133",
+        "speed": "4.1",
+        "direction": "136",
         "unit": "kts"
       },
       "tide": {
@@ -265,8 +265,8 @@
         "unit": "m"
       },
       "wind": {
-        "speed": "1.8",
-        "direction": "190",
+        "speed": "4.4",
+        "direction": "134",
         "unit": "kts"
       },
       "tide": {
