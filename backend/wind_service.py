@@ -27,25 +27,26 @@ def fetch_wind_data(lat, lon, name, output_csv_path):
     hour = now_utc.hour
 
     # Logic to pick the latest "likely available" cycle (approx 4 hour lag)
-    # CRITICAL UPDATE: For West Coast (PST/PDT), "Today" starts at ~07:00 or 08:00 UTC.
-    # The 12z run (starts 12:00 UTC) and 18z run (starts 18:00 UTC) are TOO LATE 
-    # to provide data for the early morning of "Today".
-    # Therefore, we MUST cap the cycle at '06z' (starts 06:00 UTC) to ensure full daily coverage.
+    # Logic to pick the cycle that ensures FULL coverage for the current LA day.
+    # Start of "Today" in LA is approx 08:00 UTC (07:00 UTC in Daylight Savings).
+    # To cover 08:00 UTC onwards, we need a cycle starting at 06z (06:00 UTC) or earlier.
+    # Cycles 12z and 18z start too late (12:00/18:00 UTC) and miss the LA morning.
     
-    if hour < 4: 
-        # Late night UTC (e.g. 02:00). 06z yesterday is definitely out. 18z yesterday is safer/newer?
-        # Actually 18z yesterday starts 18:00 prev day. Good coverage.
-        # But let's stick to the standard logic for previous day:
-        cycle = '18'
+    if hour < 8: 
+        # 00:00 - 08:00 UTC. In LA, this is still the previous day (16:00 - 24:00 PST).
+        # We need data for "Today" (which is Day T-1 in UTC terms).
+        # Safe bet: Day T-1 06z.
+        cycle = '06'
         date_str = (now_utc - datetime.timedelta(days=1)).strftime('%Y%m%d')
-    elif hour < 10: 
-        # 04:00 - 10:00 UTC. 00z (starts 00:00) is likely ready (avail ~04:00).
+    elif hour < 11: 
+        # 08:00 - 11:00 UTC. It is "Today" in LA (00:00 - 03:00 PST).
+        # We want Day T 06z, but it's not available until ~10:30 UTC.
+        # So we fall back to Day T 00z.
         cycle = '00'
     else:
-        # 10:00+ UTC. 06z (starts 06:00) is likely ready (avail ~10:00).
-        # We STOP here. Even if it is 20:00 UTC and 12z is ready, we DON'T use it 
-        # because it starts too late (12:00 UTC) for our 08:00 UTC target.
+        # 11:00+ UTC. 06z is definitely available.
         cycle = '06'
+        # Note: We purposely avoid 12z and 18z to maintain full-day coverage.
 
     url = f'https://nomads.ncep.noaa.gov/dods/gfs_0p25/gfs{date_str}/gfs_0p25_{cycle}z'
     print(f"Connecting to NOAA: {url}")

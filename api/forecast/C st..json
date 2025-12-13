@@ -3,18 +3,18 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Today",
+      "day": "Day",
       "date": "Dec 12",
       "date_iso": "2025-12-12",
       "swell": {
         "height": "0.81",
-        "period": "11.7",
-        "direction": "279",
+        "period": "11.7s",
+        "direction": "279\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "3.5",
-        "direction": "260",
+        "speed": "2.7",
+        "direction": "232",
         "unit": "kts"
       },
       "tide": {
@@ -31,18 +31,18 @@
       "color": "#eab308"
     },
     {
-      "day": "Tomorrow",
+      "day": "Day",
       "date": "Dec 13",
       "date_iso": "2025-12-13",
       "swell": {
         "height": "0.54",
-        "period": "10.2",
-        "direction": "278",
+        "period": "10.2s",
+        "direction": "278\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "4.0",
-        "direction": "262",
+        "speed": "3.1",
+        "direction": "261",
         "unit": "kts"
       },
       "tide": {
@@ -59,18 +59,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Sunday",
+      "day": "Day",
       "date": "Dec 14",
       "date_iso": "2025-12-14",
       "swell": {
         "height": "0.42",
-        "period": "9.9",
-        "direction": "276",
+        "period": "9.9s",
+        "direction": "276\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "3.6",
-        "direction": "268",
+        "speed": "4.5",
+        "direction": "270",
         "unit": "kts"
       },
       "tide": {
@@ -87,18 +87,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Monday",
+      "day": "Day",
       "date": "Dec 15",
       "date_iso": "2025-12-15",
       "swell": {
         "height": "0.40",
-        "period": "9.0",
-        "direction": "272",
+        "period": "9.0s",
+        "direction": "272\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.8",
-        "direction": "276",
+        "speed": "1.8",
+        "direction": "288",
         "unit": "kts"
       },
       "tide": {
@@ -115,17 +115,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Tuesday",
+      "day": "Day",
       "date": "Dec 16",
       "date_iso": "2025-12-16",
       "swell": {
         "height": "0.42",
-        "period": "5.7",
-        "direction": "270",
+        "period": "5.7s",
+        "direction": "270\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.7",
+        "speed": "3.4",
         "direction": "96",
         "unit": "kts"
       },
@@ -143,18 +143,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Wednesday",
+      "day": "Day",
       "date": "Dec 17",
       "date_iso": "2025-12-17",
       "swell": {
         "height": "0.91",
-        "period": "6.9",
-        "direction": "270",
+        "period": "6.9s",
+        "direction": "270\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.6",
-        "direction": "93",
+        "speed": "1.2",
+        "direction": "163",
         "unit": "kts"
       },
       "tide": {
@@ -171,18 +171,18 @@
       "color": "#eab308"
     },
     {
-      "day": "Thursday",
+      "day": "Day",
       "date": "Dec 18",
       "date_iso": "2025-12-18",
       "swell": {
         "height": "0.76",
-        "period": "7.5",
-        "direction": "271",
+        "period": "7.5s",
+        "direction": "271\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "1.9",
-        "direction": "231",
+        "speed": "2.7",
+        "direction": "164",
         "unit": "kts"
       },
       "tide": {
@@ -199,18 +199,18 @@
       "color": "#eab308"
     },
     {
-      "day": "Friday",
+      "day": "Day",
       "date": "Dec 19",
       "date_iso": "2025-12-19",
       "swell": {
         "height": "0.62",
-        "period": "7.8",
-        "direction": "272",
+        "period": "7.8s",
+        "direction": "272\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "3.2",
-        "direction": "145",
+        "speed": "2.4",
+        "direction": "174",
         "unit": "kts"
       },
       "tide": {
@@ -227,18 +227,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Saturday",
+      "day": "Day",
       "date": "Dec 20",
       "date_iso": "2025-12-20",
       "swell": {
         "height": "0.49",
-        "period": "7.0",
-        "direction": "270",
+        "period": "7.0s",
+        "direction": "270\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "4.1",
-        "direction": "136",
+        "speed": "2.0",
+        "direction": "133",
         "unit": "kts"
       },
       "tide": {
@@ -255,18 +255,18 @@
       "color": "#ef4444"
     },
     {
-      "day": "Sunday",
+      "day": "Day",
       "date": "Dec 21",
       "date_iso": "2025-12-21",
       "swell": {
         "height": "0.70",
-        "period": "7.6",
-        "direction": "274",
+        "period": "7.6s",
+        "direction": "274\u00b0",
         "unit": "m"
       },
       "wind": {
-        "speed": "4.4",
-        "direction": "134",
+        "speed": "1.8",
+        "direction": "190",
         "unit": "kts"
       },
       "tide": {

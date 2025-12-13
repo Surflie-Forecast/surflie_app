@@ -7,8 +7,8 @@
       "direction": 271.0
     },
     "wind": {
-      "speed": 2.11,
-      "direction": 96.0
+      "speed": 1.2,
+      "direction": 22.0
     }
   },
   {
@@ -19,8 +19,8 @@
       "direction": 277.0
     },
     "wind": {
-      "speed": 0.77,
-      "direction": 90.0
+      "speed": 1.07,
+      "direction": 111.0
     }
   },
   {
@@ -31,8 +31,8 @@
       "direction": 276.0
     },
     "wind": {
-      "speed": 0.91,
-      "direction": 33.0
+      "speed": 0.75,
+      "direction": 65.0
     }
   },
   {
@@ -43,8 +43,8 @@
       "direction": 276.0
     },
     "wind": {
-      "speed": 3.07,
-      "direction": 217.0
+      "speed": 2.78,
+      "direction": 196.0
     }
   },
   {
@@ -55,8 +55,8 @@
       "direction": 270.0
     },
     "wind": {
-      "speed": 2.32,
-      "direction": 229.0
+      "speed": 4.93,
+      "direction": 260.0
     }
   },
   {
@@ -67,8 +67,8 @@
       "direction": 267.0
     },
     "wind": {
-      "speed": 1.73,
-      "direction": 154.0
+      "speed": 1.43,
+      "direction": 130.0
     }
   },
   {
@@ -79,8 +79,8 @@
       "direction": 266.0
     },
     "wind": {
-      "speed": 5.77,
-      "direction": 3.0
+      "speed": 0.89,
+      "direction": 235.0
     }
   },
   {
@@ -91,8 +91,8 @@
       "direction": 267.0
     },
     "wind": {
-      "speed": 4.16,
-      "direction": 32.0
+      "speed": 1.21,
+      "direction": 259.0
     }
   }
 ]

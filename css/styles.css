@@ -53,45 +53,7 @@ body {
   position: relative;
 }
 
-/* Left lateral gradient overlay - full height */
-.app-container::before {
-  content: '';
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 10rem;
-
-  /* Same vertical gradient as background */
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-
-  /* Horizontal fade mask from left edge to transparent - non-linear easing */
-  -webkit-mask-image: linear-gradient(to right, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
-  mask-image: linear-gradient(to right, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
-
-  pointer-events: none;
-  z-index: 100;
-}
-
-/* Right lateral gradient overlay - full height */
-.app-container::after {
-  content: '';
-  position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 10rem;
-
-  /* Same vertical gradient as background */
-  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
-
-  /* Horizontal fade mask from right edge to transparent - non-linear easing */
-  -webkit-mask-image: linear-gradient(to left, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
-  mask-image: linear-gradient(to left, white 0%, white 15%, white 25%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
-
-  pointer-events: none;
-  z-index: 100;
-}
+/* Lateral gradients removed in favor of wrapper overlays */
 
 /* Header */
 header {
@@ -363,10 +325,43 @@ input:checked+.slider:before {
 /* Forecast Wrapper & Horizontal Scroll */
 .forecast-wrapper {
   position: relative;
-  /* Extend beyond app container padding */
-  margin-left: -15rem;
-  margin-right: -15rem;
+  /* Breakout to full viewport width */
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
   z-index: 5;
+}
+
+/* Lateral Fades - Absolute Positioned with Vertical Gradient Match */
+.forecast-wrapper::before,
+.forecast-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* Dynamic width: fill margin, minimum 2rem */
+  width: max(2rem, calc(50vw - 600px));
+  z-index: 20;
+  pointer-events: none;
+  /* Match Page Background Vertical Gradient */
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  background-attachment: fixed;
+  /* SYNC with viewport */
+  background-size: cover;
+}
+
+.forecast-wrapper::before {
+  left: 0;
+  /* Mask fade from opaque (edge) to transparent (center) */
+  -webkit-mask-image: linear-gradient(to right, black 0%, transparent 100%);
+  mask-image: linear-gradient(to right, black 0%, transparent 100%);
+}
+
+.forecast-wrapper::after {
+  right: 0;
+  /* Mask fade from opaque (edge) to transparent (center) */
+  -webkit-mask-image: linear-gradient(to left, black 0%, transparent 100%);
+  mask-image: linear-gradient(to left, black 0%, transparent 100%);
 }
 
 .forecast-container {
@@ -803,11 +798,13 @@ input:checked+.slider:before {
     font-size: 0.9rem;
   }
 
-  /* Fix lateral gradients on mobile */
-  .app-container::before,
-  .app-container::after {
-    width: 1.2rem;
-    /* Much tighter fade on mobile */
+  /* Fix lateral gradients on mobile - Adjust width for smaller screens */
+  .forecast-wrapper::before,
+  .forecast-wrapper::after {
+    /* calc() might result in 0 or negative, max ensures visibility */
+    /* But usually on mobile we want a fixed small width if the calc is crazy */
+    /* The main rule handles it with max(2rem, ...), so this might be redundant unless we want a DIFFERENT max */
+    width: 2rem;
   }
 
   /* Reset wrapper margins */
