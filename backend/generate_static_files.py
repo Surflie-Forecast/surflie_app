@@ -105,9 +105,36 @@ def generate_forecast_json(spot_name, region):
     
     print(f"✓ Generated {output_file}")
 
+import shutil  # Added for rmtree
+
+def clean_output():
+    """Clean specific output directories/files before regeneration."""
+    print("Cleaning old static files...")
+    
+    # Clean forecast directory
+    forecast_dir = os.path.join(API_DIR, 'forecast')
+    if os.path.exists(forecast_dir):
+        try:
+            shutil.rmtree(forecast_dir)
+            print("✓ Removed old api/forecast directory")
+        except Exception as e:
+            print(f"Warning: Could not remove {forecast_dir}: {e}")
+            
+    # Clean spots.json
+    spots_file = os.path.join(API_DIR, 'spots.json')
+    if os.path.exists(spots_file):
+        try:
+            os.remove(spots_file)
+            print("✓ Removed old api/spots.json")
+        except Exception as e:
+            print(f"Warning: Could not remove {spots_file}: {e}")
+
 def main():
     print("Generating static JSON files for GitHub Pages...")
     print()
+    
+    # Clean old outputs
+    clean_output()
     
     # Generate spots.json
     spots = generate_spots_json()

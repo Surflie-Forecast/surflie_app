@@ -427,6 +427,8 @@ input:checked+.slider:before {
 .forecast-card {
   /* Calculation: (100% width - (2 gaps * 2rem)) / 3 cards */
   flex: 0 0 calc((100% - 12rem) / 3);
+  min-width: 350px;
+  max-width: 400px;
   scroll-snap-align: center;
 
   background: var(--glass-bg);
@@ -434,7 +436,7 @@ input:checked+.slider:before {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
   border-radius: var(--card-radius);
-  padding: 2rem;
+  padding: 1.5rem 1.5rem 0.5rem 1.5rem;
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -477,12 +479,12 @@ input:checked+.slider:before {
   justify-content: space-between;
   align-items: center;
   padding: 0 10px;
-  padding-bottom: 16px;
+  padding-bottom: 12px;
 }
 
 .metric-row.main-row {
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  padding-bottom: 16px;
+  padding-bottom: 12px;
 }
 
 .metric-group {
@@ -541,14 +543,24 @@ input:checked+.slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--glass-border);
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
 }
 
 .day-label {
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+.quality-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .date-label {
@@ -588,6 +600,22 @@ input:checked+.slider:before {
 .metric-value.updating {
   opacity: 0.7;
   transform: scale(0.99);
+}
+
+.mini-hourly-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 24px;
+  width: 60px;
+  /* Fixed width for consistency */
+}
+
+.mini-bar {
+  flex: 1;
+  border-radius: 1px;
+  min-height: 2px;
+  opacity: 0.8;
 }
 
 .swell-arrow {

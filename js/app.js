@@ -582,7 +582,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(updateChartHighlight, 500);
     }
 
+    let currentRenderId = 0;
+
     async function renderForecast(spotName) {
+        // Increment render ID to invalidate previous running renders
+        const renderId = ++currentRenderId;
+
         // Update Title
         spotNameTitle.textContent = "Loading...";
 
@@ -592,12 +597,20 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Fetch from static JSON file
             const response = await fetch(`api/forecast/${encodeURIComponent(spotName)}.json`);
+
+            // Check if superseded
+            if (renderId !== currentRenderId) return;
+
             if (!response.ok) {
                 const err = await response.json().catch(() => ({ error: "Failed to fetch data" }));
                 throw new Error(err.error || "Failed to fetch data");
             }
 
             const data = await response.json();
+
+            // Check if superseded
+            if (renderId !== currentRenderId) return;
+
             lastRenderedSpot = data.spotName;
 
             // Update title with "Name, Region"
@@ -606,9 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update Hero Background
             const heroSection = document.querySelector('.hero');
             if (data.region && heroSection) {
-                // Try to load region image, fallback handled if needed via CSS or error event? 
-                // For now assumes images exist as per requirement.
-                // Using encodeURIComponent to handle spaces in filenames
                 heroSection.style.backgroundImage = `url('images/${data.region}.jpg')`;
                 heroSection.style.backgroundSize = 'cover';
                 heroSection.style.backgroundPosition = 'center';
@@ -628,6 +638,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateChartHighlight();
                 });
             }
+
+            // Create a promise array to fetch all hourly data
+            const hourlyPromises = data.forecast.map(async (day) => {
+                try {
+                    const res = await fetch(`api/hourly/${encodeURIComponent(spotName)}/${day.date_iso}.json`);
+                    if (res.ok) {
+                        return { date: day.date_iso, data: await res.json() };
+                    }
+                } catch (e) {
+                    console.warn(`Failed to fetch hourly for ${day.date_iso}`, e);
+                }
+                return { date: day.date_iso, data: [] };
+            });
+
+            // Wait for all hourly data (or proceed with empty arrays)
+            const allHourlyData = await Promise.all(hourlyPromises);
+
+            // Check if superseded (Critical check before DOM manipulation)
+            if (renderId !== currentRenderId) return;
+
+            const hourlyMap = {};
+
+            // Calculate Global Max Swell Height across all days/hours
+            let globalMaxH = 0;
+            allHourlyData.forEach(item => {
+                hourlyMap[item.date] = item.data;
+                item.data.forEach(h => {
+                    const swell = parseFloat(h.swell.height) || 0;
+                    if (swell > globalMaxH) globalMaxH = swell;
+                });
+            });
+
+            // Set a sane minimum (e.g., 1.0m) to avoid tiny scales or divide-by-zero
+            if (globalMaxH < 1.0) globalMaxH = 1.0;
 
             data.forecast.forEach((day, index) => {
                 const card = document.createElement('div');
@@ -659,16 +703,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     dayLabel = days[fileDate.getDay()];
                 }
 
+                // Generate Mini Plot HTML
+                const dayHourlyData = hourlyMap[day.date_iso] || [];
+                // Pass globalMaxH for consistent scaling
+                const miniPlotHtml = generateMiniHourlyPlot(dayHourlyData, globalMaxH);
+
                 card.innerHTML = `
                     <div class="card-header">
                         <span class="day-label">${dayLabel}</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            ${miniPlotHtml}
+                            <span class="quality-label" style="background-color: ${day.color};">${day.rating}</span>
+                        </div>
                         <span class="date-label">${day.date}</span>
                     </div>
                     
                     <div class="daily-summary">
                         <div class="metric-row main-row">
                             <div class="metric">
-                                <span class="metric-label">Wave Height</span>
+                                <span class="metric-label">Swell Height</span>
                                 <span class="metric-value" data-type="swell-height" data-val-m="${day.swell.height}">
                                     ${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>
                                 </span>
@@ -719,10 +772,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="rating-badge" style="background-color: ${day.color}; margin-top: auto; align-self: center; width: 100%;">
-                            ${day.rating}
                         </div>
                     </div>
                     
@@ -789,3 +838,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// Helper to generate the mini hourly bar plot HTML
+function generateMiniHourlyPlot(hourlyData, maxH = 3.0) {
+    if (!hourlyData || hourlyData.length === 0) return '';
+
+    let barsHtml = '';
+    // We want 24 bars, assuming hourlyData matches hours?
+    // Hourly data usually has datetime. We can just iterate array.
+    hourlyData.forEach(h => {
+        // Calculate Rating Color using shared logic
+        const windSpd = parseFloat(h.wind.speed) || 0;
+        const swellH = parseFloat(h.swell.height) || 0;
+        const swellP = parseFloat(h.swell.period) || 0;
+        const rating = getRatingAndColor(swellH, swellP, windSpd);
+
+        // Height percentage (clamp at 100%)
+        let pct = (swellH / maxH) * 100;
+        if (pct < 10) pct = 10; // Min height
+        if (pct > 100) pct = 100;
+
+        barsHtml += `<div class="mini-bar" style="height:${pct}%; background-color:${rating.color};" title="${h.datetime}"></div>`;
+    });
+
+    return `<div class="mini-hourly-plot">${barsHtml}</div>`;
+}
