@@ -5,11 +5,13 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
     // If already open, close it
     if (detailsDiv.style.display === 'block') {
         detailsDiv.style.display = 'none';
+        card.classList.remove('expanded');
         return;
     }
 
     // Show loading
     detailsDiv.style.display = 'block';
+    card.classList.add('expanded');
     detailsDiv.innerHTML = '<div style="text-align:center; padding:1rem;">Loading hourly data...</div>';
 
     try {
@@ -41,7 +43,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
             const windDir = Math.round(hour.wind.direction);
 
             // Calculate rating color using centralized rating.js (includes wind speed)
-            const result = getRatingAndColor(hour.swell.height, hour.swell.period, windSpeed);
+            const result = getRatingAndColor(hour.swell.height, hour.swell.period, hour.wind.speed);
             const color = result.color;
 
             html += `

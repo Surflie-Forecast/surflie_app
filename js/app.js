@@ -717,7 +717,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${miniPlotHtml}
                             <span class="quality-label" style="background-color: ${day.color};">${day.rating}</span>
                         </div>
-                        <span class="date-label">${day.date}</span>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span class="date-label">${day.date}</span>
+                            <span class="expand-icon">▼</span>
+                        </div>
                     </div>
                     
                     <div class="daily-summary">

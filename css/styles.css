@@ -405,7 +405,7 @@ input:checked+.slider:before {
 
   /* Align first card with hero - left padding counters wrapper's negative margin */
   /* Extra vertical padding to accommodate hover shadow */
-  padding: 2rem 12rem 3rem 12rem;
+  padding: 2rem max(2rem, calc(50vw - 600px + 2rem)) 3rem max(2rem, calc(50vw - 600px + 2rem));
   /* No top padding */
 
   scroll-snap-type: x mandatory;
@@ -512,7 +512,7 @@ input:checked+.slider:before {
   justify-content: space-between;
   align-items: center;
   padding: 0 10px;
-  padding-bottom: 12px;
+  padding-bottom: 6px;
 }
 
 .metric-row.main-row {
@@ -647,8 +647,19 @@ input:checked+.slider:before {
 .mini-bar {
   flex: 1;
   border-radius: 1px;
-  min-height: 2px;
+  font-weight: 500;
   opacity: 0.8;
+}
+
+.expand-icon {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  transition: transform 0.3s ease;
+}
+
+.forecast-card.expanded .expand-icon {
+  transform: rotate(180deg);
 }
 
 .swell-arrow {
