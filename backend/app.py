@@ -137,13 +137,18 @@ def get_spots():
         return jsonify([]), 200
     
     # helper: load region map
-    region_map = {}
+    # helper: load location metadata (region, lat, lon)
+    location_meta = {}
     if os.path.exists(locations_file):
         try:
             with open(locations_file, 'r') as f:
                 reader = csv.DictReader(f)
                 for row in reader:
-                    region_map[row['site_name']] = row['region']
+                    location_meta[row['site_name']] = {
+                        "region": row['region'],
+                        "latitude": float(row['latitude']) if row.get('latitude') else None,
+                        "longitude": float(row['longitude']) if row.get('longitude') else None
+                    }
         except:
              pass
 
@@ -155,9 +160,12 @@ def get_spots():
             for row in reader:
                 name = row['spot_name']
                 if name not in seen:
+                    meta = location_meta.get(name, {})
                     spots_list.append({
                         "name": name,
-                        "region": region_map.get(name, "Unknown Region")
+                        "region": meta.get("region", "Unknown Region"),
+                        "latitude": meta.get("latitude"),
+                        "longitude": meta.get("longitude")
                     })
                     seen.add(name)
         return jsonify(spots_list)

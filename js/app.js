@@ -156,6 +156,84 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial Load
     let availableSpots = []; // Array of {name, region}
+    // Helper: Haversine distance
+    function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+        var R = 6371; // Radius of the earth in km
+        var dLat = deg2rad(lat2 - lat1);
+        var dLon = deg2rad(lon2 - lon1);
+        var a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2)
+            ;
+        var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        var d = R * c; // Distance in km
+        return d;
+    }
+
+    function deg2rad(deg) {
+        return deg * (Math.PI / 180)
+    }
+
+    // Helper: Get IP Location
+    function getIPLocation() {
+        return new Promise(async (resolve) => {
+            try {
+                const res = await fetch('https://ipapi.co/json/');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.latitude && data.longitude) {
+                        resolve({ lat: data.latitude, lon: data.longitude });
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.log("IP location failed", err);
+            }
+            resolve(null);
+        });
+    }
+
+    // Helper: Get Geo Location
+    function getGeoLocation() {
+        return new Promise((resolve) => {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        resolve({
+                            lat: position.coords.latitude,
+                            lon: position.coords.longitude
+                        });
+                    },
+                    (error) => {
+                        console.log("Geolocation permission denied or failed", error);
+                        resolve(null);
+                    },
+                    { timeout: 10000 }
+                );
+            } else {
+                resolve(null);
+            }
+        });
+    }
+
+    function findNearestSpot(userLoc, spots) {
+        if (!userLoc || !spots.length) return null;
+
+        let minDist = Infinity;
+        let bestSpot = null;
+
+        spots.forEach(spot => {
+            if (spot.latitude && spot.longitude) {
+                const dist = getDistanceFromLatLonInKm(userLoc.lat, userLoc.lon, spot.latitude, spot.longitude);
+                if (dist < minDist) {
+                    minDist = dist;
+                    bestSpot = spot;
+                }
+            }
+        });
+        return bestSpot;
+    }
 
     async function init() {
         // Setup Toggle Switches (Desktop & Mobile)
@@ -189,10 +267,58 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Error fetching spots:", e);
         }
 
-        // Determine initial spot
-        const initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
+        // Determine initial spot (Default)
+        // 1. Render Default immediately so user sees something
+        let initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
         renderForecast(initialSpotName);
+
+        // 2. Start Location Checks in parallel (IP first, then Geo)
+        // We use a "confidence" level to ensure we don't downgrade.
+        // 0 = Default, 1 = IP, 2 = Geo
+        // 0 = Default, 1 = IP, 2 = Geo
+        let currentConfidence = 0;
+
+        // Async IP Check
+        const checkIP = async () => {
+            const ipLoc = await getIPLocation();
+            if (ipLoc) {
+                const nearest = findNearestSpot(ipLoc, availableSpots);
+                if (nearest) {
+                    console.log("Auto-detected IP spot:", nearest.name);
+                    // Update if we haven't already set a higher confidence spot (e.g. Geo returned super fast or user clicked)
+                    if (currentConfidence < 1) {
+                        currentConfidence = 1;
+                        if (nearest.name !== lastRenderedSpot) {
+                            renderForecast(nearest.name);
+                        }
+                    }
+                }
+            }
+        };
+
+        // Async Geo Check
+        const checkGeo = async () => {
+            const geoLoc = await getGeoLocation();
+            if (geoLoc) {
+                const nearest = findNearestSpot(geoLoc, availableSpots);
+                if (nearest) {
+                    console.log("Auto-detected Geo spot:", nearest.name);
+                    // Geo trumps everything
+                    if (currentConfidence < 2) {
+                        currentConfidence = 2;
+                        if (nearest.name !== lastRenderedSpot) {
+                            renderForecast(nearest.name);
+                        }
+                    }
+                }
+            }
+        };
+
+        // Fire and forget (don't await them)
+        checkIP();
+        checkGeo();
     }
+
 
     let lastRenderedSpot = "";
 
@@ -216,7 +342,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (matches.length > 0) {
             searchResults.style.display = 'block';
-            matches.forEach(match => {
+
+            // Show only first 5
+            const limit = 5;
+            const displayMatches = matches.slice(0, limit);
+
+            displayMatches.forEach(match => {
                 const item = document.createElement('div');
                 item.className = 'search-result-item';
                 // Display: Name, Region
@@ -228,6 +359,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 searchResults.appendChild(item);
             });
+
+            // "And X more" label
+            if (matches.length > limit) {
+                const moreItem = document.createElement('div');
+                moreItem.className = 'search-result-item';
+                moreItem.style.color = 'var(--text-secondary)';
+                moreItem.style.fontStyle = 'italic';
+                moreItem.style.cursor = 'default';
+                moreItem.textContent = `...and ${matches.length - limit} more`;
+                // Prevent clicking "more" from doing anything or maybe it should act as "keep typing"?
+                // User requirement: "display a label of more"
+                searchResults.appendChild(moreItem);
+            }
+
         } else {
             searchResults.style.display = 'none';
         }

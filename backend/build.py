@@ -48,7 +48,11 @@ def load_locations():
         with open(locations_file, 'r') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                locations[row['site_name']] = row['region']
+                locations[row['site_name']] = {
+                    'region': row['region'],
+                    'latitude': float(row['latitude']) if row.get('latitude') else None,
+                    'longitude': float(row['longitude']) if row.get('longitude') else None
+                }
     
     return locations
 
@@ -73,9 +77,12 @@ def generate_spots_json(locations):
             for row in reader:
                 spot_name = row['spot_name']
                 if spot_name not in seen:
+                    loc_data = locations.get(spot_name, {})
                     spots_data.append({
                         'name': spot_name,
-                        'region': locations.get(spot_name, 'Unknown Region')
+                        'region': loc_data.get('region', 'Unknown Region'),
+                        'latitude': loc_data.get('latitude'),
+                        'longitude': loc_data.get('longitude')
                     })
                     seen.add(spot_name)
     
@@ -156,7 +163,7 @@ def generate_forecast_json(spot_name, locations):
     if forecast_data:
         output_data = {
             'spotName': spot_name,
-            'region': locations.get(spot_name, 'Unknown Region'),
+            'region': locations.get(spot_name, {}).get('region', 'Unknown Region'),
             'forecast': forecast_data
         }
         

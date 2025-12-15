@@ -25,7 +25,9 @@ def generate_spots_json():
         for row in reader:
             spots.append({
                 'name': row['site_name'],
-                'region': row['region']
+                'region': row['region'],
+                'latitude': float(row['latitude']) if row.get('latitude') else None,
+                'longitude': float(row['longitude']) if row.get('longitude') else None
             })
     
     with open(output_file, 'w') as f:

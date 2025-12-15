@@ -1,10 +1,14 @@
 [
   {
     "name": "C st.",
-    "region": "Ventura"
+    "region": "Ventura",
+    "latitude": 34.26343870100869,
+    "longitude": -119.30167128264623
   },
   {
     "name": "Devereaux Beach",
-    "region": "Santa Barbara"
+    "region": "Santa Barbara",
+    "latitude": 34.40313812226568,
+    "longitude": -119.8780802047039
   }
 ]
