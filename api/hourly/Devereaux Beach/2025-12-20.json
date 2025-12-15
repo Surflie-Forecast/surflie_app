@@ -2,105 +2,97 @@
   {
     "datetime": "2025-12-20 01:00:00",
     "swell": {
-      "height": 0.64,
-      "period": 9.0,
-      "direction": 289.0
+      "height": 0.69,
+      "period": 9.1,
+      "direction": 290.0
     },
     "wind": {
       "speed": 5.87,
       "direction": 360.0
-    },
-    "tide": 0.9
+    }
   },
   {
     "datetime": "2025-12-20 04:00:00",
     "swell": {
-      "height": 0.69,
-      "period": 7.8,
-      "direction": 284.0
+      "height": 0.7,
+      "period": 9.1,
+      "direction": 288.0
     },
     "wind": {
       "speed": 4.91,
       "direction": 2.0
-    },
-    "tide": 0.96
+    }
   },
   {
     "datetime": "2025-12-20 07:00:00",
     "swell": {
-      "height": 0.69,
-      "period": 8.9,
-      "direction": 290.0
+      "height": 0.7,
+      "period": 9.0,
+      "direction": 289.0
     },
     "wind": {
       "speed": 4.52,
       "direction": 4.0
-    },
-    "tide": 1.6
+    }
   },
   {
     "datetime": "2025-12-20 10:00:00",
     "swell": {
-      "height": 0.7,
-      "period": 8.3,
-      "direction": 288.0
+      "height": 0.76,
+      "period": 8.7,
+      "direction": 289.0
     },
     "wind": {
       "speed": 0.71,
       "direction": 34.0
-    },
-    "tide": 1.68
+    }
   },
   {
     "datetime": "2025-12-20 13:00:00",
     "swell": {
-      "height": 0.87,
-      "period": 6.8,
-      "direction": 285.0
+      "height": 0.85,
+      "period": 8.0,
+      "direction": 290.0
     },
     "wind": {
       "speed": 5.1,
       "direction": 254.0
-    },
-    "tide": 0.62
+    }
   },
   {
     "datetime": "2025-12-20 16:00:00",
     "swell": {
-      "height": 0.8,
-      "period": 7.2,
-      "direction": 287.0
+      "height": 0.81,
+      "period": 8.6,
+      "direction": 290.0
     },
     "wind": {
       "speed": 3.06,
       "direction": 289.0
-    },
-    "tide": -0.21
+    }
   },
   {
     "datetime": "2025-12-20 19:00:00",
     "swell": {
-      "height": 0.68,
-      "period": 8.3,
+      "height": 0.83,
+      "period": 8.5,
       "direction": 290.0
     },
     "wind": {
       "speed": 4.02,
       "direction": 6.0
-    },
-    "tide": 0.23
+    }
   },
   {
     "datetime": "2025-12-20 22:00:00",
     "swell": {
-      "height": 0.61,
-      "period": 8.0,
-      "direction": 286.0
+      "height": 0.85,
+      "period": 7.6,
+      "direction": 289.0
     },
     "wind": {
       "speed": 3.44,
       "direction": 347.0
-    },
-    "tide": 0.97
+    }
   }
 ]
