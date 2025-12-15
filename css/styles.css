@@ -112,6 +112,39 @@ header {
   color: var(--text-secondary);
 }
 
+.wind-arrow-small {
+  font-size: 0.6rem;
+  display: inline-block;
+  color: var(--text-secondary);
+}
+
+/* Daily Tide Chart */
+.daily-tide-chart-container {
+  margin: 0rem 1rem;
+  width: calc(100% - 2rem);
+}
+
+.daily-tide-chart-header {
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  padding: 1rem 0rem 0rem 0rem;
+  margin-bottom: -0.5rem;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+
+
+.daily-tide-chart-svg {
+  width: 100%;
+  height: 90px;
+  overflow: visible;
+  position: relative;
+  margin-bottom: 1rem;
+}
+
 .switch {
   position: relative;
   display: inline-block;

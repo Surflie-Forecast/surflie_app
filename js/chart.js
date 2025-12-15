@@ -215,3 +215,240 @@ function renderChart(hourlyData) {
     // Ensure we start at the beginning (left)
     chartContainer.scrollLeft = 0;
 }
+
+// --- Tide Chart Implementation ---
+
+async function renderTideChart(spotName) {
+    const container = document.getElementById('tideChartContainer');
+    const waveContainer = document.getElementById('waveChartContainer');
+    const section = document.getElementById('tideChartSection');
+
+    if (!container || !waveContainer || !section) return;
+
+    // Show section
+    section.style.display = 'block';
+    container.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px; color: var(--text-secondary);">Loading tide data...</div>';
+
+    try {
+        const res = await fetch(`api/tide/${encodeURIComponent(spotName)}.json`);
+        if (!res.ok) {
+            container.innerHTML = '';
+            section.style.display = 'none'; // Hide if no data
+            return;
+        }
+
+        const json = await res.json();
+        const data = json.dataset || [];
+        const peaks = json.peaks || [];
+
+        if (!data || data.length === 0) {
+            container.innerHTML = '<div style="padding:20px; text-align:center;">No tide data available</div>';
+            return;
+        }
+
+        // We need to sync with the wave chart. 
+        setTimeout(() => {
+            drawTideChartSvg(data, peaks, container, waveContainer);
+        }, 100);
+
+        // Sync Scrolling
+        if (waveContainer._syncHandler) {
+            waveContainer.removeEventListener('scroll', waveContainer._syncHandler);
+            container.removeEventListener('scroll', container._syncHandler);
+        }
+
+        const syncWaveToTide = () => {
+            if (waveContainer._isScrolling) return;
+            container._isScrolling = true;
+            waveContainer.scrollLeft = container.scrollLeft;
+            setTimeout(() => container._isScrolling = false, 50);
+        };
+
+        const syncTideToWave = () => {
+            if (container._isScrolling) return;
+            waveContainer._isScrolling = true;
+            container.scrollLeft = waveContainer.scrollLeft;
+            setTimeout(() => waveContainer._isScrolling = false, 50);
+        };
+
+        container.addEventListener('scroll', syncWaveToTide);
+        waveContainer.addEventListener('scroll', syncTideToWave);
+
+        container._syncHandler = syncWaveToTide;
+        waveContainer._syncHandler = syncTideToWave;
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            clearTimeout(window._tideResizeTimer);
+            window._tideResizeTimer = setTimeout(() => {
+                drawTideChartSvg(data, peaks, container, waveContainer);
+            }, 200);
+        });
+
+    } catch (e) {
+        console.error("Tide render error:", e);
+        container.innerHTML = '<div style="color:red; text-align:center;">Error loading tide chart</div>';
+    }
+}
+
+function drawTideChartSvg(data, peaks, container, waveContainer) {
+    container.innerHTML = '';
+
+    // Get dimensions from the WAVE container to ensure alignment
+    // The wave container's scrollWidth represents the full time axis length
+    const fullWidth = waveContainer.scrollWidth;
+    const height = container.clientHeight || 150;
+
+    // If wave chart is empty or hidden, fallback
+    if (fullWidth < 100) return;
+
+    // Create SVG
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("width", fullWidth);
+    svg.setAttribute("height", height);
+    svg.style.display = "block";
+
+    // Find Min/Max for Y-axis scaling
+    let minH = Infinity;
+    let maxH = -Infinity;
+    data.forEach(d => {
+        if (d.v < minH) minH = d.v;
+        if (d.v > maxH) maxH = d.v;
+    });
+
+    // Add some padding to Y-axis
+    const paddingY = 20; // more padding for labels
+    const rangeY = maxH - minH;
+    // Avoid divide by zero
+    const safeRangeY = rangeY === 0 ? 1 : rangeY;
+
+    // X-axis mapping
+    if (data.length < 2) return;
+
+    const startTime = new Date(data[0].t).getTime();
+    const endTime = new Date(data[data.length - 1].t).getTime();
+    const timeRange = endTime - startTime;
+
+    // Helper to map X/Y
+    const getX = (t) => {
+        const time = new Date(t).getTime();
+        return ((time - startTime) / timeRange) * fullWidth;
+    };
+
+    const getY = (v) => {
+        const pctY = (v - minH) / safeRangeY;
+        // Invert Y (0 is top)
+        return height - paddingY - (pctY * (height - 2 * paddingY));
+    };
+
+    // Generate Path
+    // M x0 y0 L x1 y1 ...
+    // Fill path (close loop) for area effect
+
+    console.log(`Rendering Tide: ${data.length} pts, W:${fullWidth}, Range:${minH.toFixed(2)} to ${maxH.toFixed(2)}`);
+
+    // 1. Draw Line / Area
+    let pathD = "";
+    let firstX = 0;
+    let firstY = 0;
+
+    data.forEach((pt, i) => {
+        const x = getX(pt.t);
+        const y = getY(pt.v);
+
+        if (i === 0) {
+            pathD += `M ${x.toFixed(1)} ${y.toFixed(1)}`;
+            firstX = x;
+            firstY = y;
+        } else {
+            pathD += ` L ${x.toFixed(1)} ${y.toFixed(1)}`;
+        }
+    });
+
+    // Area path (optional, looks nice)
+    const areaPath = document.createElementNS(ns, "path");
+    // Close the loop: go to bottom right, then bottom left
+    const areaD = pathD + ` L ${fullWidth} ${height} L 0 ${height} Z`;
+    areaPath.setAttribute("d", areaD);
+    areaPath.setAttribute("fill", "rgba(0, 119, 190, 0.1)");
+    areaPath.setAttribute("stroke", "none");
+
+    svg.appendChild(areaPath);
+
+    // Line path
+    const linePath = document.createElementNS(ns, "path");
+    linePath.setAttribute("d", pathD);
+    linePath.setAttribute("fill", "none");
+    linePath.setAttribute("stroke", "#0077be");
+    linePath.setAttribute("stroke-width", "2");
+
+    svg.appendChild(linePath);
+
+    // 2. Draw Peaks
+    peaks.forEach(peak => {
+        const px = getX(peak.t);
+        const py = getY(peak.v);
+
+        // Dot
+        const circle = document.createElementNS(ns, "circle");
+        circle.setAttribute("cx", px.toFixed(1));
+        circle.setAttribute("cy", py.toFixed(1));
+        circle.setAttribute("r", "3");
+        circle.setAttribute("fill", "#131929"); // Dark navy
+        svg.appendChild(circle);
+
+        // Label (H 4.5ft or just 4.5ft)
+        // User asked for "peak aH and L values to it, along the date"
+        // Let's show: "4.5ft" above H, below L
+
+        const text = document.createElementNS(ns, "text");
+
+        // Convert unit
+        const valM = peak.v;
+        const formattedVal = formatHeight(valM, currentUnit || 'imperial');
+        const unit = getHeightUnit(currentUnit || 'imperial');
+
+        text.textContent = `${formattedVal}${unit}`;
+
+        text.setAttribute("x", px.toFixed(1));
+        text.setAttribute("text-anchor", "middle");
+        text.setAttribute("font-size", "10px");
+        text.setAttribute("font-weight", "bold");
+        text.setAttribute("fill", "var(--text-secondary)");
+
+        // Offset Y
+        if (peak.type === 'H') {
+            text.setAttribute("y", (py - 8).toFixed(1));
+        } else {
+            text.setAttribute("y", (py + 15).toFixed(1));
+        }
+
+        svg.appendChild(text);
+
+        // Time Label? "along the date"? 
+        // Maybe just the time: "4:30 PM"
+        const timeText = document.createElementNS(ns, "text");
+        const dt = new Date(peak.t);
+        const timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+
+        timeText.textContent = timeStr;
+        timeText.setAttribute("x", px.toFixed(1));
+        timeText.setAttribute("text-anchor", "middle");
+        timeText.setAttribute("font-size", "9px");
+        timeText.setAttribute("fill", "rgba(0,0,0,0.4)");
+
+        if (peak.type === 'H') {
+            timeText.setAttribute("y", (py - 18).toFixed(1)); // Above value
+        } else {
+            timeText.setAttribute("y", (py + 25).toFixed(1)); // Below value
+        }
+        svg.appendChild(timeText);
+
+    });
+
+    container.appendChild(svg);
+
+    // Reset scroll to match wave container
+    container.scrollLeft = waveContainer.scrollLeft;
+}

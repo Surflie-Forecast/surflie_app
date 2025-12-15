@@ -636,6 +636,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderWaveHeightChart(spotName, data.forecast).then(() => {
                     // Trigger highlight update after chart is fully rendered
                     updateChartHighlight();
+
+
                 });
             }
 

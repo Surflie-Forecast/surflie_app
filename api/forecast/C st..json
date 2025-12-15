@@ -3,17 +3,17 @@
   "region": "Ventura",
   "forecast": [
     {
-      "day": "Day",
+      "day": "Today",
       "date": "Dec 15",
       "date_iso": "2025-12-15",
       "swell": {
         "height": "0.40",
-        "period": "8.2s",
-        "direction": "272\u00b0",
+        "period": "8.2",
+        "direction": "272",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.2",
+        "speed": "2.8",
         "direction": "244",
         "unit": "kts"
       },
@@ -31,13 +31,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Tomorrow",
       "date": "Dec 16",
       "date_iso": "2025-12-16",
       "swell": {
         "height": "0.50",
-        "period": "4.9s",
-        "direction": "272\u00b0",
+        "period": "4.9",
+        "direction": "272",
         "unit": "m"
       },
       "wind": {
@@ -59,17 +59,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Wednesday",
       "date": "Dec 17",
       "date_iso": "2025-12-17",
       "swell": {
         "height": "0.87",
-        "period": "7.9s",
-        "direction": "273\u00b0",
+        "period": "7.9",
+        "direction": "273",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.4",
+        "speed": "3.4",
         "direction": "222",
         "unit": "kts"
       },
@@ -87,13 +87,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Thursday",
       "date": "Dec 18",
       "date_iso": "2025-12-18",
       "swell": {
         "height": "0.82",
-        "period": "6.5s",
-        "direction": "270\u00b0",
+        "period": "6.5",
+        "direction": "270",
         "unit": "m"
       },
       "wind": {
@@ -115,17 +115,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Friday",
       "date": "Dec 19",
       "date_iso": "2025-12-19",
       "swell": {
         "height": "0.74",
-        "period": "6.4s",
-        "direction": "270\u00b0",
+        "period": "6.4",
+        "direction": "270",
         "unit": "m"
       },
       "wind": {
-        "speed": "1.4",
+        "speed": "1.8",
         "direction": "218",
         "unit": "kts"
       },
@@ -143,17 +143,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Saturday",
       "date": "Dec 20",
       "date_iso": "2025-12-20",
       "swell": {
         "height": "0.52",
-        "period": "6.6s",
-        "direction": "270\u00b0",
+        "period": "6.6",
+        "direction": "270",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.1",
+        "speed": "2.5",
         "direction": "164",
         "unit": "kts"
       },
@@ -171,17 +171,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Sunday",
       "date": "Dec 21",
       "date_iso": "2025-12-21",
       "swell": {
         "height": "0.63",
-        "period": "7.8s",
-        "direction": "274\u00b0",
+        "period": "7.8",
+        "direction": "274",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.5",
+        "speed": "2.6",
         "direction": "190",
         "unit": "kts"
       },
@@ -199,17 +199,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Monday",
       "date": "Dec 22",
       "date_iso": "2025-12-22",
       "swell": {
         "height": "0.67",
-        "period": "7.9s",
-        "direction": "271\u00b0",
+        "period": "7.9",
+        "direction": "271",
         "unit": "m"
       },
       "wind": {
-        "speed": "2.3",
+        "speed": "2.5",
         "direction": "172",
         "unit": "kts"
       },
@@ -227,13 +227,13 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Tuesday",
       "date": "Dec 23",
       "date_iso": "2025-12-23",
       "swell": {
         "height": "0.70",
-        "period": "7.2s",
-        "direction": "266\u00b0",
+        "period": "7.2",
+        "direction": "266",
         "unit": "m"
       },
       "wind": {
@@ -255,17 +255,17 @@
       "color": "#ef4444"
     },
     {
-      "day": "Day",
+      "day": "Wednesday",
       "date": "Dec 24",
       "date_iso": "2025-12-24",
       "swell": {
         "height": "0.99",
-        "period": "7.3s",
-        "direction": "259\u00b0",
+        "period": "7.3",
+        "direction": "259",
         "unit": "m"
       },
       "wind": {
-        "speed": "5.1",
+        "speed": "5.7",
         "direction": "99",
         "unit": "kts"
       },

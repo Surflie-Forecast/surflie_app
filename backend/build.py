@@ -38,6 +38,7 @@ def ensure_dirs():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(forecast_dir, exist_ok=True)
     os.makedirs(hourly_dir, exist_ok=True)
+    os.makedirs(os.path.join(OUTPUT_DIR, 'tide'), exist_ok=True)
 
 def load_locations():
     """Load locations from CSV."""
@@ -244,9 +245,59 @@ def main():
     for spot_name in spots:
         generate_forecast_json(spot_name, locations)
         generate_hourly_json(spot_name)
+        generate_tide_json(spot_name)
     
     print("-" * 50)
     print(f"✓ Build complete! Generated JSON files in {OUTPUT_DIR}")
+
+def generate_tide_json(spot_name):
+    """Generate tide JSON file for a specific spot."""
+    tide_file = os.path.join(DATA_DIR, 'tide_raw.csv')
+    peaks_file = os.path.join(DATA_DIR, 'tide_peaks.csv')
+    
+    if not os.path.exists(tide_file):
+        return
+    
+    tide_data = []
+    
+    # Read Raw Data
+    with open(tide_file, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            if row['spot_name'] == spot_name:
+                tide_data.append({
+                    't': row['datetime'],
+                    'v': float(row['tide_height'])
+                })
+                
+    # Read Peaks Data
+    peaks_data = []
+    if os.path.exists(peaks_file):
+        with open(peaks_file, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row['spot_name'] == spot_name:
+                    peaks_data.append({
+                        't': row['datetime'],
+                        'v': float(row['tide_height']),
+                        'type': row['type'] # 'H' or 'L'
+                    })
+    
+    if tide_data:
+        # Sort by time
+        tide_data.sort(key=lambda x: x['t'])
+        peaks_data.sort(key=lambda x: x['t'])
+        
+        output_data = {
+            'dataset': tide_data,
+            'peaks': peaks_data
+        }
+        
+        output_file = os.path.join(OUTPUT_DIR, 'tide', f'{spot_name}.json')
+        with open(output_file, 'w') as f:
+            json.dump(output_data, f, indent=2)
+        
+        print(f"✓ Generated tide file for {spot_name} with {len(tide_data)} points and {len(peaks_data)} peaks")
 
 if __name__ == '__main__':
     main()
