@@ -273,7 +273,7 @@ function drawDailyTideSvg(data, peaks, container, dateISO) {
         txt.setAttribute("x", x.toFixed(1));
         txt.setAttribute("y", height.toFixed(1)); // Bottom
         txt.setAttribute("text-anchor", "middle");
-        txt.setAttribute("font-size", "9px");
+        txt.setAttribute("font-size", "11px");
         txt.setAttribute("fill", "var(--text-secondary)");
         svg.appendChild(txt);
     });
@@ -300,7 +300,7 @@ function drawDailyTideSvg(data, peaks, container, dateISO) {
         text.textContent = `${formVal}${unit}`;
         text.setAttribute("x", px.toFixed(1));
         text.setAttribute("text-anchor", "middle");
-        text.setAttribute("font-size", "9px");
+        text.setAttribute("font-size", "10px");
         text.setAttribute("font-weight", "bold");
         text.setAttribute("fill", "var(--text-secondary)");
 
@@ -311,7 +311,7 @@ function drawDailyTideSvg(data, peaks, container, dateISO) {
         timeText.textContent = timeStr;
         timeText.setAttribute("x", px.toFixed(1));
         timeText.setAttribute("text-anchor", "middle");
-        timeText.setAttribute("font-size", "8px");
+        timeText.setAttribute("font-size", "9px");
         timeText.setAttribute("fill", "rgba(0,0,0,0.5)");
 
         // Place both ABOVE the point
