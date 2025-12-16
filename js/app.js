@@ -207,13 +207,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 const marker = L.marker([spot.latitude, spot.longitude])
                     .addTo(map);
 
-                // Add Popup
+                // Attach metadata to marker for event handlers
+                marker.spotData = spot;
+
+                // Add Popup with placeholders
+                const safeName = spot.name.replace(/[^a-zA-Z0-9]/g, '_');
                 const popupContent = `
-                    <div class="popup-country">${spot.region}</div>
-                    <div class="popup-name">${spot.name}</div>
-                    <button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
-                        View Forecast
-                    </button>
+                    <div class="popup-wrapper" id="popup-${safeName}">
+                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px; margin-bottom: 4px;">
+                            <div class="popup-name" style="margin: 0; line-height: 1.2;">${spot.name}</div>
+                            <button class="popup-btn" style="margin: 0; width: auto; padding: 4px 10px; font-size: 0.7rem;" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
+                                View Forecast
+                            </button>
+                        </div>
+                        <div class="popup-dynamic-content" style="min-height: 40px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
+                            <!-- Content injected on open -->
+                            <div class="loader" style="font-size: 0.8rem; color: #888;">Loading...</div>
+                        </div>
+                    </div>
                 `;
 
                 marker.bindPopup(popupContent, {
@@ -230,6 +241,86 @@ document.addEventListener('DOMContentLoaded', () => {
         if (markers.length > 0) {
             map.fitBounds(bounds, { padding: [50, 50] });
         }
+
+        // Add Event Listener for Popup Open (Lazy Load Data)
+        map.on('popupopen', async (e) => {
+            const marker = e.popup._source;
+            if (!marker || !marker.spotData) return;
+
+            const spot = marker.spotData;
+            const container = e.popup.getElement();
+            // Leaflet popup content wrapper
+            const dynamicContainer = container.querySelector('.popup-dynamic-content');
+
+            if (!dynamicContainer || dynamicContainer.dataset.loaded === 'true') return;
+
+            try {
+                // 1. Fetch Main Forecast Summary (for ratings, colors, and valid dates)
+                const forecastRes = await fetch(`api/forecast/${encodeURIComponent(spot.name)}.json`);
+                if (!forecastRes.ok) throw new Error("Forecast unavailable");
+
+                const forecastData = await forecastRes.json();
+                const daysToShow = forecastData.forecast.slice(0, 3); // Today + Next 2 days
+
+                if (daysToShow.length === 0) {
+                    dynamicContainer.innerHTML = `<div style="font-size: 0.8rem; color: #888;">No data available</div>`;
+                    return;
+                }
+
+                // 2. Fetch Hourly Data for these days in parallel
+                const hourlyPromises = daysToShow.map(day =>
+                    fetch(`api/hourly/${encodeURIComponent(spot.name)}/${day.date_iso}.json`)
+                        .then(r => r.ok ? r.json() : [])
+                        .catch(() => [])
+                );
+
+                const allHourlyData = await Promise.all(hourlyPromises);
+
+                // 3. Build HTML
+                let rowsHtml = '';
+
+                daysToShow.forEach((day, index) => {
+                    const hourly = allHourlyData[index];
+
+                    // Format Date: "Dec 16"
+                    const d = new Date(day.date_iso + 'T12:00:00'); // Midday
+                    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                    // Mini Plot
+                    // Placeholder sized to match new compact dimensions
+                    let plotHtml = '<div style="width: 50px; height:16px; background:rgba(0,0,0,0.05); border-radius:2px;"></div>';
+                    if (hourly && hourly.length > 0) {
+                        // Calc max per day for shape
+                        let maxH = 0;
+                        hourly.forEach(h => {
+                            const val = parseFloat(h.swell.height) || 0;
+                            if (val > maxH) maxH = val;
+                        });
+                        if (maxH < 1) maxH = 1;
+
+                        // Generate Plot and Inject Inline Styles for Compactness
+                        // Use fixed width 50px as requested/hinted by user's CSS edit
+                        const originalHtml = generateMiniHourlyPlot(hourly, maxH);
+                        plotHtml = originalHtml.replace('class="mini-hourly-plot"', 'class="mini-hourly-plot" style="height: 16px; width: 50px;"');
+                    }
+
+                    rowsHtml += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 2px;">
+                            <div style="font-size: 0.7rem; font-weight: 500; color: #555; width: 40px; flex-shrink: 0; text-align: left; line-height: 1;">${dateStr}</div>
+                            ${plotHtml}
+                            <span class="quality-label" style="background-color: ${day.color}; font-size: 0.55rem; padding: 1px 5px; min-width: 45px; text-align: center; border-radius: 4px; line-height: 1.4;">${day.rating}</span>
+                        </div>
+                    `;
+                });
+
+                dynamicContainer.innerHTML = `<div style="display:flex; flex-direction:column; width: 100%;">${rowsHtml}</div>`;
+                dynamicContainer.dataset.loaded = 'true';
+
+            } catch (err) {
+                console.warn("Failed to load map info", err);
+                dynamicContainer.innerHTML = `<div style="font-size: 0.8rem; color: #888;">Error loading</div>`;
+            }
+        });
     }
 
     // Event Listener for Popup Click (delegated via CustomEvent)
