@@ -387,24 +387,54 @@ document.addEventListener('DOMContentLoaded', () => {
     function openMap() {
         mapOverlay.classList.add('active');
 
+        // Force hero to expand (be normal size) so map has space
+        const hero = document.querySelector('.hero');
+        if (hero) hero.classList.remove('compact');
+
+        // Helper to open the specific popup
+        const openCurrentSpotPopup = () => {
+            if (lastRenderedSpot && markers.length > 0) {
+                const targetMarker = markers.find(m => m.spotData && m.spotData.name === lastRenderedSpot);
+                if (targetMarker) {
+                    // Slight delay to ensure map animation/sizing is done
+                    setTimeout(() => {
+                        targetMarker.openPopup();
+                        // Optional: Center map on marker if needed
+                        // map.panTo(targetMarker.getLatLng()); 
+                    }, 200);
+                }
+            }
+        };
+
         // Initialize map if needed (lazy load)
         if (!map) {
             initMap();
             // Tiny delay to ensure container has size before fitting bounds
-            setTimeout(() => {
+            setTimeout(async () => {
                 map.invalidateSize();
-                populateMapMarkers();
+                await populateMapMarkers();
+                openCurrentSpotPopup();
             }, 100);
         } else {
             // Just refresh size in case window changed
             setTimeout(() => {
                 map.invalidateSize();
+                openCurrentSpotPopup();
             }, 300); // Wait for transition
         }
     }
 
     function closeMap() {
         mapOverlay.classList.remove('active');
+
+        // Restore hero state logic
+        // If cards are expanded, we should return to compact hero
+        const anyCardExpanded = document.querySelector('.forecast-card.expanded');
+        const hero = document.querySelector('.hero');
+
+        if (hero && anyCardExpanded) {
+            hero.classList.add('compact');
+        }
     }
 
     // Bind Buttons
@@ -1076,8 +1106,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 toggleHourlyDetails(c, dateIso, spot);
                             }
                         });
-                        // Compact the hero
-                        if (heroSection) {
+                        // Compact the hero ONLY if map is NOT open
+                        const mapOverlay = document.getElementById('mapOverlay');
+                        const isMapOpen = mapOverlay && mapOverlay.classList.contains('active');
+
+                        if (heroSection && !isMapOpen) {
                             heroSection.classList.add('compact');
                         }
                     }
