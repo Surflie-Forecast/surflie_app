@@ -427,6 +427,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeMap() {
         mapOverlay.classList.remove('active');
 
+        // Force close any open popup so that the 'popupopen' event 
+        // fires reliably the next time the map is opened.
+        if (map) {
+            map.closePopup();
+        }
+
         // Restore hero state logic
         // If cards are expanded, we should return to compact hero
         const anyCardExpanded = document.querySelector('.forecast-card.expanded');
