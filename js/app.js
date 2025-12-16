@@ -276,7 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             marker.bindPopup(popupContent, {
                 closeButton: false,
-                className: 'custom-popup'
+                className: 'custom-popup',
+                offset: [0, -35], // Position popup above the pin
+                autoPanPadding: [30, 30] // Add margin when auto-panning to show popup
             });
 
             markers.push(marker);
