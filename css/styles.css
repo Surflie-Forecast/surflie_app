@@ -1564,4 +1564,149 @@ input:checked+.slider:before {
   z-index: 50;
   display: none;
   box-shadow: none;
+}/* Map Feature Styles */
+
+/* Map Button */
+.map-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--glass-border);
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.map-btn:hover {
+    transform: scale(1.05);
+    background: rgba(255, 255, 255, 0.4);
+    color: var(--accent-blue);
+}
+
+/* Map Overlay Container */
+.map-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    border-radius: var(--card-radius);
+    z-index: 1000;
+    /* Higher than search results */
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px) scale(0.98);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.map-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+/* The actual Leaflet Map div */
+#surfMap {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Close Button */
+.close-map-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: white;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    font-size: 1.5rem;
+    line-height: 1;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1001;
+    /* Above map */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.close-map-btn:hover {
+    transform: scale(1.1);
+    background: #f1f5f9;
+}
+
+/* Popup Styles overrides */
+.leaflet-popup-content-wrapper {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    padding: 0;
+}
+
+.leaflet-popup-content {
+    margin: 12px 16px;
+    line-height: 1.4;
+    font-family: var(--font-main);
+}
+
+.popup-country {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+}
+
+.popup-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.popup-btn {
+    display: inline-block;
+    background: var(--accent-blue);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.popup-btn:hover {
+    background: #005a8e;
+}
+
+/* Compact Hero State fix for Map Button */
+@media (min-width: 769px) {
+    .hero.compact .search-container {
+        padding-right: 0;
+        /* Reset if needed */
+    }
+
+    .hero.compact #mapBtn {
+        /* Maybe smaller on compact? */
+        width: 44px;
+        height: 44px;
+    }
 }

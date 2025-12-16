@@ -154,6 +154,113 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setRandomLogo();
 
+    // ---------------------------------------------------------
+    // Map Logic
+    // ---------------------------------------------------------
+    const mapBtn = document.getElementById('mapBtn');
+    const mapOverlay = document.getElementById('mapOverlay');
+    const closeMapBtn = document.getElementById('closeMapBtn');
+    let map = null;
+    let markers = [];
+
+    // Initialize Map Function
+    function initMap() {
+        if (map) return; // Already initialized
+
+        // Default view (will be updated by bounds)
+        map = L.map('surfMap', {
+            zoomControl: false // Positioned manually or hidden needed? Standard is TopLeft
+        }).setView([20, 0], 2);
+
+        // Add standard OpenStreetMap tile layer (light/clean variant if possible, standard for now)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(map);
+    }
+
+    // Function to populate markers
+    function populateMapMarkers() {
+        if (!map) return;
+
+        // Clear existing
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+
+        // Bounds builder
+        const bounds = L.latLngBounds();
+
+        availableSpots.forEach(spot => {
+            if (spot.latitude && spot.longitude) {
+                // Custom Icon? Standard for now.
+                const marker = L.marker([spot.latitude, spot.longitude])
+                    .addTo(map);
+
+                // Add Popup
+                const popupContent = `
+                    <div class="popup-country">${spot.region}</div>
+                    <div class="popup-name">${spot.name}</div>
+                    <button class="popup-btn" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
+                        View Forecast
+                    </button>
+                `;
+
+                marker.bindPopup(popupContent, {
+                    closeButton: false,
+                    className: 'custom-popup'
+                });
+
+                markers.push(marker);
+                bounds.extend([spot.latitude, spot.longitude]);
+            }
+        });
+
+        // Fit bounds if we have spots
+        if (markers.length > 0) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+    }
+
+    // Event Listener for Popup Click (delegated via CustomEvent)
+    document.addEventListener('map-spot-select', (e) => {
+        const spotName = e.detail;
+        renderForecast(spotName);
+        closeMap();
+    });
+
+    // Open/Close Handlers
+    function openMap() {
+        mapOverlay.classList.add('active');
+
+        // Initialize map if needed (lazy load)
+        if (!map) {
+            initMap();
+            // Tiny delay to ensure container has size before fitting bounds
+            setTimeout(() => {
+                map.invalidateSize();
+                populateMapMarkers();
+            }, 100);
+        } else {
+            // Just refresh size in case window changed
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300); // Wait for transition
+        }
+    }
+
+    function closeMap() {
+        mapOverlay.classList.remove('active');
+    }
+
+    // Bind Buttons
+    if (mapBtn) mapBtn.addEventListener('click', openMap);
+    if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
+
     // Initial Load
     let availableSpots = []; // Array of {name, region}
     // Helper: Haversine distance
