@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Function to populate markers
-    function populateMapMarkers() {
+    async function populateMapMarkers() {
         if (!map) return;
 
         // Clear existing
@@ -201,41 +201,92 @@ document.addEventListener('DOMContentLoaded', () => {
         // Bounds builder
         const bounds = L.latLngBounds();
 
-        availableSpots.forEach(spot => {
-            if (spot.latitude && spot.longitude) {
-                // Custom Icon? Standard for now.
-                const marker = L.marker([spot.latitude, spot.longitude])
-                    .addTo(map);
+        // Get today's date in ISO format
+        const today = new Date();
+        const todayISO = today.toISOString().split('T')[0];
 
-                // Attach metadata to marker for event handlers
-                marker.spotData = spot;
+        // Create markers with custom icons based on swell direction
+        const markerPromises = availableSpots.map(async (spot) => {
+            if (!spot.latitude || !spot.longitude) return null;
 
-                // Add Popup with placeholders
-                const safeName = spot.name.replace(/[^a-zA-Z0-9]/g, '_');
-                const popupContent = `
-                    <div class="popup-wrapper" id="popup-${safeName}">
-                        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px; margin-bottom: 4px;">
-                            <div class="popup-name" style="margin: 0; line-height: 1.2;">${spot.name}</div>
-                            <button class="popup-btn" style="margin: 0; width: auto; padding: 4px 10px; font-size: 0.7rem;" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
-                                View Forecast
-                            </button>
-                        </div>
-                        <div class="popup-dynamic-content" style="min-height: 40px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
-                            <!-- Content injected on open -->
-                            <div class="loader" style="font-size: 0.8rem; color: #888;">Loading...</div>
-                        </div>
-                    </div>
-                `;
+            let swellDirection = 0; // Default direction
 
-                marker.bindPopup(popupContent, {
-                    closeButton: false,
-                    className: 'custom-popup'
-                });
+            // Try to fetch today's hourly data to get swell direction
+            try {
+                const response = await fetch(`api/hourly/${encodeURIComponent(spot.name)}/${todayISO}.json`);
+                if (response.ok) {
+                    const hourlyData = await response.json();
+                    if (hourlyData && hourlyData.length > 0) {
+                        // Get the most recent hour's swell direction
+                        const currentHour = today.getHours();
+                        const relevantData = hourlyData.find(h => {
+                            const hour = new Date(h.time).getHours();
+                            return hour >= currentHour;
+                        }) || hourlyData[0];
 
-                markers.push(marker);
-                bounds.extend([spot.latitude, spot.longitude]);
+                        swellDirection = parseFloat(relevantData.swell.direction) || 0;
+                    }
+                }
+            } catch (err) {
+                console.warn(`Could not fetch swell direction for ${spot.name}`, err);
             }
+
+            // Create custom arrow icon rotated to swell direction
+            // Add 180 degrees to show where swell is going (not where it's coming from)
+            const arrowIcon = L.divIcon({
+                className: 'custom-arrow-marker',
+                html: `<div style="width: 40px; height: 50px; display: flex; align-items: center; justify-content: center; position: relative;">
+                    <svg width="40" height="50" viewBox="0 0 40 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Pin shape -->
+                        <path d="M20 2C13.373 2 8 7.373 8 14C8 23 20 38 20 38C20 38 32 23 32 14C32 7.373 26.627 2 20 2Z" 
+                              fill="#0078A8" stroke="white" stroke-width="2"/>
+                        <!-- Arrow inside pin, rotated -->
+                        <g transform="translate(20, 14) rotate(${swellDirection + 180})">
+                            <path d="M0 -6L0 6M0 -6L-3 -3M0 -6L3 -3" 
+                                  stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </g>
+                    </svg>
+                </div>`,
+                iconSize: [40, 50],
+                iconAnchor: [20, 40]
+            });
+
+            const marker = L.marker([spot.latitude, spot.longitude], { icon: arrowIcon })
+                .addTo(map);
+
+            // Attach metadata to marker for event handlers
+            marker.spotData = spot;
+
+            // Add Popup with placeholders
+            const safeName = spot.name.replace(/[^a-zA-Z0-9]/g, '_');
+            const popupContent = `
+                <div class="popup-wrapper" id="popup-${safeName}">
+                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px; margin-bottom: 4px;">
+                        <div class="popup-name" style="margin: 0; line-height: 1.2;">${spot.name}</div>
+                        <button class="popup-btn" style="margin: 0; width: auto; padding: 4px 10px; font-size: 0.7rem;" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
+                            View Forecast
+                        </button>
+                    </div>
+                    <div class="popup-dynamic-content" style="min-height: 40px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
+                        <!-- Content injected on open -->
+                        <div class="loader" style="font-size: 0.8rem; color: #888;">Loading...</div>
+                    </div>
+                </div>
+            `;
+
+            marker.bindPopup(popupContent, {
+                closeButton: false,
+                className: 'custom-popup'
+            });
+
+            markers.push(marker);
+            bounds.extend([spot.latitude, spot.longitude]);
+
+            return marker;
         });
+
+        // Wait for all markers to be created
+        await Promise.all(markerPromises);
 
         // Fit bounds if we have spots
         if (markers.length > 0) {

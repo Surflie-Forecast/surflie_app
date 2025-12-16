@@ -1681,6 +1681,11 @@ input:checked+.slider:before {
   margin-bottom: 8px;
 }
 
+.custom-arrow-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
 .popup-wrapper {
   min-width: 140px;
 }
