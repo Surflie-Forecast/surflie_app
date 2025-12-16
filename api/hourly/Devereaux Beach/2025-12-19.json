@@ -2,24 +2,24 @@
   {
     "datetime": "2025-12-19 01:00:00",
     "swell": {
-      "height": 1.01,
-      "period": 8.7,
+      "height": 0.99,
+      "period": 8.6,
       "direction": 280.0
     },
     "wind": {
-      "speed": 4.3,
+      "speed": 4.73,
       "direction": 9.0
     }
   },
   {
     "datetime": "2025-12-19 04:00:00",
     "swell": {
-      "height": 1.04,
-      "period": 7.9,
+      "height": 0.94,
+      "period": 8.5,
       "direction": 280.0
     },
     "wind": {
-      "speed": 5.26,
+      "speed": 5.14,
       "direction": 8.0
     }
   },
@@ -27,11 +27,11 @@
     "datetime": "2025-12-19 07:00:00",
     "swell": {
       "height": 0.9,
-      "period": 8.5,
-      "direction": 281.0
+      "period": 6.9,
+      "direction": 280.0
     },
     "wind": {
-      "speed": 5.18,
+      "speed": 5.23,
       "direction": 6.0
     }
   },
@@ -43,56 +43,56 @@
       "direction": 279.0
     },
     "wind": {
-      "speed": 3.11,
-      "direction": 334.0
+      "speed": 3.3,
+      "direction": 333.0
     }
   },
   {
     "datetime": "2025-12-19 13:00:00",
     "swell": {
-      "height": 0.86,
-      "period": 6.0,
+      "height": 0.79,
+      "period": 7.3,
       "direction": 280.0
     },
     "wind": {
-      "speed": 6.03,
-      "direction": 309.0
+      "speed": 5.02,
+      "direction": 302.0
     }
   },
   {
     "datetime": "2025-12-19 16:00:00",
     "swell": {
-      "height": 0.81,
-      "period": 6.6,
-      "direction": 278.0
+      "height": 0.77,
+      "period": 7.1,
+      "direction": 280.0
     },
     "wind": {
-      "speed": 6.92,
-      "direction": 316.0
+      "speed": 7.92,
+      "direction": 325.0
     }
   },
   {
     "datetime": "2025-12-19 19:00:00",
     "swell": {
-      "height": 0.71,
-      "period": 8.0,
+      "height": 0.82,
+      "period": 7.2,
       "direction": 279.0
     },
     "wind": {
-      "speed": 6.24,
+      "speed": 6.45,
       "direction": 352.0
     }
   },
   {
     "datetime": "2025-12-19 22:00:00",
     "swell": {
-      "height": 0.74,
-      "period": 7.6,
+      "height": 0.71,
+      "period": 9.3,
       "direction": 288.0
     },
     "wind": {
-      "speed": 6.06,
-      "direction": 355.0
+      "speed": 5.49,
+      "direction": 1.0
     }
   }
 ]
