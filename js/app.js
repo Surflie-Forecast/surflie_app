@@ -172,11 +172,17 @@ document.addEventListener('DOMContentLoaded', () => {
             zoomControl: false // Positioned manually or hidden needed? Standard is TopLeft
         }).setView([20, 0], 2);
 
-        // Add standard OpenStreetMap tile layer (light/clean variant if possible, standard for now)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-            subdomains: 'abcd',
-            maxZoom: 19
+        // 1. BOTTOM LAYER: Ocean Bathymetry
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri, GEBCO, NOAA',
+            maxZoom: 13
+        }).addTo(map);
+
+        // 2. TOP LAYER: Satellite (Transparent)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Esri, USGS',
+            opacity: 0.75,
+            maxZoom: 17
         }).addTo(map);
 
         L.control.zoom({
