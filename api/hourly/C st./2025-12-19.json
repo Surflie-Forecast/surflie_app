@@ -2,9 +2,9 @@
   {
     "datetime": "2025-12-19 01:00:00",
     "swell": {
-      "height": 0.63,
-      "period": 9.4,
-      "direction": 267.0
+      "height": 0.64,
+      "period": 9.6,
+      "direction": 268.0
     },
     "wind": {
       "speed": 0.88,
@@ -14,9 +14,9 @@
   {
     "datetime": "2025-12-19 04:00:00",
     "swell": {
-      "height": 0.65,
-      "period": 8.9,
-      "direction": 272.0
+      "height": 0.69,
+      "period": 5.1,
+      "direction": 268.0
     },
     "wind": {
       "speed": 0.58,
@@ -26,9 +26,9 @@
   {
     "datetime": "2025-12-19 07:00:00",
     "swell": {
-      "height": 0.63,
-      "period": 5.5,
-      "direction": 269.0
+      "height": 0.75,
+      "period": 4.9,
+      "direction": 268.0
     },
     "wind": {
       "speed": 0.59,
@@ -38,9 +38,9 @@
   {
     "datetime": "2025-12-19 10:00:00",
     "swell": {
-      "height": 0.68,
-      "period": 4.9,
-      "direction": 270.0
+      "height": 0.77,
+      "period": 5.1,
+      "direction": 269.0
     },
     "wind": {
       "speed": 1.21,
@@ -50,9 +50,9 @@
   {
     "datetime": "2025-12-19 13:00:00",
     "swell": {
-      "height": 0.65,
-      "period": 4.9,
-      "direction": 270.0
+      "height": 0.72,
+      "period": 4.8,
+      "direction": 269.0
     },
     "wind": {
       "speed": 4.44,
@@ -62,9 +62,9 @@
   {
     "datetime": "2025-12-19 16:00:00",
     "swell": {
-      "height": 0.64,
-      "period": 4.6,
-      "direction": 269.0
+      "height": 0.7,
+      "period": 4.4,
+      "direction": 267.0
     },
     "wind": {
       "speed": 2.14,
@@ -74,9 +74,9 @@
   {
     "datetime": "2025-12-19 19:00:00",
     "swell": {
-      "height": 0.72,
-      "period": 4.4,
-      "direction": 267.0
+      "height": 0.71,
+      "period": 4.3,
+      "direction": 266.0
     },
     "wind": {
       "speed": 3.96,
@@ -86,9 +86,9 @@
   {
     "datetime": "2025-12-19 22:00:00",
     "swell": {
-      "height": 0.72,
-      "period": 4.3,
-      "direction": 266.0
+      "height": 0.68,
+      "period": 4.2,
+      "direction": 265.0
     },
     "wind": {
       "speed": 1.72,

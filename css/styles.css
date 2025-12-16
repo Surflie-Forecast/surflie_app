@@ -904,6 +904,27 @@ input:checked+.slider:before {
     padding-top: 30px !important;
   }
 
+  /* Make map twice as high as hero on mobile */
+  /* Expand hero when map is active to push content down */
+  .hero:has(.map-overlay.active) {
+    min-height: 60vh;
+    /* Approximately twice the normal hero height */
+    transition: min-height 0.3s ease;
+  }
+
+  /* Hide other hero elements when map is active so only map is visible */
+  .hero:has(.map-overlay.active)>*:not(.map-overlay) {
+    display: none;
+  }
+
+  .map-overlay.active {
+    height: 100%;
+    /* Fill the expanded hero */
+    bottom: 0;
+    z-index: 50;
+    /* Keep it below search results if needed, or just standard */
+  }
+
 }
 
 /* Hourly Details */

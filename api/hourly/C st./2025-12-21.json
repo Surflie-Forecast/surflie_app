@@ -2,9 +2,9 @@
   {
     "datetime": "2025-12-21 01:00:00",
     "swell": {
-      "height": 0.7,
-      "period": 7.9,
-      "direction": 277.0
+      "height": 0.67,
+      "period": 8.2,
+      "direction": 276.0
     },
     "wind": {
       "speed": 0.79,
@@ -15,8 +15,8 @@
     "datetime": "2025-12-21 04:00:00",
     "swell": {
       "height": 0.74,
-      "period": 7.4,
-      "direction": 274.0
+      "period": 7.2,
+      "direction": 273.0
     },
     "wind": {
       "speed": 0.57,
@@ -26,9 +26,9 @@
   {
     "datetime": "2025-12-21 07:00:00",
     "swell": {
-      "height": 0.72,
-      "period": 7.6,
-      "direction": 274.0
+      "height": 0.73,
+      "period": 7.3,
+      "direction": 273.0
     },
     "wind": {
       "speed": 0.69,
@@ -38,9 +38,9 @@
   {
     "datetime": "2025-12-21 10:00:00",
     "swell": {
-      "height": 0.72,
-      "period": 7.9,
-      "direction": 274.0
+      "height": 0.71,
+      "period": 7.6,
+      "direction": 273.0
     },
     "wind": {
       "speed": 1.44,
@@ -50,9 +50,9 @@
   {
     "datetime": "2025-12-21 13:00:00",
     "swell": {
-      "height": 0.71,
-      "period": 8.0,
-      "direction": 273.0
+      "height": 0.68,
+      "period": 7.6,
+      "direction": 272.0
     },
     "wind": {
       "speed": 5.12,
@@ -62,9 +62,9 @@
   {
     "datetime": "2025-12-21 16:00:00",
     "swell": {
-      "height": 0.71,
-      "period": 8.0,
-      "direction": 273.0
+      "height": 0.67,
+      "period": 7.6,
+      "direction": 272.0
     },
     "wind": {
       "speed": 3.61,
@@ -74,8 +74,8 @@
   {
     "datetime": "2025-12-21 19:00:00",
     "swell": {
-      "height": 0.68,
-      "period": 8.0,
+      "height": 0.65,
+      "period": 7.7,
       "direction": 272.0
     },
     "wind": {
@@ -86,9 +86,9 @@
   {
     "datetime": "2025-12-21 22:00:00",
     "swell": {
-      "height": 0.69,
-      "period": 8.0,
-      "direction": 272.0
+      "height": 0.65,
+      "period": 7.7,
+      "direction": 271.0
     },
     "wind": {
       "speed": 1.59,
