@@ -441,6 +441,28 @@ document.addEventListener('DOMContentLoaded', () => {
     function openMap() {
         mapOverlay.classList.add('active');
 
+        // Show Map Site Name Container
+        const mapSiteNameContainer = document.getElementById('mapSiteNameContainer');
+        if (mapSiteNameContainer) {
+            let content = lastRenderedSpot;
+
+            // Try to find full spot data for region
+            const spotData = availableSpots.find(s => s.name === lastRenderedSpot);
+            if (spotData && spotData.region) {
+                // "Site Name, Region" with region styled differently
+                content = `${spotData.name}, <span class="map-site-region">${spotData.region}</span>`;
+            } else {
+                // Fallback to title grabbing if needed, or just name
+                const titleEl = document.getElementById('spotName');
+                if (titleEl) {
+                    content = titleEl.innerText; // Plain text fallback
+                }
+            }
+
+            mapSiteNameContainer.innerHTML = content;
+            mapSiteNameContainer.classList.add('active');
+        }
+
         // Force hero to expand (be normal size) so map has space
         const hero = document.querySelector('.hero');
         if (hero) hero.classList.remove('compact');
@@ -480,6 +502,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closeMap() {
         mapOverlay.classList.remove('active');
+
+        // Hide Map Site Name Container
+        const mapSiteNameContainer = document.getElementById('mapSiteNameContainer');
+        if (mapSiteNameContainer) {
+            mapSiteNameContainer.classList.remove('active');
+        }
 
         // Force close any open popup so that the 'popupopen' event 
         // fires reliably the next time the map is opened.

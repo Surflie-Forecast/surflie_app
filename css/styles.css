@@ -886,8 +886,18 @@ input:checked+.slider:before {
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    padding-bottom: 1rem;
-    /* Restore padding */
+    padding-bottom: 0.5rem;
+    /* Reduced padding */
+  }
+
+  .brand {
+    font-size: 1.5rem;
+    /* Smaller title */
+  }
+
+  .brand img {
+    height: 40px;
+    /* Smaller logo */
   }
 
   /* Right side: Toggle only now (Date hidden) */
@@ -904,23 +914,68 @@ input:checked+.slider:before {
     min-height: unset;
     /* Remove large min-height */
     height: auto;
-    padding: 2rem 1rem 1rem 1rem;
+    padding: 1rem 1rem 1rem 1rem;
+    /* Reduced top padding */
     /* More top padding, tighter bottom */
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
   }
 
+  /* Force stacked content on mobile */
+  .hero .hero-content {
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+    /* Reset grid if it was grid */
+    align-items: center;
+    gap: 0.75rem;
+    /* Increased space */
+    /* Reduced gap strictly */
+    width: 100%;
+  }
+
   .hero h1 {
+    grid-column: auto;
+    /* Reset grid placement */
+    width: 100%;
+    text-align: center;
     font-size: 1.8rem;
-    /* Slightly smaller */
-    margin-bottom: 0.2rem;
-    /* Closer to search bar */
+    margin-bottom: 0rem;
+    /* No margin */
+    line-height: 1.1;
+    /* Tighter line height */
+  }
+
+  .hero .search-container {
+    grid-column: auto;
+    /* Reset grid placement */
+    width: 100%;
+    margin-left: 0;
+    margin-right: 0;
   }
 
   .search-container {
-    margin-top: 0.5rem;
-    /* Tighter spacing on mobile */
+    margin-top: 0rem;
+    /* Remove top margin */
+  }
+
+  .search-container input {
+    font-size: 0.85rem;
+    padding: 0.5rem 1rem;
+    /* Reduced height */
+  }
+
+  .search-container button {
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    /* Adjustment for icon centering if needed */
+  }
+
+  .search-container button svg {
+    width: 16px;
+    height: 16px;
   }
 
   .app-container {
@@ -1872,4 +1927,58 @@ input:checked+.slider:before {
 .leaflet-control-attribution a {
   color: rgba(0, 0, 0, 0.5) !important;
   text-decoration: none !important;
+}
+
+/* Map Site Name Container (visible when map expands) */
+/* Map Site Name Container (visible when map expands) */
+/* Map Site Name Container (visible when map expands) */
+.map-site-name-container {
+  display: block;
+  text-align: left;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  /* No background/box style */
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+
+  margin: 0;
+  margin-left: 2px;
+  /* Slight alignment fix if needed */
+
+  width: 100%;
+  /* Full width to align left properly in container */
+  max-width: 100%;
+  position: relative;
+  z-index: 950;
+
+  opacity: 0;
+  transform: translateY(-5px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+
+  height: 0;
+  overflow: visible;
+  /* Allow negative margins to not be clipped */
+}
+
+.map-site-name-container.active {
+  opacity: 1;
+  transform: translateY(0);
+  height: auto;
+  /* Super close to graph below */
+  margin-top: 10px;
+  margin-bottom: -10px;
+  /* Pull graph up / pull text down closer */
+  padding-bottom: 0px;
+  pointer-events: auto;
+}
+
+.map-site-region {
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: 1.2rem;
+  margin-left: 4px;
 }
