@@ -481,11 +481,13 @@ input:checked+.slider:before {
   display: none;
 }
 
-.forecast-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-  border-color: var(--glass-shine);
-  z-index: 10;
+@media (min-width: 769px) {
+  .forecast-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+    border-color: var(--glass-shine);
+    z-index: 10;
+  }
 }
 
 .forecast-card::before {
@@ -895,9 +897,12 @@ input:checked+.slider:before {
     /* Smaller title */
   }
 
-  .brand img {
+  .brand img,
+  .brand img.alt-logo {
     height: 40px;
-    /* Smaller logo */
+    /* Smaller logo, override alt specificity */
+    padding-bottom: 0px;
+    /* Remove alt padding if needed */
   }
 
   /* Right side: Toggle only now (Date hidden) */
@@ -966,14 +971,16 @@ input:checked+.slider:before {
     /* Reduced height */
   }
 
-  .search-container button {
+  .search-container button,
+  .search-container .map-btn {
     width: 36px;
     height: 36px;
     padding: 8px;
     /* Adjustment for icon centering if needed */
   }
 
-  .search-container button svg {
+  .search-container button svg,
+  .search-container .map-btn svg {
     width: 16px;
     height: 16px;
   }
