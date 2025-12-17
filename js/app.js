@@ -161,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const mapOverlay = document.getElementById('mapOverlay');
     const closeMapBtn = document.getElementById('closeMapBtn');
     let map = null;
+    let heroMap = null;
     let markers = [];
 
     // Initialize Map Function
@@ -188,6 +189,59 @@ document.addEventListener('DOMContentLoaded', () => {
         L.control.zoom({
             position: 'bottomright'
         }).addTo(map);
+    }
+
+    // Initialize Static Hero Map
+    function initHeroMap() {
+        if (heroMap) return;
+
+        heroMap = L.map('heroStaticMap', {
+            zoomControl: false,
+            dragging: false,
+            scrollWheelZoom: false,
+            doubleClickZoom: false,
+            boxZoom: false,
+            keyboard: false,
+            touchZoom: false,
+            attributionControl: false, // Minimal UI
+            zoomAnimation: false,
+            fadeAnimation: false,
+            inertia: false
+        }).setView([20, 0], 5);
+
+        // Ocean Base
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 13
+        }).addTo(heroMap);
+
+        // Limit Max Zoom of map to prevent white tiles
+        // Also ensure layer maxZoom matches
+        // Satellite Overlay
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            opacity: 0.95, // Fully opaque
+            maxZoom: 17
+        }).addTo(heroMap);
+    }
+
+    // Update Hero Map Position
+    function updateHeroMap(lat, lon) {
+        if (!heroMap) initHeroMap();
+
+        // Slight delay to ensure container size is correct
+        setTimeout(() => {
+            heroMap.invalidateSize();
+
+            // Set view to location
+            const zoomLevel = 14; // Good context level
+            heroMap.setView([lat, lon], zoomLevel, { animate: false });
+
+            // Offset logic: Move map center to the LEFT so location appears on right
+            // Target: Location at 75% of width
+            const mapSize = heroMap.getSize();
+            const offsetX = -mapSize.x * 0.25; // Negative pans view left (objects move right)
+
+            heroMap.panBy([offsetX, 0], { animate: false });
+        }, 100);
     }
 
     // Function to populate markers
@@ -906,16 +960,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
             lastRenderedSpot = data.spotName;
 
-            // Update title with "Name, Region"
-            spotNameTitle.textContent = `${data.spotName}, ${data.region}`;
+            // Update title with "Name" and "Region" separate
+            spotNameTitle.innerHTML = `${data.spotName}<span class="hero-region">${data.region}</span>`;
 
             // Update Hero Background
-            const heroSection = document.querySelector('.hero');
-            if (data.region && heroSection) {
-                heroSection.style.backgroundImage = `url('images/${data.region}.jpg')`;
-                heroSection.style.backgroundSize = 'cover';
-                heroSection.style.backgroundPosition = 'center';
+
+            // Update Hero Map Background
+            // Find lat/lon from availableSpots if possible
+            const spotInfo = availableSpots.find(s => s.name === data.spotName);
+            if (spotInfo && spotInfo.latitude && spotInfo.longitude) {
+                updateHeroMap(spotInfo.latitude, spotInfo.longitude);
+            } else if (data.latitude && data.longitude) {
+                // Fallback if data has it
+                updateHeroMap(data.latitude, data.longitude);
             }
+
 
             container.innerHTML = ''; // Clear loading
 

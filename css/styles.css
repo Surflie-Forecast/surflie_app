@@ -694,30 +694,111 @@ input:checked+.slider:before {
   padding: 4rem 2rem;
   position: relative;
   border-radius: var(--card-radius);
-  color: white;
+  color: #131929;
+  /* Dark text for visibility on map? Or keep white if map is dark? */
+  overflow: hidden;
+  /* Contain the map */
+  /* Allow dropdown to extend beyond? No, map needs to be contained. If dropdown needs to extend, we might have issues. */
+  /* Reverting overflow to visible caused issues with map z-index outside container. 
+     But map needs to be background. 
+     Wait, if overflow is visible, map might leak. 
+     Let's keep overflow hidden for the map background. 
+     But search results need to overflow. 
+     Solution: map is absolute 100% width/height of hero. 
+     If hero has overflow visible, map will stay within bounds if sized correctly, unless zoomed out? 
+     Leaflet map container usually doesn't leak unless specified. 
+     Let's use overflow: visible for search results, but borderRadius on map.
+  */
   overflow: visible;
-  /* Allow dropdown to extend beyond */
   box-shadow: var(--card-shadow);
   animation: fadeInUp 0.8s ease-out 0.2s backwards;
-  /* margin-bottom: 2rem; */
   z-index: 900;
-  /* Default gradient fallback */
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-/* Background image layer with optional overlay */
-.hero::before {
-  content: '';
+/* Static Map Background */
+#heroStaticMap {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: var(--hero-overlay, none), var(--hero-bg-image, none);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  z-index: -1;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  border-radius: var(--card-radius);
+  opacity: 1;
+  /* Fully opaque map */
+  pointer-events: none;
+  /* Disable interaction events handled by JS too, but this is good */
+}
+
+/* Content wrapper to sit above map */
+.hero-content {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  justify-items: center;
+}
+
+.hero h1 {
+  color: white;
+  /* Ensure title is white */
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  /* Slight shadow for readability */
+  grid-column: 1 / 2;
+  /* Left Column */
+}
+
+/* Specific positioning for search in large view */
+.hero .search-container {
+  grid-column: 2 / 3;
+  /* Right half */
+  width: 90%;
+  max-width: 450px;
+}
+
+.hero-region {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: white;
+  margin-top: 0rem;
+  opacity: 0.9;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  /* Region follows H1 flow in grid item ?? 
+     No, h1 is the grid item. The region is INSIDE h1 now (span).
+     So it moves with h1. Perfect.
+  */
+}
+
+/* Compact Hero State - Content adjustment */
+@media (min-width: 769px) {
+  .hero.compact .hero-content {
+    display: flex;
+    /* Override grid */
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .hero.compact .hero-region {
+    text-align: left;
+    margin-left: 2px;
+  }
+
+  /* Reset search container for compact flex */
+  .hero.compact .search-container {
+    grid-column: auto;
+    width: auto;
+    /* other props handled by existing .hero.compact .search-container rules below? 
+         Yes, specificity is fine or I should check order.
+         The existing media query rule for .hero.compact .search-container is at line 741 in original file.
+         I am editing lines 734-758. 
+         Wait, line 741 is "Compact Hero State - Desktop Only" block which follows.
+         So those rules will cascade and apply. Good.
+      */
+  }
 }
 
 /* Compact Hero State - Desktop Only */
