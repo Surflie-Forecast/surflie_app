@@ -925,14 +925,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Render Chart
+            // Render Chart
             if (window.renderWaveHeightChart) {
                 renderWaveHeightChart(spotName, data.forecast).then(() => {
                     // Trigger highlight update after chart is fully rendered
                     updateChartHighlight();
-
-
                 });
             }
+
+            // Update forecast days counter
+            const forecastDaysCounter = document.getElementById('forecastDaysCounter');
+            if (forecastDaysCounter && data.forecast.length > 0) {
+                const dayText = data.forecast.length === 1 ? 'day' : 'days';
+                forecastDaysCounter.textContent = `${data.forecast.length} ${dayText}`;
+                forecastDaysCounter.style.display = 'flex';
+            }
+
 
             // Create a promise array to fetch all hourly data
             const hourlyPromises = data.forecast.map(async (day) => {

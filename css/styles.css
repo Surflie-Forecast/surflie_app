@@ -1049,6 +1049,36 @@ input:checked+.slider:before {
   font-weight: 500;
 }
 
+/* Zero-Height Container */
+.forecast-gap-container {
+  height: 0;
+  width: 100%;
+  position: relative;
+  z-index: 950;
+  /* Above chart/hero backgrounds if needed */
+}
+
+/* Forecast Days Counter */
+.forecast-days-counter {
+  position: absolute;
+  top: -0.2rem;
+  /* Move it down below the hero */
+  right: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  animation: fadeInUp 0.8s ease-out 0.25s backwards;
+  display: flex;
+  align-items: center;
+}
+
+.forecast-days-counter::before {
+  content: '+';
+  margin-right: 0.25rem;
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+
 /* Wave Height Chart */
 .chart-section {
   width: 100%;
@@ -1159,6 +1189,11 @@ input:checked+.slider:before {
     min-width: 15px;
     /* Wider bars to force scrolling on mobile */
     width: auto;
+  }
+
+  .forecast-days-counter {
+    right: 1rem;
+    font-size: 0.8rem;
   }
 }
 
