@@ -10,4 +10,5 @@ numpy
 # NOAA NOMADS (for wind data)
 netCDF4
 h5netcdf
+h5py
 pydap
