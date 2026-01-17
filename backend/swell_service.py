@@ -8,6 +8,27 @@ import os
 import pytz
 
 # --- CONFIGURATION ---
+# Check if credentials are in ENV; if not, try to load from setup_env.sh (Local Dev)
+if not os.environ.get('COPERNICUS_USERNAME'):
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    setup_path = os.path.join(base_dir, 'setup_env.sh')
+    
+    if os.path.exists(setup_path):
+        print(f"Loading credentials from locally found {setup_path}...") # Debug info
+        try:
+            with open(setup_path, 'r') as f:
+                for line in f:
+                    if line.strip().startswith('export COPERNICUS_'):
+                        # Parse: export KEY="VALUE"
+                        parts = line.replace('export ', '').strip().split('=', 1)
+                        if len(parts) == 2:
+                            key, val = parts[0].strip(), parts[1].strip()
+                            # Remove quotes
+                            val = val.strip('"').strip("'")
+                            os.environ[key] = val
+        except Exception as e:
+            print(f"Warning: Failed to parse setup_env.sh: {e}")
+
 # Copernicus credentials should be set as environment variables
 # For GitHub Actions: Set as repository secrets (COPERNICUS_USERNAME, COPERNICUS_PASSWORD)
 # For local development: Set in your shell or .env file

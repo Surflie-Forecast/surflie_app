@@ -1,0 +1,98 @@
+[
+  {
+    "datetime": "2026-01-23 01:00:00",
+    "swell": {
+      "height": 0.5,
+      "period": 8.6,
+      "direction": 277.0
+    },
+    "wind": {
+      "speed": 1.72,
+      "direction": 15.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 04:00:00",
+    "swell": {
+      "height": 0.45,
+      "period": 8.2,
+      "direction": 276.0
+    },
+    "wind": {
+      "speed": 2.01,
+      "direction": 20.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 07:00:00",
+    "swell": {
+      "height": 0.39,
+      "period": 10.0,
+      "direction": 276.0
+    },
+    "wind": {
+      "speed": 2.2,
+      "direction": 75.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 10:00:00",
+    "swell": {
+      "height": 0.39,
+      "period": 11.9,
+      "direction": 280.0
+    },
+    "wind": {
+      "speed": 2.73,
+      "direction": 110.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 13:00:00",
+    "swell": {
+      "height": 0.41,
+      "period": 11.7,
+      "direction": 280.0
+    },
+    "wind": {
+      "speed": 4.53,
+      "direction": 219.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 16:00:00",
+    "swell": {
+      "height": 0.41,
+      "period": 11.7,
+      "direction": 280.0
+    },
+    "wind": {
+      "speed": 3.38,
+      "direction": 220.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 19:00:00",
+    "swell": {
+      "height": 0.42,
+      "period": 11.6,
+      "direction": 280.0
+    },
+    "wind": {
+      "speed": 0.42,
+      "direction": 205.0
+    }
+  },
+  {
+    "datetime": "2026-01-23 22:00:00",
+    "swell": {
+      "height": 0.43,
+      "period": 11.6,
+      "direction": 280.0
+    },
+    "wind": {
+      "speed": 1.92,
+      "direction": 134.0
+    }
+  }
+]
