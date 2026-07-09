@@ -650,15 +650,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Determine initial spot (Default)
-        // 1. Render Default immediately so user sees something
+        // We use a "confidence" level to ensure we don't downgrade.
+        // 0 = Default, 1 = IP, 2 = Geo, 3 = URL slug (explicit share link)
+        let currentConfidence = 0;
+
+        // 1. Render immediately so user sees something. A #slug in the URL
+        // is an explicit choice (bookmark/share link) — it trumps IP/Geo.
         let initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
+        const urlSlug = decodeURIComponent(window.location.hash.slice(1));
+        const urlSpot = urlSlug && availableSpots.find(s => s.slug === urlSlug);
+        if (urlSpot) {
+            initialSpotName = urlSpot.name;
+            currentConfidence = 3;
+        }
         renderForecast(initialSpotName);
 
         // 2. Start Location Checks in parallel (IP first, then Geo)
-        // We use a "confidence" level to ensure we don't downgrade.
-        // 0 = Default, 1 = IP, 2 = Geo
-        // 0 = Default, 1 = IP, 2 = Geo
-        let currentConfidence = 0;
 
         // Async IP Check
         const checkIP = async () => {
@@ -994,6 +1001,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (renderId !== currentRenderId) return;
 
             lastRenderedSpot = data.spotName;
+
+            // Reflect the displayed spot in the URL (#slug) so it can be
+            // bookmarked/shared; replaceState avoids polluting history.
+            const spotSlug = window._spotSlugs[data.spotName];
+            if (spotSlug) history.replaceState(null, '', `#${spotSlug}`);
 
             // Update title with "Name" and "Region" separate
             spotNameTitle.innerHTML = `${data.spotName}<span class="hero-region">${data.region}</span>`;

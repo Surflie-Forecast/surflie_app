@@ -13,8 +13,19 @@ picked (land cells hold the -999.99 fill value).
 
 Coverage is California only (32-42N); spots outside the grid yield no rows,
 which is fine — the source is non-critical.
+
+Unlike Open-Meteo, the MOP forecast file is a pure forward forecast: it drops
+timesteps that are now in the past. So the already-elapsed early hours of the
+current day disappear once the file rolls forward, leaving the overlay's first
+day short. To keep a full first day we persist each run's rows to a small
+per-spot cache (data/mop_cache/<slug>.json — gitignored; CI restores it
+between runs via actions/cache) and merge: live rows win for shared
+timestamps, cached rows backfill the gap, and anything before the window
+start is pruned so the cache only ever holds the current window.
 """
+import json
 import math
+import os
 import re
 from datetime import datetime, timezone
 
@@ -23,6 +34,9 @@ import requests
 NAME = 'cdip-mop'
 CRITICAL = False
 SOURCE = 'cdip:mop'
+
+CACHE_DIR = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), '..', '..', 'data', 'mop_cache')
 
 BASE = ('https://thredds.cdip.ucsd.edu/thredds/dodsC/'
         'cdip/model/MOP_grids/CA_0.01_forecast.nc')
@@ -58,7 +72,69 @@ def _shape():
     return dims['waveTime'], dims['metaLatitude'], dims['metaLongitude']
 
 
+def _cache_path(spot):
+    return os.path.join(CACHE_DIR, f'{spot.slug}.json')
+
+
+def _load_cache(spot, start_utc, end_utc):
+    """Cached rows still inside the window, keyed by ts_utc. {} if none/bad."""
+    try:
+        with open(_cache_path(spot)) as f:
+            cached = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    out = {}
+    for ts_utc, value in cached.items():
+        ts = datetime.fromisoformat(ts_utc)
+        if start_utc <= ts <= end_utc:
+            out[ts_utc] = value
+    return out
+
+
+def _save_cache(spot, rows):
+    """Persist rows as {ts_utc: value}, pruned to the window by the caller."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    data = {r['ts_utc']: r['value'] for r in rows}
+    with open(_cache_path(spot), 'w') as f:
+        json.dump(data, f, separators=(',', ':'), sort_keys=True)
+
+
+def _row(spot, ts_utc, value):
+    return {
+        'spot': spot.slug,
+        'ts_utc': ts_utc,
+        'variable': 'wave_height',
+        'value': value,
+        'source': SOURCE,
+    }
+
+
 def fetch(spot, start_utc, end_utc):
+    """Live MOP rows merged with the cached window so the first day stays full.
+
+    Live values win for shared timestamps; cached-only timestamps (the elapsed
+    hours MOP has since dropped) backfill the gap. On a total live failure we
+    still serve the cache — better a slightly stale first day than none — and
+    the cache is left untouched. Non-critical, so we never raise.
+    """
+    cached = _load_cache(spot, start_utc, end_utc)
+    try:
+        live = _fetch_live(spot, start_utc, end_utc)
+    except Exception as e:
+        print(f"    {NAME}: live fetch failed ({e}); serving {len(cached)} cached rows")
+        return [_row(spot, ts, v) for ts, v in cached.items()]
+
+    merged = dict(cached)
+    for r in live:
+        merged[r['ts_utc']] = r['value']  # live wins
+
+    rows = [_row(spot, ts, v) for ts, v in merged.items()]
+    if rows:  # don't litter empty caches for spots outside the CA grid
+        _save_cache(spot, rows)
+    return rows
+
+
+def _fetch_live(spot, start_utc, end_utc):
     n_time, n_lat, n_lon = _shape()
     lat0, dlat = _axis('metaLatitude')
     lon0, dlon = _axis('metaLongitude')
@@ -104,13 +180,7 @@ def fetch(spot, start_utc, end_utc):
 
     r, c = best
     return [
-        {
-            'spot': spot.slug,
-            'ts_utc': ts.isoformat(),
-            'variable': 'wave_height',
-            'value': hs[t][r][c],
-            'source': SOURCE,
-        }
+        _row(spot, ts.isoformat(), hs[t][r][c])
         for t, ts in enumerate(times)
         if hs[t][r][c] >= FILL_CUTOFF and start_utc <= ts <= end_utc
     ]

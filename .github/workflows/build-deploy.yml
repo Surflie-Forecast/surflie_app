@@ -40,6 +40,18 @@ jobs:
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
 
+      # MOP publishes a pure forward forecast, so elapsed timesteps vanish
+      # from the source. The adapter keeps a tiny per-spot cache
+      # (data/mop_cache/) to backfill the current day; persist it across runs
+      # here since the repo never commits data. The run_id key always misses,
+      # so each run restores the newest previous cache and saves its own.
+      - name: Restore MOP cache
+        uses: actions/cache@v4
+        with:
+          path: data/mop_cache
+          key: mop-cache-${{ github.run_id }}
+          restore-keys: mop-cache-
+
       - name: Run data pipeline
         run: python backend/pipeline.py
 
