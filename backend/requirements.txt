@@ -1,14 +1,1 @@
-flask
-flask-cors
-requests
-pytz
-# Copernicus Marine Service (for swell data)
-copernicusmarine
-xarray
-pandas
-numpy
-# NOAA NOMADS (for wind data)
-netCDF4
-h5netcdf
-h5py
-pydap
+requests==2.34.2

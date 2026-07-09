@@ -16,7 +16,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
 
     try {
         // Fetch from static JSON file organized by spot and date
-        const response = await fetch(`api/hourly/${encodeURIComponent(spotName)}/${dateISO}.json`);
+        const response = await fetch(`api/hourly/${apiSpotId(spotName)}/${dateISO}.json`);
         if (!response.ok) {
             throw new Error('Failed to load hourly data');
         }
@@ -98,7 +98,7 @@ async function renderDailyTideChart(spotName, dateISO, containerId) {
     try {
         // We reuse the main tide file. 
         // Note: Using a global cache would be better but browser cache helps.
-        const res = await fetch(`api/tide/${encodeURIComponent(spotName)}.json`);
+        const res = await fetch(`api/tide/${apiSpotId(spotName)}.json`);
         if (!res.ok) {
             container.innerHTML = '<div style="font-size:0.7rem;">Tide data unavailable</div>';
             return;

@@ -1,3 +1,3 @@
-site_name,region,latitude,longitude
-C st.,Ventura,34.26343870100869,-119.30167128264623
-Devereaux,Santa Barbara,34.40313812226568,-119.8780802047039
+site_name,slug,region,latitude,longitude,timezone
+C st.,c-st,Ventura,34.26343870100869,-119.30167128264623,America/Los_Angeles
+Devereaux,devereaux,Santa Barbara,34.40313812226568,-119.8780802047039,America/Los_Angeles
