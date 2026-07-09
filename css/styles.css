@@ -1204,8 +1204,8 @@ input:checked+.slider:before {
 /* Forecast Days Counter */
 .forecast-days-counter {
   position: absolute;
-  top: -0.2rem;
-  /* Move it down below the hero */
+  top: 0.1rem;
+  /* Nudged just below the chart so it clears the day-highlight box */
   right: 0.5rem;
   font-size: 0.85rem;
   font-weight: 600;
@@ -1238,7 +1238,10 @@ input:checked+.slider:before {
      day-highlight box never slides underneath it */
   top: -38px;
   right: 12px;
-  padding: 4px 12px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid rgba(0, 0, 0, 0.15);
   background: rgba(255, 255, 255, 0.85);
@@ -1249,7 +1252,8 @@ input:checked+.slider:before {
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  transition: background-color 0.2s, color 0.2s,
+    top 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .model-compare-btn:hover {
@@ -1260,11 +1264,16 @@ input:checked+.slider:before {
   background: #131929;
   border-color: #131929;
   color: #fff;
+  /* Model view on: drop into the boundary strip, level with the legend */
+  top: 6px;
 }
 
 .model-legend {
   position: absolute;
-  top: -35px;
+  /* In the hero/chart boundary strip: just below the hero, level with the
+     active Models button, left of it (the legend only shows while the
+     button sits in the strip) */
+  top: 6px;
   right: 96px;
   display: none;
   flex-wrap: wrap;
@@ -1281,7 +1290,8 @@ input:checked+.slider:before {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(4px);
@@ -1289,6 +1299,16 @@ input:checked+.slider:before {
   font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+/* Hot = hovered directly, or its line is hovered in the plot */
+.model-legend .legend-chip.legend-chip--hot {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
 }
 
 .model-legend .legend-chip i {
@@ -1304,26 +1324,174 @@ input:checked+.slider:before {
   top: 0;
   pointer-events: none;
   z-index: 3;
+  transition: opacity 0.4s ease;
+}
+
+/* Discrete y-axis (model view only): height labels + short ticks hanging
+   OUTSIDE the plot on both sides — in the app container's side padding,
+   touching the plot edges. The plot keeps its full width; the section just
+   lifts its overflow clipping while the axis is out there. Scrolled plot
+   content still clips at the scroll container's edge, so it never reaches
+   the labels. */
+#waveChartSection {
+  position: relative;
+}
+
+#waveChartSection.models-gutters {
+  overflow: visible;
+}
+
+.chart-y-axis {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.chart-y-axis--left {
+  right: 100%;
+}
+
+.chart-y-axis--right {
+  left: 100%;
+}
+
+.chart-y-axis .y-tick {
+  position: absolute;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.chart-y-axis--left .y-tick {
+  right: 0;
+}
+
+.chart-y-axis--right .y-tick {
+  left: 0;
+}
+
+/* No page margin to borrow on small screens: fall back to inner gutters */
+@media (max-width: 768px) {
+  #waveChartSection.models-gutters {
+    padding: 0 30px;
+    overflow: hidden;
+  }
+
+  .chart-y-axis {
+    width: 30px;
+  }
+
+  .chart-y-axis--left {
+    right: auto;
+    left: 0;
+  }
+
+  .chart-y-axis--right {
+    left: auto;
+    right: 0;
+  }
+
+  .chart-y-axis--left .y-tick {
+    right: 2px;
+  }
+
+  .chart-y-axis--right .y-tick {
+    left: 2px;
+  }
+}
+
+.chart-y-axis .y-tick i {
+  display: block;
+  width: 5px;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.6;
 }
 
 /* Model view replaces the bars: keep the wrappers (they define the time
-   axis, date labels, and day-highlight geometry), hide only the bars */
+   axis, date labels, and day-highlight geometry), hide only the bars.
+   Bars sink and fade in step with the date labels dropping down.
+   (ID-scoped: .chart-bar is declared three times further down and the last
+   one would otherwise override the transition.) */
+#waveChartContainer .chart-bar {
+  transition: height 0.3s ease, background-color 0.2s, opacity 0.5s ease,
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 #waveChartContainer.models-active .chart-bar {
   opacity: 0;
+  transform: translateY(26px);
   pointer-events: none;
+}
+
+/* Date labels slide from the top of the plot to the bottom in model view
+   (inline top:0 is set in JS, hence the !important). The easing lands
+   softly: fast start, long gentle deceleration. */
+#waveChartContainer .axis-label {
+  transition: top 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#waveChartContainer.models-active .axis-label {
+  top: calc(100% - 20px) !important;
+}
+
+/* The day-highlight box shrinks from its top edge while the legend occupies
+   the boundary strip above it, moving with the same easing as the dates.
+   left/width must be restated: this shorthand outranks the base
+   .chart-highlight-overlay rule that provides the fluid horizontal glide. */
+#waveChartContainer .chart-highlight-overlay {
+  transition: left 0.3s ease, width 0.3s ease,
+    top 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#waveChartContainer.models-active .chart-highlight-overlay {
+  /* Below the legend row (legend bottom = 6px top + 22px chip) */
+  top: 32px;
+}
+
+/* Card unfolded (hero compacts): the button leaves the shrinking hero and
+   drops into the hero/chart boundary strip, and the day-highlight box gives
+   it room — same easing as everything else. */
+.hero.compact+.chart-gap-container .model-compare-btn {
+  top: 6px;
+}
+
+.hero.compact+.chart-gap-container .model-legend {
+  right: 96px;
+  max-width: calc(100% - 120px);
+}
+
+.hero.compact~.chart-section #waveChartContainer .chart-highlight-overlay {
+  top: 32px;
 }
 
 /* On small screens the hero bottom holds the search buttons — keep the
    model controls below the boundary instead (chart has 30px top padding) */
 @media (max-width: 768px) {
   .model-compare-btn {
-    top: 4px;
+    top: 6px;
   }
 
   .model-legend {
     top: 6px;
-    right: 90px;
-    max-width: calc(100% - 110px);
+    right: 86px;
+    max-width: calc(100% - 106px);
+  }
+
+  /* Legend wraps to several rows on narrow screens: drop the highlight
+     box further (higher-specificity twin keeps this winning when a card
+     is unfolded at the same time) */
+  #waveChartContainer.models-active .chart-highlight-overlay,
+  .hero.compact~.chart-section #waveChartContainer.models-active .chart-highlight-overlay {
+    top: 74px;
   }
 }
 
@@ -1380,7 +1548,8 @@ input:checked+.slider:before {
   background: #38bdf8;
   /* Light blue base */
   border-radius: 2px 2px 0 0;
-  transition: height 0.3s ease, background-color 0.2s;
+  transition: height 0.3s ease, background-color 0.2s, opacity 0.5s ease,
+    transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
 }
 

@@ -236,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
             heroMap.invalidateSize();
 
             // Set view to location
-            const zoomLevel = 14; // Good context level
+            const zoomLevel = 13; // Wider coastline context
             heroMap.setView([lat, lon], zoomLevel, { animate: false });
 
             // Offset logic: Move map center to the LEFT so location appears on right

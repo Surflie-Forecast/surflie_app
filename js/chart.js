@@ -222,7 +222,80 @@ function renderChart(hourlyData) {
     // exact time axis and height scale
     chartContainer._hourlyData = hourlyData;
     chartContainer._scaleMax = scaleMax;
+
+    renderBarYAxis(chartContainer);
 }
+
+// --- Discrete Y Axis (bars view AND model view) ---
+// Height labels + short ticks on BOTH sides of the plot, hanging outside
+// the scroll container in the page margins, so scrolled plot content never
+// runs under them. No axis line. Always at least 2 tick values.
+
+function removeYAxis() {
+    const section = document.getElementById('waveChartSection');
+    if (!section) return;
+    section.classList.remove('models-gutters');
+    section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
+}
+
+function renderYAxisTicks(scaleMax, yScreenFor) {
+    const section = document.getElementById('waveChartSection');
+    if (!section) return;
+    section.classList.add('models-gutters');
+    section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
+
+    // Ticks at nice values in the display unit (skip 0); pick the step
+    // giving 2-3 ticks, preferring fewer but never less than 2
+    const factor = currentUnit === 'imperial' ? 3.28084 : 1;
+    const unit = getHeightUnit(currentUnit);
+    const maxDisp = scaleMax * factor;
+    const steps = [0.1, 0.25, 0.5, 1, 2, 3, 5, 10, 20];
+    const nTicks = s => Math.max(0, Math.ceil(maxDisp / s) - 1);
+    const step = steps.find(s => nTicks(s) >= 2 && nTicks(s) <= 3)
+        || steps.find(s => nTicks(s) <= 3) || 10;
+
+    const sectionTop = section.getBoundingClientRect().top;
+    ['left', 'right'].forEach(side => {
+        const axis = document.createElement('div');
+        axis.className = `chart-y-axis chart-y-axis--${side}`;
+        for (let v = step; v < maxDisp; v = Math.round((v + step) * 100) / 100) {
+            const tick = document.createElement('div');
+            tick.className = 'y-tick';
+            tick.style.top = `${(yScreenFor(v / factor) - sectionTop).toFixed(1)}px`;
+            tick.innerHTML = side === 'left'
+                ? `<span>${v}${unit}</span><i></i>`
+                : `<i></i><span>${v}${unit}</span>`;
+            axis.appendChild(tick);
+        }
+        section.appendChild(axis);
+    });
+}
+
+function renderBarYAxis(container) {
+    const w0 = container.querySelector('.chart-bar-wrapper');
+    if (!w0 || !container._scaleMax) {
+        removeYAxis();
+        return;
+    }
+    const scale = container._scaleMax;
+    renderYAxisTicks(scale, v => {
+        const r = w0.getBoundingClientRect();
+        return r.top + r.height * (1 - v / scale);
+    });
+    container._axisRender = () => renderBarYAxis(container);
+}
+
+function renderModelYAxis(svg, scaleMax, yForOffset) {
+    renderYAxisTicks(scaleMax,
+        v => svg.getBoundingClientRect().top + yForOffset(v));
+}
+
+// Redraw the axis in the new unit once app.js has updated currentUnit
+document.querySelectorAll('.unit-toggle').forEach(t =>
+    t.addEventListener('change', () => setTimeout(() => {
+        const container = document.getElementById('waveChartContainer');
+        if (container && container._axisRender) container._axisRender();
+    }, 60)));
 
 // --- Model Comparison Overlay ---
 // Overlays every wave model's combined Hs as lines on the bar chart,
@@ -275,7 +348,12 @@ function clearModelOverlay() {
         container._modelData = null;
         container.classList.remove('models-active');
         const svg = container.querySelector('.model-overlay-svg');
-        if (svg) svg.remove();
+        if (svg) {
+            // Fade out in step with the bars fading back in
+            svg.style.opacity = '0';
+            setTimeout(() => svg.remove(), 400);
+        }
+        renderBarYAxis(container); // back to the bars' scale
     }
     if (btn) btn.classList.remove('active');
     if (legend) {
@@ -318,6 +396,11 @@ function drawModelOverlay(data) {
     const old = container.querySelector('.model-overlay-svg');
     if (old) old.remove();
 
+    // Open the side gutters for the y-axis BEFORE measuring bar positions:
+    // the section padding narrows the scrollport and reflows the bars
+    const section = document.getElementById('waveChartSection');
+    if (section) section.classList.add('models-gutters');
+
     const wrappers = container.querySelectorAll('.chart-bar-wrapper');
     if (wrappers.length === 0) return;
 
@@ -330,8 +413,6 @@ function drawModelOverlay(data) {
 
     const top = wrappers[0].offsetTop;
     const barH = wrappers[0].offsetHeight;
-    const scaleMax = container._scaleMax;
-    const yFor = v => Math.max(top + 1, top + barH * (1 - v / scaleMax));
 
     const xFor = (t) => {
         if (t < times[0] || t > times[n - 1]) return null;
@@ -341,6 +422,27 @@ function drawModelOverlay(data) {
         const frac = (t - times[j]) / (times[j + 1] - times[j]);
         return centers[j] + frac * (centers[j + 1] - centers[j]);
     };
+
+    // First pass: project every model's points onto the chart's time axis
+    const projected = data.models.map(model => ({
+        model,
+        pts: model.series.reduce((acc, pt) => {
+            const t = new Date(pt.t.replace(' ', 'T'));
+            const x = xFor(t.getTime());
+            if (x !== null) acc.push({ x, v: pt.v, t });
+            return acc;
+        }, []),
+    }));
+
+    // The model view has its own y-scale: fit the highest line rather than
+    // clip everything above the bars' max. The bottom band stays clear for
+    // the date labels, which drop down there in model view.
+    let vMax = 0;
+    projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
+    const scaleMax = Math.max(vMax, 0.1) * 1.1;
+    const yTop = top + 4;
+    const yBottom = top + barH - 26;
+    const yFor = v => yTop + (yBottom - yTop) * (1 - v / scaleMax);
 
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
@@ -354,15 +456,23 @@ function drawModelOverlay(data) {
     const toPathD = pts =>
         pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
 
-    data.models.forEach(model => {
-        const pts = [];
-        model.series.forEach(pt => {
-            const t = new Date(pt.t.replace(' ', 'T'));
-            const x = xFor(t.getTime());
-            if (x === null) return;
-            const y = yFor(pt.v);
-            pts.push({ x, y, v: pt.v, t });
+    // Two-way hover link between lines and legend chips: the hot model's
+    // line thickens and its chip lights up; the other lines dim.
+    const refs = {};
+    const setHot = (id, on) => {
+        Object.entries(refs).forEach(([oid, ref]) => {
+            const hot = on && oid === id;
+            ref.paths.forEach(p => {
+                p.setAttribute('stroke-width', ref.baseWidth + (hot ? 1.5 : 0));
+                p.setAttribute('opacity',
+                    on && !hot ? '0.25' : (ref.isDefault ? '1' : '0.85'));
+            });
+            if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
+    };
+
+    projected.forEach(({ model, pts }) => {
+        pts.forEach(p => { p.y = yFor(p.v); });
         if (pts.length < 2) return;
 
         const color = model.default ? BAR_COLOR : (MODEL_COLORS[model.id] || '#64748b');
@@ -396,6 +506,7 @@ function drawModelOverlay(data) {
             paths.push(path);
         });
         if (paths.length === 0) return;
+        refs[model.id] = { paths, baseWidth, isDefault: model.default };
 
         // Invisible wide twin of the line as the hover hit area
         const hit = document.createElementNS(ns, 'path');
@@ -423,14 +534,14 @@ function drawModelOverlay(data) {
                 `<span style="font-size: 0.9rem; font-weight: 700;">` +
                 `<i style="display:inline-block;width:10px;height:3px;border-radius:2px;` +
                 `vertical-align:middle;background:${color}"></i> ` +
-                `${model.label} &bull; ${val}${unit} &bull; ${timeStr}</span>`;
+                `${val}${unit} &bull; ${timeStr}</span>`;
 
             const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
             tooltip.style.left = `${cx}px`;
             tooltip.style.top = `${rect.top + best.y}px`;
             tooltip.style.transform = 'translate(-50%, -140%)';
             tooltip.classList.add('visible');
-            paths.forEach(p => p.setAttribute('stroke-width', baseWidth + 1.5));
+            setHot(model.id, true);
         };
 
         hit.addEventListener('mousemove', e => showPoint(e.clientX));
@@ -439,19 +550,32 @@ function drawModelOverlay(data) {
         }, { passive: true });
         hit.addEventListener('mouseleave', () => {
             if (tooltip) tooltip.classList.remove('visible');
-            paths.forEach(p => p.setAttribute('stroke-width', baseWidth));
+            setHot(model.id, false);
         });
         svg.appendChild(hit);
     });
 
+    // Fade the lines in as the bars fade out (CSS transition on opacity)
+    svg.style.opacity = '0';
     container.appendChild(svg);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        svg.style.opacity = '1';
+    }));
     container.classList.add('models-active');
+    renderModelYAxis(svg, scaleMax, yFor);
+    container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
 
     if (legend) {
         legend.innerHTML = data.models.map(m =>
-            `<span class="legend-chip"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`
+            `<span class="legend-chip" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`
         ).join('');
         legend.classList.add('visible');
+        legend.querySelectorAll('.legend-chip').forEach(chip => {
+            const id = chip.dataset.modelId;
+            if (refs[id]) refs[id].chip = chip;
+            chip.addEventListener('mouseenter', () => setHot(id, true));
+            chip.addEventListener('mouseleave', () => setHot(id, false));
+        });
     }
 }
 

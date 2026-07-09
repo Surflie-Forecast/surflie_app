@@ -232,14 +232,10 @@ def build_spot(store, spot, out_dir):
                   else _local_series(store, spot.slug, 'wave_height', tz, source=src))
         if not _usable(series):
             continue
-        on_hour = [(dt, v) for dt, v in series.items() if not dt.minute]
-        # Trim hourly models to the chart's 3-hour cadence; models with a
-        # coarser cadence (MOP is 6-hourly UTC, off the local 3-hour grid)
-        # keep their native points.
-        stepped = [(dt, v) for dt, v in on_hour if dt.hour % HOURLY_STEP_H == 0]
-        if len(stepped) < len(on_hour) // HOURLY_STEP_H:
-            stepped = on_hour
-        points = [{'t': _fmt_dt(dt), 'v': round(v, 2)} for dt, v in stepped]
+        # Full native resolution (hourly for the global models, 6-hourly for
+        # MOP): the overlay lines interpolate between the 3-hourly bars.
+        points = [{'t': _fmt_dt(dt), 'v': round(v, 2)}
+                  for dt, v in series.items() if not dt.minute]
         if points:
             models_out.append({
                 'id': src.split(':', 1)[1],
