@@ -7,9 +7,12 @@ spot's local timezone here, and writes the API contract:
     api/forecast/{slug}.json          daily summaries + ratings
     api/hourly/{slug}/{date}.json     3-hourly swell + wind entries
     api/tide/{slug}.json              6-min tide curve + high/low peaks
+    api/models/{slug}.json            per-model combined Hs for the overlay
 
 Output keys and value types intentionally match the pre-rewrite contract so
-the frontend needs no changes beyond slug-based URLs.
+the frontend needs no changes beyond slug-based URLs. The displayed "wave"
+height is combined significant wave height (Hs) from the default model; the
+swell partition (period/direction) qualifies it and drives the rating.
 """
 import json
 import os
@@ -24,6 +27,35 @@ from rating_config import RatingConfig
 HOURLY_STEP_H = 3          # cadence of hourly entries (matches the old 3-hourly data)
 RATING_HOURS = (7, 19)     # local hours (inclusive) considered for the daily rating
 
+# Wave models present in the store (source tag -> display label). Tags and
+# preference order must match backend/adapters/openmeteo_marine.py; the app
+# displays the first model with usable data at each spot.
+WAVE_MODELS = {
+    'openmeteo:gfswave025': 'GFS Wave 25km',
+    'openmeteo:mfwam': 'MFWAM 8km',
+    'openmeteo:ecmwf_wam9': 'ECMWF WAM 9km',
+    'openmeteo:ecmwf_wam25': 'ECMWF WAM 25km',
+    'openmeteo:gwam': 'DWD GWAM 25km',
+}
+
+
+def _usable(series):
+    """A model's series counts only if it has real (non-masked) values.
+
+    GFS Wave's 25 km land-sea mask yields all-zero series at some nearshore
+    cells (e.g. C st. inside the Santa Barbara Channel).
+    """
+    return bool(series) and max(series.values()) > 0.01
+
+
+def _pick_wave_source(store, slug):
+    """First model (preference order) with usable Hs and a swell partition."""
+    for src in WAVE_MODELS:
+        if (_usable(store.series(slug, 'wave_height', src))
+                and store.series(slug, 'swell_period', src)):
+            return src
+    return None
+
 
 def _write_json(path, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -31,9 +63,9 @@ def _write_json(path, data):
         json.dump(data, f, separators=(',', ':'))
 
 
-def _local_series(store, slug, variable, tz):
+def _local_series(store, slug, variable, tz, source=None):
     """{local datetime: value}, chronologically sorted."""
-    utc = store.series(slug, variable)
+    utc = store.series(slug, variable, source)
     return {ts.astimezone(tz): v for ts, v in sorted(utc.items())}
 
 
@@ -50,10 +82,13 @@ def _day_label(date_obj, today):
     return date_obj.strftime('%A')
 
 
-def _build_hourly(swell_h, swell_p, swell_d, wind_s, wind_d):
-    """3-hourly entries per local date where swell and wind both exist."""
+def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d):
+    """3-hourly entries per local date where waves and wind both exist.
+
+    height is combined Hs; period/direction are the primary swell partition.
+    """
     by_date = defaultdict(list)
-    for dt, height in swell_h.items():
+    for dt, height in wave_h.items():
         if dt.hour % HOURLY_STEP_H or dt.minute:
             continue
         if not (dt in swell_p and dt in swell_d and dt in wind_s and dt in wind_d):
@@ -106,9 +141,13 @@ def _tide_extremes(date_obj, tide_peaks, tide_raw):
 
 def build_spot(store, spot, out_dir):
     tz = ZoneInfo(spot.timezone)
-    swell_h = _local_series(store, spot.slug, 'swell_height', tz)
-    swell_p = _local_series(store, spot.slug, 'swell_period', tz)
-    swell_d = _local_series(store, spot.slug, 'swell_direction', tz)
+    wave_src = _pick_wave_source(store, spot.slug)
+    if wave_src is None:
+        print(f"  ! no usable wave model for {spot.name}; skipping")
+        return False
+    wave_h = _local_series(store, spot.slug, 'wave_height', tz, source=wave_src)
+    swell_p = _local_series(store, spot.slug, 'swell_period', tz, source=wave_src)
+    swell_d = _local_series(store, spot.slug, 'swell_direction', tz, source=wave_src)
     wind_s = _local_series(store, spot.slug, 'wind_speed', tz)
     wind_d = _local_series(store, spot.slug, 'wind_direction', tz)
     tide_raw = _local_series(store, spot.slug, 'tide_height', tz)
@@ -120,12 +159,12 @@ def build_spot(store, spot, out_dir):
     tide_types.update(
         {dt: 'L' for dt in _local_series(store, spot.slug, 'tide_low', tz)})
 
-    if not swell_h:
-        print(f"  ! no swell data for {spot.name}; skipping")
+    if not wave_h:
+        print(f"  ! no wave data for {spot.name}; skipping")
         return False
 
     # --- hourly files ---
-    hourly_by_date = _build_hourly(swell_h, swell_p, swell_d, wind_s, wind_d)
+    hourly_by_date = _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d)
     for date_obj, entries in hourly_by_date.items():
         entries.sort(key=lambda e: e['datetime'])
         _write_json(
@@ -135,7 +174,7 @@ def build_spot(store, spot, out_dir):
     # --- daily forecast ---
     today = datetime.now(tz).date()
     by_date = defaultdict(lambda: defaultdict(list))
-    for series, key in ((swell_h, 'height'), (swell_p, 'period'), (swell_d, 'sdir'),
+    for series, key in ((wave_h, 'height'), (swell_p, 'period'), (swell_d, 'sdir'),
                         (wind_s, 'speed'), (wind_d, 'wdir')):
         for dt, v in series.items():
             by_date[dt.date()][key].append(v)
@@ -176,6 +215,28 @@ def build_spot(store, spot, out_dir):
         'forecast': forecast,
     })
 
+    # --- model comparison file (combined Hs, 3-hourly, per model) ---
+    models_out = []
+    for src, label in WAVE_MODELS.items():
+        series = (wave_h if src == wave_src
+                  else _local_series(store, spot.slug, 'wave_height', tz, source=src))
+        if not _usable(series):
+            continue
+        points = [
+            {'t': _fmt_dt(dt), 'v': round(v, 2)}
+            for dt, v in series.items()
+            if dt.hour % HOURLY_STEP_H == 0 and not dt.minute]
+        if points:
+            models_out.append({
+                'id': src.split(':', 1)[1],
+                'label': label,
+                'default': src == wave_src,
+                'series': points,
+            })
+    if models_out:
+        _write_json(os.path.join(out_dir, 'models', f'{spot.slug}.json'),
+                    {'variable': 'wave_height', 'unit': 'm', 'models': models_out})
+
     # --- tide file ---
     if tide_raw:
         _write_json(os.path.join(out_dir, 'tide', f'{spot.slug}.json'), {
@@ -188,14 +249,16 @@ def build_spot(store, spot, out_dir):
 
     print(f"  ✓ {spot.name}: {len(forecast)} days, "
           f"{len(hourly_by_date)} hourly files, "
-          f"{len(tide_raw)} tide points")
+          f"{len(tide_raw)} tide points, "
+          f"waves from {WAVE_MODELS[wave_src]}, "
+          f"{len(models_out)} models in overlay")
     return True
 
 
 def build_all(store, spots, out_dir):
     # Regenerate the whole API directory from scratch so renamed/removed
     # spots leave no stale files behind.
-    for sub in ('forecast', 'hourly', 'tide'):
+    for sub in ('forecast', 'hourly', 'tide', 'models'):
         shutil.rmtree(os.path.join(out_dir, sub), ignore_errors=True)
 
     built = []

@@ -44,14 +44,17 @@ async function renderWaveHeightChart(spotName, forecastDays) {
 
         if (allHours.length === 0) {
             chartContainer.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px;">No hourly data available for chart</div>';
+            setupModelCompare(null);
             return;
         }
 
         renderChart(allHours);
+        setupModelCompare(spotName);
 
     } catch (error) {
         console.error("Error rendering chart:", error);
         chartContainer.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px; color:red;">Failed to load chart</div>';
+        setupModelCompare(null);
     }
 }
 
@@ -214,6 +217,164 @@ function renderChart(hourlyData) {
 
     // Ensure we start at the beginning (left)
     chartContainer.scrollLeft = 0;
+
+    // Expose data the model-comparison overlay needs to share the bars'
+    // exact time axis and height scale
+    chartContainer._hourlyData = hourlyData;
+    chartContainer._scaleMax = scaleMax;
+}
+
+// --- Model Comparison Overlay ---
+// Overlays every wave model's combined Hs as lines on the bar chart,
+// sharing the bars' y-scale and time axis (bars = default model).
+
+const MODEL_COLORS = {
+    gfswave025: '#131929',
+    mfwam: '#e11d48',
+    ecmwf_wam9: '#7c3aed',
+    ecmwf_wam25: '#c084fc',
+    gwam: '#10b981',
+};
+
+function setupModelCompare(spotName) {
+    const btn = document.getElementById('modelCompareBtn');
+    if (!btn) return;
+
+    clearModelOverlay();
+
+    if (!spotName) {
+        btn.style.display = 'none';
+        return;
+    }
+
+    btn.style.display = 'inline-flex';
+    btn.dataset.spot = spotName;
+
+    if (!btn._bound) {
+        btn._bound = true;
+        btn.addEventListener('click', toggleModelOverlay);
+        window.addEventListener('resize', () => {
+            clearTimeout(window._modelResizeTimer);
+            window._modelResizeTimer = setTimeout(() => {
+                const container = document.getElementById('waveChartContainer');
+                if (container && container._modelData) {
+                    drawModelOverlay(container._modelData);
+                }
+            }, 200);
+        });
+    }
+}
+
+function clearModelOverlay() {
+    const container = document.getElementById('waveChartContainer');
+    const btn = document.getElementById('modelCompareBtn');
+    const legend = document.getElementById('modelLegend');
+
+    if (container) {
+        container._modelData = null;
+        const svg = container.querySelector('.model-overlay-svg');
+        if (svg) svg.remove();
+    }
+    if (btn) btn.classList.remove('active');
+    if (legend) {
+        legend.classList.remove('visible');
+        legend.innerHTML = '';
+    }
+}
+
+async function toggleModelOverlay() {
+    const btn = document.getElementById('modelCompareBtn');
+    const container = document.getElementById('waveChartContainer');
+    if (!btn || !container) return;
+
+    if (container._modelData) {
+        clearModelOverlay();
+        return;
+    }
+
+    try {
+        const res = await fetch(`api/models/${apiSpotId(btn.dataset.spot)}.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.models || data.models.length === 0) throw new Error('no models');
+
+        container._modelData = data;
+        drawModelOverlay(data);
+        btn.classList.add('active');
+    } catch (e) {
+        console.warn('Model comparison unavailable:', e);
+        btn.disabled = true;
+        setTimeout(() => { btn.disabled = false; }, 3000);
+    }
+}
+
+function drawModelOverlay(data) {
+    const container = document.getElementById('waveChartContainer');
+    const legend = document.getElementById('modelLegend');
+    if (!container || !container._hourlyData || !container._scaleMax) return;
+
+    const old = container.querySelector('.model-overlay-svg');
+    if (old) old.remove();
+
+    const wrappers = container.querySelectorAll('.chart-bar-wrapper');
+    if (wrappers.length === 0) return;
+
+    // Bar timeline: timestamps (ms) and x centers, in the same offset
+    // coordinate space the highlight overlay uses
+    const hours = container._hourlyData;
+    const times = hours.map(h => new Date(h.datetime.replace(' ', 'T')).getTime());
+    const centers = Array.from(wrappers, w => w.offsetLeft + w.offsetWidth / 2);
+    const n = Math.min(times.length, centers.length);
+
+    const top = wrappers[0].offsetTop;
+    const barH = wrappers[0].offsetHeight;
+    const scaleMax = container._scaleMax;
+    const yFor = v => Math.max(top + 1, top + barH * (1 - v / scaleMax));
+
+    const xFor = (t) => {
+        if (t < times[0] || t > times[n - 1]) return null;
+        let j = times.findIndex((ts, i) => i + 1 < n && t >= ts && t <= times[i + 1]);
+        if (t === times[n - 1]) j = n - 2;
+        if (j < 0) return null;
+        const frac = (t - times[j]) / (times[j + 1] - times[j]);
+        return centers[j] + frac * (centers[j + 1] - centers[j]);
+    };
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'model-overlay-svg');
+    svg.setAttribute('width', container.scrollWidth);
+    svg.setAttribute('height', top + barH);
+
+    data.models.forEach(model => {
+        let d = '';
+        model.series.forEach(pt => {
+            const t = new Date(pt.t.replace(' ', 'T')).getTime();
+            const x = xFor(t);
+            if (x === null) return;
+            const y = yFor(pt.v);
+            d += (d ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
+        });
+        if (!d) return;
+
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', d);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', MODEL_COLORS[model.id] || '#64748b');
+        path.setAttribute('stroke-width', model.default ? 2.5 : 1.5);
+        path.setAttribute('stroke-linejoin', 'round');
+        if (!model.default) path.setAttribute('opacity', '0.85');
+        svg.appendChild(path);
+    });
+
+    container.appendChild(svg);
+
+    if (legend) {
+        legend.innerHTML = data.models.map(m =>
+            `<span class="legend-chip"><i style="background:${MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}${m.default ? ' •' : ''}</span>`
+        ).join('');
+        legend.classList.add('visible');
+    }
 }
 
 // --- Tide Chart Implementation ---

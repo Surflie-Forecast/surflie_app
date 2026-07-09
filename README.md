@@ -9,7 +9,8 @@ Pages — no server, no database, no credentials.
 ```
 INGESTION  (GitHub Actions, every 6 h)
   backend/adapters/          one module per data source
-    openmeteo_marine.py      swell — MeteoFrance MFWAM via Open-Meteo
+    openmeteo_marine.py      waves — NCEP GFS Wave (default) + 4 comparison
+                             models via Open-Meteo, all tagged by source
     openmeteo_weather.py     wind  — NOAA GFS via Open-Meteo
     noaa_tides.py            tides — NOAA CO-OPS (nearest station)
         │   all emit the same normalized rows (spot, ts_utc, variable, value, source)
@@ -44,6 +45,13 @@ Key properties:
 | `api/forecast/{slug}.json` | Daily summaries + ratings (10 days) |
 | `api/hourly/{slug}/{date}.json` | 3-hourly swell + wind entries |
 | `api/tide/{slug}.json` | 6-min tide curve + high/low peaks |
+| `api/models/{slug}.json` | Combined Hs per wave model (3-hourly) for the comparison overlay |
+
+The displayed wave height is **combined significant wave height (Hs)** from
+the default model (NCEP GFS Wave — full variable set, 16-day horizon; see
+`data_exploration/model_exploration_devereaux.ipynb`). The swell partition
+(period/direction) qualifies it and drives the rating. The "Models" button
+on the chart overlays every fetched model's Hs.
 
 ## Local development
 
@@ -83,7 +91,8 @@ python backend/sync_rating_logic.py   # rewrites js/rating.js
 
 ## Tech stack
 
-- **Data**: Open-Meteo (marine + weather), NOAA CO-OPS (tides)
+- **Data**: Open-Meteo (marine: GFS Wave default + MFWAM/ECMWF/GWAM
+  comparison; weather: GFS), NOAA CO-OPS (tides)
 - **Pipeline**: Python 3.12+, stdlib + `requests`
 - **Hosting**: GitHub Pages (artifact deploys via GitHub Actions)
 - **Frontend**: vanilla JS/HTML/CSS, Leaflet

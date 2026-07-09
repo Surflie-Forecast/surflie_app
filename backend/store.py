@@ -31,11 +31,16 @@ class ForecastStore:
                 raise ValueError(f"Row missing fields {missing}: {r}")
         self._rows.extend(rows)
 
-    def series(self, spot_slug, variable):
-        """Return {utc datetime: value} for one spot/variable."""
+    def series(self, spot_slug, variable, source=None):
+        """Return {utc datetime: value} for one spot/variable.
+
+        source=None matches any provider; pass a source tag to disambiguate
+        variables that several models emit (e.g. wave_height).
+        """
         out = {}
         for r in self._rows:
-            if r['spot'] == spot_slug and r['variable'] == variable:
+            if r['spot'] == spot_slug and r['variable'] == variable \
+                    and (source is None or r['source'] == source):
                 out[datetime.fromisoformat(r['ts_utc'])] = r['value']
         return out
 

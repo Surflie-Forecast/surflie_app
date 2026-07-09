@@ -1222,6 +1222,88 @@ input:checked+.slider:before {
   color: var(--accent-blue);
 }
 
+/* --- Model comparison (hero/chart gap) --- */
+/* Zero-height like .forecast-gap-container: floats content in the boundary
+   between hero and wave chart without changing their spacing. */
+.chart-gap-container {
+  height: 0;
+  width: 100%;
+  position: relative;
+  z-index: 960;
+}
+
+.model-compare-btn {
+  position: absolute;
+  top: 6px;
+  right: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.model-compare-btn:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+.model-compare-btn.active {
+  background: #131929;
+  border-color: #131929;
+  color: #fff;
+}
+
+.model-legend {
+  position: absolute;
+  top: 8px;
+  right: 90px;
+  display: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  max-width: calc(100% - 120px);
+}
+
+.model-legend.visible {
+  display: flex;
+}
+
+.model-legend .legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.model-legend .legend-chip i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.model-overlay-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
 /* Wave Height Chart */
 .chart-section {
   width: 100%;
