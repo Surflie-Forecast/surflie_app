@@ -31,8 +31,11 @@ setup_env.sh
 *.key
 gee_key.json
 
-# Data files (optional - comment out if you want to track them)
-# data/*.csv
+# Generated data — built by the pipeline, deployed as a Pages artifact, never committed
+api/
+data/*
+!data/locations.csv
+_site/
 
 # Temporary files
 temp_*.nc
