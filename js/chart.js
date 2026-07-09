@@ -18,7 +18,7 @@ async function renderWaveHeightChart(spotName, forecastDays) {
     try {
         // Collect all hourly data promises
         const promises = forecastDays.map(day => {
-            return fetch(`api/hourly/${encodeURIComponent(spotName)}/${day.date_iso}.json`)
+            return fetch(`api/hourly/${apiSpotId(spotName)}/${day.date_iso}.json`)
                 .then(res => {
                     if (!res.ok) return null;
                     return res.json();
@@ -230,7 +230,7 @@ async function renderTideChart(spotName) {
     container.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px; color: var(--text-secondary);">Loading tide data...</div>';
 
     try {
-        const res = await fetch(`api/tide/${encodeURIComponent(spotName)}.json`);
+        const res = await fetch(`api/tide/${apiSpotId(spotName)}.json`);
         if (!res.ok) {
             container.innerHTML = '';
             section.style.display = 'none'; // Hide if no data

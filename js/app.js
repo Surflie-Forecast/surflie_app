@@ -4,6 +4,10 @@ let currentUnit = localStorage.getItem('surfForecastUnit') || 'imperial';
 
 // Unit Conversion Helpers
 // Unit Conversion Helpers
+// Spot slugs (populated from spots.json) — slugs are the stable API file ids
+window._spotSlugs = {};
+window.apiSpotId = (name) => window._spotSlugs[name] || encodeURIComponent(name);
+
 window.toFeet = (meters) => (meters * 3.28084).toFixed(1);
 window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
 window.formatHeight = (val, unit) => unit === 'imperial' ? window.toFeet(val) : val;
@@ -267,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Try to fetch today's hourly data to get swell direction
             try {
-                const response = await fetch(`api/hourly/${encodeURIComponent(spot.name)}/${todayISO}.json`);
+                const response = await fetch(`api/hourly/${apiSpotId(spot.name)}/${todayISO}.json`);
                 if (response.ok) {
                     const hourlyData = await response.json();
                     if (hourlyData && hourlyData.length > 0) {
@@ -363,7 +367,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             try {
                 // 1. Fetch Main Forecast Summary (for ratings, colors, and valid dates)
-                const forecastRes = await fetch(`api/forecast/${encodeURIComponent(spot.name)}.json`);
+                const forecastRes = await fetch(`api/forecast/${apiSpotId(spot.name)}.json`);
                 if (!forecastRes.ok) throw new Error("Forecast unavailable");
 
                 const forecastData = await forecastRes.json();
@@ -376,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // 2. Fetch Hourly Data for these days in parallel
                 const hourlyPromises = daysToShow.map(day =>
-                    fetch(`api/hourly/${encodeURIComponent(spot.name)}/${day.date_iso}.json`)
+                    fetch(`api/hourly/${apiSpotId(spot.name)}/${day.date_iso}.json`)
                         .then(r => r.ok ? r.json() : [])
                         .catch(() => [])
                 );
@@ -635,6 +639,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const spotsRes = await fetch('api/spots.json');
             if (spotsRes.ok) {
                 availableSpots = await spotsRes.json();
+                availableSpots.forEach(s => {
+                    if (s.slug) window._spotSlugs[s.name] = s.slug;
+                });
             } else {
                 console.error("Failed to fetch spots list");
             }
@@ -971,7 +978,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Fetch from static JSON file
-            const response = await fetch(`api/forecast/${encodeURIComponent(spotName)}.json`);
+            const response = await fetch(`api/forecast/${apiSpotId(spotName)}.json`);
 
             // Check if superseded
             if (renderId !== currentRenderId) return;
@@ -1032,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create a promise array to fetch all hourly data
             const hourlyPromises = data.forecast.map(async (day) => {
                 try {
-                    const res = await fetch(`api/hourly/${encodeURIComponent(spotName)}/${day.date_iso}.json`);
+                    const res = await fetch(`api/hourly/${apiSpotId(spotName)}/${day.date_iso}.json`);
                     if (res.ok) {
                         return { date: day.date_iso, data: await res.json() };
                     }
