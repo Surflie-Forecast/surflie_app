@@ -51,6 +51,13 @@ async function renderWaveHeightChart(spotName, forecastDays) {
         renderChart(allHours);
         setupModelCompare(spotName);
 
+        // Deep link (#slug[/date]/models): restore the overlay now — the
+        // only point where the chart data and compare button are both ready.
+        if (window._pendingModelsView) {
+            window._pendingModelsView = false;
+            toggleModelOverlay();
+        }
+
     } catch (error) {
         console.error("Error rendering chart:", error);
         chartContainer.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px; color:red;">Failed to load chart</div>';
@@ -369,6 +376,7 @@ async function toggleModelOverlay() {
 
     if (container._modelData) {
         clearModelOverlay();
+        if (window.updateUrlView) window.updateUrlView({ models: false });
         return;
     }
 
@@ -381,6 +389,7 @@ async function toggleModelOverlay() {
         container._modelData = data;
         drawModelOverlay(data);
         btn.classList.add('active');
+        if (window.updateUrlView) window.updateUrlView({ models: true });
     } catch (e) {
         console.warn('Model comparison unavailable:', e);
         btn.disabled = true;
@@ -449,6 +458,15 @@ function drawModelOverlay(data) {
     svg.setAttribute('class', 'model-overlay-svg');
     svg.setAttribute('width', container.scrollWidth);
     svg.setAttribute('height', top + barH);
+
+    // The wide transparent hover paths would swallow clicks meant for the
+    // bars below — forward them so day selection keeps working with the
+    // overlay on.
+    svg.addEventListener('click', (e) => {
+        const wrapper = document.elementsFromPoint(e.clientX, e.clientY)
+            .find(el => el.classList && el.classList.contains('chart-bar-wrapper'));
+        if (wrapper) wrapper.click();
+    });
 
     const tooltip = document.getElementById('globalChartTooltip');
     const BAR_COLOR = '#38bdf8'; // the default model IS the bars — same color

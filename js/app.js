@@ -13,10 +13,32 @@ window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
 window.formatHeight = (val, unit) => unit === 'imperial' ? window.toFeet(val) : val;
 window.getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
+// URL hash = #slug[/date][/models]. Update the given parts, keep the rest,
+// so spot renders, date clicks and the models toggle can each write their
+// own segment without clobbering the others. No-op until a spot is in the
+// hash (nothing to anchor the view to yet).
+window.updateUrlView = (changes) => {
+    const parts = window.location.hash.slice(1).split('/');
+    const state = {
+        slug: parts[0] || '',
+        date: parts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p)) || null,
+        models: parts.includes('models'),
+        ...changes,
+    };
+    if (!state.slug) return;
+    let hash = `#${state.slug}`;
+    if (state.date) hash += `/${state.date}`;
+    if (state.models) hash += '/models';
+    history.replaceState(null, '', hash);
+};
+
 window.scrollToForecastDate = (dateIso) => {
     const container = document.getElementById('forecastContainer');
     const card = container.querySelector(`.forecast-card[data-date="${dateIso}"]`);
     if (card) {
+        // Reflect the selected day in the URL so the exact view can be
+        // bookmarked/shared alongside the spot (and models view, if on).
+        window.updateUrlView({ date: dateIso });
         const containerWidth = container.clientWidth;
         const cardWidth = card.offsetWidth;
         const cardLeft = card.offsetLeft;
@@ -654,14 +676,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // 0 = Default, 1 = IP, 2 = Geo, 3 = URL slug (explicit share link)
         let currentConfidence = 0;
 
-        // 1. Render immediately so user sees something. A #slug in the URL
-        // is an explicit choice (bookmark/share link) — it trumps IP/Geo.
+        // 1. Render immediately so user sees something. A #slug[/date][/models]
+        // in the URL is an explicit choice (bookmark/share link) — it trumps
+        // IP/Geo. Segments are recognized by shape, not position.
         let initialSpotName = availableSpots.length > 0 ? availableSpots[0].name : "Devereaux Beach";
-        const urlSlug = decodeURIComponent(window.location.hash.slice(1));
+        const hashParts = decodeURIComponent(window.location.hash.slice(1)).split('/');
+        const urlSlug = hashParts[0];
         const urlSpot = urlSlug && availableSpots.find(s => s.slug === urlSlug);
         if (urlSpot) {
             initialSpotName = urlSpot.name;
             currentConfidence = 3;
+            // Restore the selected day once the cards have rendered
+            const urlDate = hashParts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p));
+            if (urlDate) pendingScrollDate = urlDate;
+            // Restore the models overlay once the chart has rendered
+            // (consumed by renderWaveHeightChart in chart.js — the only
+            // point where the overlay's prerequisites are guaranteed).
+            if (hashParts.includes('models')) window._pendingModelsView = true;
         }
         renderForecast(initialSpotName);
 
@@ -710,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     let lastRenderedSpot = "";
+    let pendingScrollDate = null; // date from a #slug/date deep link, applied after render
 
     init();
 
@@ -1004,6 +1036,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Reflect the displayed spot in the URL (#slug) so it can be
             // bookmarked/shared; replaceState avoids polluting history.
+            // A spot switch resets date and models view (the chart re-render
+            // clears the overlay), so those segments are dropped here.
             const spotSlug = window._spotSlugs[data.spotName];
             if (spotSlug) history.replaceState(null, '', `#${spotSlug}`);
 
@@ -1122,7 +1156,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="day-label">${dayLabel}</span>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             ${miniPlotHtml}
-                            <span class="quality-label" style="background-color: ${day.color};">${day.rating}</span>
+                            <span class="quality-label${day.rating.length > 4 ? ' quality-label--long' : ''}" style="background-color: ${day.color};">${day.rating}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 4px;">
                             <span class="date-label">${day.date}</span>
@@ -1242,6 +1276,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update scroll indicator after rendering
             setTimeout(() => {
                 updateScrollIndicator();
+                // Deep link (#slug/date): restore the selected day now that
+                // the cards exist (also re-adds /date to the URL).
+                if (pendingScrollDate) {
+                    window.scrollToForecastDate(pendingScrollDate);
+                    pendingScrollDate = null;
+                }
             }, 100);
         } catch (e) {
             console.error("Forecast rendering error:", e);
