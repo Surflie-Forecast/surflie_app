@@ -1234,7 +1234,9 @@ input:checked+.slider:before {
 
 .model-compare-btn {
   position: absolute;
-  top: 6px;
+  /* Sits over the hero's bottom edge, clear of the chart area so the
+     day-highlight box never slides underneath it */
+  top: -38px;
   right: 12px;
   padding: 4px 12px;
   border-radius: 999px;
@@ -1262,8 +1264,8 @@ input:checked+.slider:before {
 
 .model-legend {
   position: absolute;
-  top: 8px;
-  right: 90px;
+  top: -35px;
+  right: 96px;
   display: none;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -1302,6 +1304,27 @@ input:checked+.slider:before {
   top: 0;
   pointer-events: none;
   z-index: 3;
+}
+
+/* Model view replaces the bars: keep the wrappers (they define the time
+   axis, date labels, and day-highlight geometry), hide only the bars */
+#waveChartContainer.models-active .chart-bar {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* On small screens the hero bottom holds the search buttons — keep the
+   model controls below the boundary instead (chart has 30px top padding) */
+@media (max-width: 768px) {
+  .model-compare-btn {
+    top: 4px;
+  }
+
+  .model-legend {
+    top: 6px;
+    right: 90px;
+    max-width: calc(100% - 110px);
+  }
 }
 
 /* Wave Height Chart */

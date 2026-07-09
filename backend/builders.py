@@ -36,6 +36,8 @@ WAVE_MODELS = {
     'openmeteo:ecmwf_wam9': 'ECMWF WAM 9km',
     'openmeteo:ecmwf_wam25': 'ECMWF WAM 25km',
     'openmeteo:gwam': 'DWD GWAM 25km',
+    # Overlay-only: Hs with no swell partition, so never display-picked.
+    'cdip:mop': 'CDIP MOP 1km',
 }
 
 
@@ -164,7 +166,14 @@ def build_spot(store, spot, out_dir):
         return False
 
     # --- hourly files ---
-    hourly_by_date = _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d)
+    # Only full days: a trailing day the default model covers partially is
+    # dropped rather than shown with missing hours.
+    full_day = 24 // HOURLY_STEP_H
+    hourly_by_date = {
+        d: entries
+        for d, entries in _build_hourly(wave_h, swell_p, swell_d,
+                                        wind_s, wind_d).items()
+        if len(entries) >= full_day}
     for date_obj, entries in hourly_by_date.items():
         entries.sort(key=lambda e: e['datetime'])
         _write_json(
@@ -180,7 +189,8 @@ def build_spot(store, spot, out_dir):
             by_date[dt.date()][key].append(v)
 
     forecast = []
-    for date_obj in sorted(d for d in by_date if by_date[d]['height'] and d >= today):
+    for date_obj in sorted(d for d in hourly_by_date
+                           if by_date[d]['height'] and d >= today):
         vals = by_date[date_obj]
         rating, color = _daily_rating(hourly_by_date.get(date_obj, []))
         tide_min, tide_min_t, tide_max, tide_max_t = _tide_extremes(
@@ -222,10 +232,14 @@ def build_spot(store, spot, out_dir):
                   else _local_series(store, spot.slug, 'wave_height', tz, source=src))
         if not _usable(series):
             continue
-        points = [
-            {'t': _fmt_dt(dt), 'v': round(v, 2)}
-            for dt, v in series.items()
-            if dt.hour % HOURLY_STEP_H == 0 and not dt.minute]
+        on_hour = [(dt, v) for dt, v in series.items() if not dt.minute]
+        # Trim hourly models to the chart's 3-hour cadence; models with a
+        # coarser cadence (MOP is 6-hourly UTC, off the local 3-hour grid)
+        # keep their native points.
+        stepped = [(dt, v) for dt, v in on_hour if dt.hour % HOURLY_STEP_H == 0]
+        if len(stepped) < len(on_hour) // HOURLY_STEP_H:
+            stepped = on_hour
+        points = [{'t': _fmt_dt(dt), 'v': round(v, 2)} for dt, v in stepped]
         if points:
             models_out.append({
                 'id': src.split(':', 1)[1],

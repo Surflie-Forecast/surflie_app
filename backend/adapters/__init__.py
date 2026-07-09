@@ -10,6 +10,6 @@ Each adapter module exposes:
 To add a new data source, create a module with that interface and append it
 to ADAPTERS. Nothing else in the pipeline needs to change.
 """
-from . import openmeteo_marine, openmeteo_weather, noaa_tides
+from . import cdip_mop, openmeteo_marine, openmeteo_weather, noaa_tides
 
-ADAPTERS = [openmeteo_marine, openmeteo_weather, noaa_tides]
+ADAPTERS = [openmeteo_marine, cdip_mop, openmeteo_weather, noaa_tides]

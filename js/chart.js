@@ -230,10 +230,11 @@ function renderChart(hourlyData) {
 
 const MODEL_COLORS = {
     gfswave025: '#131929',
-    mfwam: '#e11d48',
+    mfwam: '#f59e0b',
     ecmwf_wam9: '#7c3aed',
     ecmwf_wam25: '#c084fc',
     gwam: '#10b981',
+    mop: '#e34948', // notebook-reserved MOP red
 };
 
 function setupModelCompare(spotName) {
@@ -272,6 +273,7 @@ function clearModelOverlay() {
 
     if (container) {
         container._modelData = null;
+        container.classList.remove('models-active');
         const svg = container.querySelector('.model-overlay-svg');
         if (svg) svg.remove();
     }
@@ -346,32 +348,108 @@ function drawModelOverlay(data) {
     svg.setAttribute('width', container.scrollWidth);
     svg.setAttribute('height', top + barH);
 
+    const tooltip = document.getElementById('globalChartTooltip');
+    const BAR_COLOR = '#38bdf8'; // the default model IS the bars — same color
+
+    const toPathD = pts =>
+        pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+
     data.models.forEach(model => {
-        let d = '';
+        const pts = [];
         model.series.forEach(pt => {
-            const t = new Date(pt.t.replace(' ', 'T')).getTime();
-            const x = xFor(t);
+            const t = new Date(pt.t.replace(' ', 'T'));
+            const x = xFor(t.getTime());
             if (x === null) return;
             const y = yFor(pt.v);
-            d += (d ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
+            pts.push({ x, y, v: pt.v, t });
         });
-        if (!d) return;
+        if (pts.length < 2) return;
 
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', d);
-        path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', MODEL_COLORS[model.id] || '#64748b');
-        path.setAttribute('stroke-width', model.default ? 2.5 : 1.5);
-        path.setAttribute('stroke-linejoin', 'round');
-        if (!model.default) path.setAttribute('opacity', '0.85');
-        svg.appendChild(path);
+        const color = model.default ? BAR_COLOR : (MODEL_COLORS[model.id] || '#64748b');
+        const baseWidth = model.default ? 2.5 : 1.5;
+
+        // The final 24 h of a model that ends inside the chart window are
+        // drawn dashed: its forecast is running out. Models clipped by the
+        // chart edge (they continue past it) stay solid to the edge.
+        const lastMs = new Date(model.series[model.series.length - 1].t.replace(' ', 'T')).getTime();
+        const endsInChart = xFor(lastMs) !== null;
+        const cutoff = lastMs - 24 * 3600 * 1000;
+        let solidPts = pts, dashPts = [];
+        if (endsInChart) {
+            solidPts = pts.filter(p => p.t.getTime() <= cutoff);
+            dashPts = pts.filter(p => p.t.getTime() >= cutoff);
+            if (solidPts.length) dashPts.unshift(solidPts[solidPts.length - 1]);
+        }
+
+        const paths = [];
+        [[solidPts, false], [dashPts, true]].forEach(([segment, dashed]) => {
+            if (segment.length < 2) return;
+            const path = document.createElementNS(ns, 'path');
+            path.setAttribute('d', toPathD(segment));
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', color);
+            path.setAttribute('stroke-width', baseWidth);
+            path.setAttribute('stroke-linejoin', 'round');
+            if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+            if (!model.default) path.setAttribute('opacity', '0.85');
+            svg.appendChild(path);
+            paths.push(path);
+        });
+        if (paths.length === 0) return;
+
+        // Invisible wide twin of the line as the hover hit area
+        const hit = document.createElementNS(ns, 'path');
+        hit.setAttribute('d', toPathD(pts));
+        hit.setAttribute('fill', 'none');
+        hit.setAttribute('stroke', 'transparent');
+        hit.setAttribute('stroke-width', 12);
+        hit.style.pointerEvents = 'stroke';
+        hit.style.cursor = 'pointer';
+
+        const showPoint = (clientX) => {
+            if (!tooltip || pts.length === 0) return;
+            const rect = svg.getBoundingClientRect();
+            const mx = clientX - rect.left;
+            let best = pts[0];
+            for (const p of pts) {
+                if (Math.abs(p.x - mx) < Math.abs(best.x - mx)) best = p;
+            }
+            const val = formatHeight(best.v, currentUnit);
+            const unit = getHeightUnit(currentUnit);
+            const timeStr = best.t.toLocaleString('en-US', {
+                weekday: 'short', hour: 'numeric', minute: '2-digit',
+            });
+            tooltip.innerHTML =
+                `<span style="font-size: 0.9rem; font-weight: 700;">` +
+                `<i style="display:inline-block;width:10px;height:3px;border-radius:2px;` +
+                `vertical-align:middle;background:${color}"></i> ` +
+                `${model.label} &bull; ${val}${unit} &bull; ${timeStr}</span>`;
+
+            const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
+            tooltip.style.left = `${cx}px`;
+            tooltip.style.top = `${rect.top + best.y}px`;
+            tooltip.style.transform = 'translate(-50%, -140%)';
+            tooltip.classList.add('visible');
+            paths.forEach(p => p.setAttribute('stroke-width', baseWidth + 1.5));
+        };
+
+        hit.addEventListener('mousemove', e => showPoint(e.clientX));
+        hit.addEventListener('touchstart', e => {
+            if (e.touches.length) showPoint(e.touches[0].clientX);
+        }, { passive: true });
+        hit.addEventListener('mouseleave', () => {
+            if (tooltip) tooltip.classList.remove('visible');
+            paths.forEach(p => p.setAttribute('stroke-width', baseWidth));
+        });
+        svg.appendChild(hit);
     });
 
     container.appendChild(svg);
+    container.classList.add('models-active');
 
     if (legend) {
         legend.innerHTML = data.models.map(m =>
-            `<span class="legend-chip"><i style="background:${MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}${m.default ? ' •' : ''}</span>`
+            `<span class="legend-chip"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`
         ).join('');
         legend.classList.add('visible');
     }

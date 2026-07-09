@@ -11,6 +11,8 @@ INGESTION  (GitHub Actions, every 6 h)
   backend/adapters/          one module per data source
     openmeteo_marine.py      waves — NCEP GFS Wave (default) + 4 comparison
                              models via Open-Meteo, all tagged by source
+    cdip_mop.py              waves — CDIP MOP 1 km California nearshore grid
+                             (overlay-only; THREDDS OPeNDAP ascii, no netCDF deps)
     openmeteo_weather.py     wind  — NOAA GFS via Open-Meteo
     noaa_tides.py            tides — NOAA CO-OPS (nearest station)
         │   all emit the same normalized rows (spot, ts_utc, variable, value, source)
