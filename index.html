@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surflie | Forecast</title>
     <link rel="icon" type="image/png" href="images/favicon.png?v=4">
-    <link rel="stylesheet" href="css/styles.css?v=16">
+    <link rel="stylesheet" href="css/styles.css?v=18">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -84,6 +84,8 @@
                 <div id="modelLegend" class="model-legend"></div>
                 <button id="modelCompareBtn" class="model-compare-btn" style="display: none;"
                     title="Overlay all wave models (combined Hs)">Models</button>
+                <button id="buoyCompareBtn" class="model-compare-btn buoy-compare-btn" style="display: none;"
+                    title="Observed Hs vs MOP forecast vs global models at the buoy">Buoys</button>
             </div>
 
             <section class="chart-section" id="waveChartSection" style="display: none;">
@@ -119,9 +121,9 @@
     <!-- Bump ?v= whenever these files change so cached copies are dropped -->
     <script src="js/rating.js?v=2"></script>
     <script src="js/hourly.js?v=2"></script>
-    <script src="js/chart.js?v=10"></script>
+    <script src="js/chart.js?v=13"></script>
 
-    <script src="js/app.js?v=7"></script>
+    <script src="js/app.js?v=8"></script>
 </body>
 
 </html>

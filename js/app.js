@@ -13,22 +13,24 @@ window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
 window.formatHeight = (val, unit) => unit === 'imperial' ? window.toFeet(val) : val;
 window.getHeightUnit = (unit) => unit === 'imperial' ? 'ft' : 'm';
 
-// URL hash = #slug[/date][/models]. Update the given parts, keep the rest,
-// so spot renders, date clicks and the models toggle can each write their
-// own segment without clobbering the others. No-op until a spot is in the
-// hash (nothing to anchor the view to yet).
+// URL hash = #slug[/date][/models|/buoys]. Update the given parts, keep the
+// rest, so spot renders, date clicks and the models/buoys toggles can each
+// write their own segment without clobbering the others. No-op until a spot
+// is in the hash (nothing to anchor the view to yet).
 window.updateUrlView = (changes) => {
     const parts = window.location.hash.slice(1).split('/');
     const state = {
         slug: parts[0] || '',
         date: parts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p)) || null,
         models: parts.includes('models'),
+        buoys: parts.includes('buoys'),
         ...changes,
     };
     if (!state.slug) return;
     let hash = `#${state.slug}`;
     if (state.date) hash += `/${state.date}`;
     if (state.models) hash += '/models';
+    if (state.buoys) hash += '/buoys';
     history.replaceState(null, '', hash);
 };
 
@@ -190,6 +192,36 @@ document.addEventListener('DOMContentLoaded', () => {
     let heroMap = null;
     let markers = [];
 
+    // Active CA buoy positions (api/buoys.json) — drawn on the hero map and
+    // the full map so the Buoys view's data sources are visible in place.
+    let availableBuoys = [];
+    let heroBuoysAdded = false;
+    const buoysPromise = fetch('api/buoys.json')
+        .then(r => r.ok ? r.json() : [])
+        .catch(() => [])
+        .then(buoys => {
+            availableBuoys = buoys;
+            addHeroBuoyMarkers(); // covers buoys arriving after the map
+            return buoys;
+        });
+
+    function buoyMarker(b, radius, interactive) {
+        return L.circleMarker([b.latitude, b.longitude], {
+            radius,
+            color: '#fff',
+            weight: 1.5,
+            fillColor: '#131929',
+            fillOpacity: 0.95,
+            interactive,
+        });
+    }
+
+    function addHeroBuoyMarkers() {
+        if (!heroMap || heroBuoysAdded || availableBuoys.length === 0) return;
+        heroBuoysAdded = true;
+        availableBuoys.forEach(b => buoyMarker(b, 5, false).addTo(heroMap));
+    }
+
     // Initialize Map Function
     function initMap() {
         if (map) return; // Already initialized
@@ -247,6 +279,8 @@ document.addEventListener('DOMContentLoaded', () => {
             opacity: 0.95, // Fully opaque
             maxZoom: 17
         }).addTo(heroMap);
+
+        addHeroBuoyMarkers(); // covers the map arriving after the buoys
     }
 
     // Update Hero Map Position
@@ -369,6 +403,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Wait for all markers to be created
         await Promise.all(markerPromises);
+
+        // Buoys on the full map get a hover tooltip naming the station
+        // (bounds stay spot-driven — offshore buoys shouldn't zoom us out)
+        const buoys = await buoysPromise;
+        buoys.forEach(b => {
+            const m = buoyMarker(b, 6, true).addTo(map);
+            m.bindTooltip(`CDIP ${b.id} — ${b.name}`, { direction: 'top' });
+            markers.push(m);
+        });
 
         // Fit bounds if we have spots
         if (markers.length > 0) {
@@ -689,10 +732,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Restore the selected day once the cards have rendered
             const urlDate = hashParts.find(p => /^\d{4}-\d{2}-\d{2}$/.test(p));
             if (urlDate) pendingScrollDate = urlDate;
-            // Restore the models overlay once the chart has rendered
-            // (consumed by renderWaveHeightChart in chart.js — the only
-            // point where the overlay's prerequisites are guaranteed).
+            // Restore the models overlay / buoy view once the chart has
+            // rendered (consumed by renderWaveHeightChart in chart.js — the
+            // only point where the views' prerequisites are guaranteed).
             if (hashParts.includes('models')) window._pendingModelsView = true;
+            if (hashParts.includes('buoys')) window._pendingBuoysView = true;
         }
         renderForecast(initialSpotName);
 

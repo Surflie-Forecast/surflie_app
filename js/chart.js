@@ -45,23 +45,29 @@ async function renderWaveHeightChart(spotName, forecastDays) {
         if (allHours.length === 0) {
             chartContainer.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px;">No hourly data available for chart</div>';
             setupModelCompare(null);
+            setupBuoyCompare(null);
             return;
         }
 
         renderChart(allHours);
         setupModelCompare(spotName);
+        setupBuoyCompare(spotName);
 
-        // Deep link (#slug[/date]/models): restore the overlay now — the
-        // only point where the chart data and compare button are both ready.
+        // Deep link (#slug[/date]/models or /buoys): restore the view now —
+        // the only point where the chart data and buttons are both ready.
         if (window._pendingModelsView) {
             window._pendingModelsView = false;
             toggleModelOverlay();
+        } else if (window._pendingBuoysView) {
+            window._pendingBuoysView = false;
+            toggleBuoyView();
         }
 
     } catch (error) {
         console.error("Error rendering chart:", error);
         chartContainer.innerHTML = '<div style="width:100%; text-align:center; padding-top: 50px; color:red;">Failed to load chart</div>';
         setupModelCompare(null);
+        setupBuoyCompare(null);
     }
 }
 
@@ -341,6 +347,9 @@ function setupModelCompare(spotName) {
                 if (container && container._modelData) {
                     drawModelOverlay(container._modelData);
                 }
+                if (container && container._buoyData) {
+                    drawBuoyChart(container._buoyData);
+                }
             }, 200);
         });
     }
@@ -363,6 +372,9 @@ function clearModelOverlay() {
         renderBarYAxis(container); // back to the bars' scale
     }
     if (btn) btn.classList.remove('active');
+    // The Buoys button steps aside while the model view owns the strip
+    const buoyBtn = document.getElementById('buoyCompareBtn');
+    if (buoyBtn) buoyBtn.style.visibility = '';
     if (legend) {
         legend.classList.remove('visible');
         legend.innerHTML = '';
@@ -386,10 +398,14 @@ async function toggleModelOverlay() {
         const data = await res.json();
         if (!data.models || data.models.length === 0) throw new Error('no models');
 
+        clearBuoyView();
+        const buoyBtn = document.getElementById('buoyCompareBtn');
+        if (buoyBtn) buoyBtn.style.visibility = 'hidden';
+
         container._modelData = data;
         drawModelOverlay(data);
         btn.classList.add('active');
-        if (window.updateUrlView) window.updateUrlView({ models: true });
+        if (window.updateUrlView) window.updateUrlView({ models: true, buoys: false });
     } catch (e) {
         console.warn('Model comparison unavailable:', e);
         btn.disabled = true;
@@ -590,6 +606,376 @@ function drawModelOverlay(data) {
         legend.classList.add('visible');
         legend.querySelectorAll('.legend-chip').forEach(chip => {
             const id = chip.dataset.modelId;
+            if (refs[id]) refs[id].chip = chip;
+            chip.addEventListener('mouseenter', () => setHot(id, true));
+            chip.addEventListener('mouseleave', () => setHot(id, false));
+        });
+    }
+}
+
+// --- Buoy Comparison View ---
+// The notebook's "apples-to-apples at the buoys" panel: observed Hs (dots),
+// CDIP's MOP forecast at the buoy site (red), and the global models
+// re-fetched at the buoy's coordinates. Unlike the model overlay this view
+// has its own time axis spanning the full data extent — past observations on
+// the left (checkable against the forecast lines), each model drawn out to
+// its own horizon on the right.
+
+const DEFAULT_BUOY = '071'; // Harvest
+
+// No fixed window: the buoy view spans the full extent of whatever data the
+// file holds — earliest observation on the left, latest forecast point on the
+// right — so every series is drawn to where its own data actually runs out.
+const BUOY_INK = '#0b0b0b'; // observations are ink, not a series hue
+
+function setupBuoyCompare(spotName) {
+    const btn = document.getElementById('buoyCompareBtn');
+    if (!btn) return;
+
+    clearBuoyView();
+
+    if (!spotName) {
+        btn.style.display = 'none';
+        return;
+    }
+
+    btn.style.display = 'inline-flex';
+
+    if (!btn._bound) {
+        btn._bound = true;
+        btn.addEventListener('click', toggleBuoyView);
+    }
+}
+
+function clearBuoyView() {
+    const container = document.getElementById('waveChartContainer');
+    const btn = document.getElementById('buoyCompareBtn');
+    const modelBtn = document.getElementById('modelCompareBtn');
+    const legend = document.getElementById('modelLegend');
+
+    if (container) {
+        const wasActive = !!container._buoyData;
+        container._buoyData = null;
+        container.classList.remove('buoys-active');
+        const svg = container.querySelector('.buoy-overlay-svg');
+        if (svg) {
+            svg.style.opacity = '0';
+            setTimeout(() => svg.remove(), 400);
+        }
+        const spacer = container.querySelector('.buoy-scroll-spacer');
+        if (spacer) spacer.remove();
+        if (wasActive) {
+            container.scrollLeft = 0; // bars start at the left edge again
+            renderBarYAxis(container); // back to the bars' scale
+            if (legend) {
+                legend.classList.remove('visible');
+                legend.innerHTML = '';
+            }
+        }
+    }
+    if (btn) btn.classList.remove('active');
+    if (modelBtn) modelBtn.style.visibility = '';
+}
+
+async function toggleBuoyView() {
+    const btn = document.getElementById('buoyCompareBtn');
+    const container = document.getElementById('waveChartContainer');
+    if (!btn || !container) return;
+
+    if (container._buoyData) {
+        clearBuoyView();
+        if (window.updateUrlView) window.updateUrlView({ buoys: false });
+        return;
+    }
+
+    try {
+        const res = await fetch(`api/buoys/${DEFAULT_BUOY}.json`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.models || data.models.length === 0) throw new Error('no series');
+
+        // Mutually exclusive with the model overlay
+        clearModelOverlay();
+        const modelBtn = document.getElementById('modelCompareBtn');
+        if (modelBtn) modelBtn.style.visibility = 'hidden';
+
+        container._buoyData = data;
+        drawBuoyChart(data);
+        btn.classList.add('active');
+        if (window.updateUrlView) window.updateUrlView({ buoys: true, models: false });
+    } catch (e) {
+        console.warn('Buoy comparison unavailable:', e);
+        btn.disabled = true;
+        setTimeout(() => { btn.disabled = false; }, 3000);
+    }
+}
+
+function drawBuoyChart(data) {
+    const container = document.getElementById('waveChartContainer');
+    const legend = document.getElementById('modelLegend');
+    if (!container) return;
+
+    const old = container.querySelector('.buoy-overlay-svg');
+    if (old) old.remove();
+
+    // Open the side gutters BEFORE measuring (they reflow the container)
+    const section = document.getElementById('waveChartSection');
+    if (section) section.classList.add('models-gutters');
+
+    const parseT = s => new Date(s.replace(' ', 'T')).getTime();
+    const now = Date.now();
+    const PADX = 6;
+
+    // No fixed window: span the FULL extent of the data. tMin is the earliest
+    // observation, tMax the latest forecast point across every series — so all
+    // the past observations stay and each model is drawn to wherever its own
+    // horizon ends (they differ: GFS Wave ~16 d, MFWAM ~10, GWAM/MOP ~8).
+    const obs = (data.observed || []).map(p => ({ t: parseT(p.t), v: p.v }));
+    const modelPts = (data.models || []).map(model => ({
+        model,
+        pts: model.series.map(p => ({ t: parseT(p.t), v: p.v })),
+    }));
+    const allT = [
+        ...obs.map(p => p.t),
+        ...modelPts.flatMap(m => m.pts.map(p => p.t)),
+    ];
+    const tMin = allT.length ? Math.min(...allT) : now - 3 * 86400e3;
+    const tMax = allT.length ? Math.max(...allT) : now + 8 * 86400e3;
+    const spanDays = Math.max((tMax - tMin) / 86400e3, 1);
+
+    // Measure the bars' vertical band and pixels-per-day NOW, while they're
+    // still laid out — activating the buoy view below collapses them. We build
+    // our own wide, scrollable timeline at the SAME density as the bars; the
+    // observation window fills the screen first, the forecast tail scrolls in.
+    const wrappers = container.querySelectorAll('.chart-bar-wrapper');
+    const top = wrappers.length ? wrappers[0].offsetTop : 8;
+    const barH = wrappers.length
+        ? wrappers[0].offsetHeight
+        : Math.max(container.clientHeight - 16, 100);
+
+    const viewW = container.clientWidth;
+    let pxPerDay = (viewW - 2 * PADX) / spanDays;
+    if (wrappers.length >= 2 && container._hourlyData) {
+        const barMs = container._hourlyData;
+        const spanBarsDays =
+            (parseT(barMs[barMs.length - 1].datetime) - parseT(barMs[0].datetime)) / 86400e3;
+        const barsPx = wrappers[wrappers.length - 1].offsetLeft
+            + wrappers[wrappers.length - 1].offsetWidth
+            - wrappers[0].offsetLeft;
+        if (spanBarsDays > 0) pxPerDay = barsPx / spanBarsDays;
+    }
+    const W = Math.max(viewW, Math.round(pxPerDay * spanDays + 2 * PADX));
+    const xFor = t => PADX + ((t - tMin) / (tMax - tMin)) * (W - 2 * PADX);
+
+    // Now collapse the bars and switch on the buoy layout
+    container.classList.add('buoys-active');
+
+    const projected = modelPts.map(({ model, pts }) => ({
+        model,
+        pts: pts.map(p => ({ x: xFor(p.t), v: p.v, t: new Date(p.t) })),
+    }));
+
+    let vMax = 0;
+    obs.forEach(p => { vMax = Math.max(vMax, p.v); });
+    projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
+    const scaleMax = Math.max(vMax, 0.1) * 1.1;
+    const yTop = top + 4;
+    const yBottom = top + barH - 26; // bottom band holds the date labels
+    const yFor = v => yTop + (yBottom - yTop) * (1 - v / scaleMax);
+
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('class', 'model-overlay-svg buoy-overlay-svg');
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', top + barH);
+
+    // Day separators + date labels (every other day when narrow)
+    const nDays = (tMax - tMin) / 86400e3;
+    const labelEvery = (W / nDays) < 46 ? 2 : 1;
+    const dayStart = new Date(tMin);
+    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setDate(dayStart.getDate() + 1);
+    let dayIdx = 0;
+    for (let d = new Date(dayStart); d.getTime() <= tMax; d.setDate(d.getDate() + 1), dayIdx++) {
+        const x = xFor(d.getTime());
+        const line = document.createElementNS(ns, 'line');
+        line.setAttribute('x1', x.toFixed(1));
+        line.setAttribute('x2', x.toFixed(1));
+        line.setAttribute('y1', yTop);
+        line.setAttribute('y2', yBottom + 6);
+        line.setAttribute('stroke', 'rgba(0,0,0,0.09)');
+        line.setAttribute('stroke-dasharray', '2 3');
+        svg.appendChild(line);
+        if (dayIdx % labelEvery === 0) {
+            const label = document.createElementNS(ns, 'text');
+            label.textContent = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
+            label.setAttribute('x', (x + 4).toFixed(1));
+            label.setAttribute('y', top + barH - 8);
+            label.setAttribute('font-size', '11');
+            label.setAttribute('font-weight', '600');
+            label.setAttribute('fill', '#475569');
+            svg.appendChild(label);
+        }
+    }
+
+    // "Now" line: everything to its left is checkable against the dots
+    const nowLine = document.createElementNS(ns, 'line');
+    nowLine.setAttribute('x1', xFor(now).toFixed(1));
+    nowLine.setAttribute('x2', xFor(now).toFixed(1));
+    nowLine.setAttribute('y1', yTop - 2);
+    nowLine.setAttribute('y2', yBottom);
+    nowLine.setAttribute('stroke', '#52514e');
+    nowLine.setAttribute('stroke-dasharray', '5 4');
+    nowLine.setAttribute('opacity', '0.6');
+    svg.appendChild(nowLine);
+
+    const tooltip = document.getElementById('globalChartTooltip');
+    const toPathD = pts =>
+        pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+
+    // Two-way hover link between series and legend chips
+    const refs = {};
+    const setHot = (id, on) => {
+        Object.entries(refs).forEach(([oid, ref]) => {
+            const hot = on && oid === id;
+            (ref.paths || []).forEach(p => {
+                p.setAttribute('stroke-width', ref.baseWidth + (hot ? 1.5 : 0));
+                p.setAttribute('opacity', on && !hot ? '0.25' : ref.baseOpacity);
+            });
+            (ref.dots || []).forEach(c => {
+                c.setAttribute('opacity', on && !hot ? '0.2' : '0.75');
+                c.setAttribute('r', hot ? 3.2 : 2.5);
+            });
+            if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
+        });
+    };
+
+    const showTooltip = (clientX, pts, color, id) => {
+        if (!tooltip || pts.length === 0) return;
+        const rect = svg.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        let best = pts[0];
+        for (const p of pts) {
+            if (Math.abs(p.x - mx) < Math.abs(best.x - mx)) best = p;
+        }
+        const val = formatHeight(best.v, currentUnit);
+        const unit = getHeightUnit(currentUnit);
+        const timeStr = best.t.toLocaleString('en-US', {
+            weekday: 'short', hour: 'numeric', minute: '2-digit',
+        });
+        tooltip.innerHTML =
+            `<span style="font-size: 0.9rem; font-weight: 700;">` +
+            `<i style="display:inline-block;width:10px;height:3px;border-radius:2px;` +
+            `vertical-align:middle;background:${color}"></i> ` +
+            `${val}${unit} &bull; ${timeStr}</span>`;
+        const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
+        tooltip.style.left = `${cx}px`;
+        tooltip.style.top = `${rect.top + best.y}px`;
+        tooltip.style.transform = 'translate(-50%, -140%)';
+        tooltip.classList.add('visible');
+        setHot(id, true);
+    };
+    const hideTooltip = (id) => {
+        if (tooltip) tooltip.classList.remove('visible');
+        setHot(id, false);
+    };
+
+    // Forecast lines: MOP keeps its reserved red and reads heavier — it is
+    // the site-exact forecast the others are being judged against
+    projected.forEach(({ model, pts }) => {
+        pts.forEach(p => { p.y = yFor(p.v); });
+        if (pts.length < 2) return;
+
+        const color = MODEL_COLORS[model.id] || '#64748b';
+        const isMop = model.id === 'mop';
+        const baseWidth = isMop ? 2.2 : 1.5;
+        const baseOpacity = isMop ? '1' : '0.85';
+
+        const path = document.createElementNS(ns, 'path');
+        path.setAttribute('d', toPathD(pts));
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', color);
+        path.setAttribute('stroke-width', baseWidth);
+        path.setAttribute('stroke-linejoin', 'round');
+        path.setAttribute('opacity', baseOpacity);
+        svg.appendChild(path);
+        refs[model.id] = { paths: [path], baseWidth, baseOpacity };
+
+        // Invisible wide twin of the line as the hover hit area
+        const hit = document.createElementNS(ns, 'path');
+        hit.setAttribute('d', toPathD(pts));
+        hit.setAttribute('fill', 'none');
+        hit.setAttribute('stroke', 'transparent');
+        hit.setAttribute('stroke-width', 12);
+        hit.style.pointerEvents = 'stroke';
+        hit.style.cursor = 'pointer';
+        hit.addEventListener('mousemove', e => showTooltip(e.clientX, pts, color, model.id));
+        hit.addEventListener('touchstart', e => {
+            if (e.touches.length) showTooltip(e.touches[0].clientX, pts, color, model.id);
+        }, { passive: true });
+        hit.addEventListener('mouseleave', () => hideTooltip(model.id));
+        svg.appendChild(hit);
+    });
+
+    // Observed Hs on top: ink dots, the ground truth
+    const obsPts = obs.map(p => ({ x: xFor(p.t), y: yFor(p.v), v: p.v, t: new Date(p.t) }));
+    const dots = obsPts.map(p => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', p.x.toFixed(1));
+        c.setAttribute('cy', p.y.toFixed(1));
+        c.setAttribute('r', 2.5);
+        c.setAttribute('fill', BUOY_INK);
+        c.setAttribute('opacity', '0.75');
+        c.style.pointerEvents = 'all';
+        c.style.cursor = 'pointer';
+        c.addEventListener('mousemove', e => showTooltip(e.clientX, obsPts, BUOY_INK, 'observed'));
+        c.addEventListener('touchstart', e => {
+            if (e.touches.length) showTooltip(e.touches[0].clientX, obsPts, BUOY_INK, 'observed');
+        }, { passive: true });
+        c.addEventListener('mouseleave', () => hideTooltip('observed'));
+        svg.appendChild(c);
+        return c;
+    });
+    if (dots.length) refs.observed = { dots };
+
+    // The SVG is absolutely positioned (out of flow), so on its own it can't
+    // widen the scrollport. The bars only span the forecast window; our
+    // timeline is wider (3 extra past days). A zero-height spacer at width W
+    // gives the container the right scrollWidth so it scrolls the full span.
+    const spacer = document.createElement('div');
+    spacer.className = 'buoy-scroll-spacer';
+    spacer.style.cssText =
+        `width:${W}px;min-width:${W}px;height:0;flex:0 0 ${W}px;pointer-events:none;`;
+    container.appendChild(spacer);
+
+    // Fade in over the bars fading out (shared CSS transition). Start at the
+    // left edge: with "now" only 3 days into an 18-day span, the past
+    // observations + the near-term forecast (where the models are checkable
+    // against the dots) already fill the screen; the forecast tail is a
+    // scroll to the right, exactly like the bars/models views.
+    svg.style.opacity = '0';
+    container.appendChild(svg);
+    container.scrollLeft = 0;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        svg.style.opacity = '1';
+    }));
+
+    renderModelYAxis(svg, scaleMax, yFor);
+    container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
+
+    if (legend) {
+        const chips = [
+            `<span class="legend-chip legend-chip--title">${data.label}</span>`,
+            `<span class="legend-chip" data-series-id="observed">` +
+            `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>observed Hs</span>`,
+            ...data.models.map(m =>
+                `<span class="legend-chip" data-series-id="${m.id}">` +
+                `<i style="background:${MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}</span>`),
+        ];
+        legend.innerHTML = chips.join('');
+        legend.classList.add('visible');
+        legend.querySelectorAll('.legend-chip[data-series-id]').forEach(chip => {
+            const id = chip.dataset.seriesId;
             if (refs[id]) refs[id].chip = chip;
             chip.addEventListener('mouseenter', () => setHot(id, true));
             chip.addEventListener('mouseleave', () => setHot(id, false));

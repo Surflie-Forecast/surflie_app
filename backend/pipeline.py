@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from adapters import ADAPTERS
 from builders import build_all
+from buoys import build_buoys
 from spots import load_spots
 from store import ForecastStore
 
@@ -66,6 +67,14 @@ def main():
 
     print("\nBuilding static JSON...")
     build_all(store, spots, API_DIR)
+
+    # Non-critical: the buoy comparison view degrades to absent, never
+    # blocks publishing the forecast snapshot.
+    print("\nBuilding buoy comparison files...")
+    try:
+        build_buoys(API_DIR)
+    except Exception as e:
+        print(f"  X buoys failed: {e}")
 
     if critical_failures:
         print("\n❌ Critical source failures — refusing to publish a degraded snapshot:")

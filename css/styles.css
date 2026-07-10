@@ -1312,6 +1312,13 @@ input:checked+.slider:before {
   transition: border-color 0.15s, background-color 0.15s, color 0.15s;
 }
 
+/* Non-interactive title chip (buoy view): names the buoy being compared */
+.model-legend .legend-chip--title {
+  background: #131929;
+  color: #fff;
+  cursor: default;
+}
+
 /* Hot = hovered directly, or its line is hovered in the plot */
 .model-legend .legend-chip.legend-chip--hot {
   background: #fff;
@@ -1444,7 +1451,7 @@ input:checked+.slider:before {
    (inline top:0 is set in JS, hence the !important). The easing lands
    softly: fast start, long gentle deceleration. */
 #waveChartContainer .axis-label {
-  transition: top 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: top 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
 }
 
 #waveChartContainer.models-active .axis-label {
@@ -1501,6 +1508,54 @@ input:checked+.slider:before {
   .hero.compact~.chart-section #waveChartContainer.models-active .chart-highlight-overlay {
     top: 74px;
   }
+}
+
+/* --- Buoy comparison view --- */
+
+/* Sits left of the Models button in the hero; when active it slides into
+   the Models slot (the Models button hides while the buoy view is on) */
+.buoy-compare-btn {
+  right: 88px;
+  transition: background-color 0.2s, color 0.2s,
+    top 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    right 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.buoy-compare-btn.active {
+  right: 12px;
+}
+
+/* Buoy view has its own time axis (it reaches 3 days into the past, which the
+   bars don't cover), so the bars, their day separators, date labels and the
+   day-highlight box all stand down — the SVG carries its own separators and
+   labels. The bar wrappers collapse to zero width so a single spacer element
+   (sized in JS to the full 3-past + 15-forecast day span) defines the
+   scrollWidth, letting the plot scroll like the bars/models views. */
+#waveChartContainer.buoys-active {
+  overflow-x: auto;
+}
+
+#waveChartContainer.buoys-active .chart-bar {
+  opacity: 0;
+  transform: translateY(26px);
+  pointer-events: none;
+}
+
+#waveChartContainer.buoys-active .chart-bar-wrapper {
+  min-width: 0 !important;
+  width: 0 !important;
+  flex: 0 0 0 !important;
+  overflow: hidden;
+  border-left-color: transparent !important;
+}
+
+#waveChartContainer.buoys-active .axis-label {
+  opacity: 0;
+}
+
+/* !important: forecast-scroll syncing keeps setting display:block inline */
+#waveChartContainer.buoys-active .chart-highlight-overlay {
+  display: none !important;
 }
 
 /* Wave Height Chart */
