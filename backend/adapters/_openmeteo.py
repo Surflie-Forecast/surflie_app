@@ -59,3 +59,72 @@ def fetch_hourly_rows(url, spot, varmap, source, start_utc, end_utc, extra_param
                     'source': source,
                 })
     return rows
+
+
+def _parse_hourly(obj, slug, varmap, source, start_utc, end_utc):
+    """Turn one location's response object into store rows for that slug."""
+    hourly = obj.get('hourly') or {}
+    times = [
+        datetime.fromisoformat(t).replace(tzinfo=timezone.utc)
+        for t in hourly.get('time', [])
+    ]
+
+    rows = []
+    for api_var, variable in varmap.items():
+        values = hourly.get(api_var)
+        if values is None:
+            # Multi-model responses suffix keys with the model name.
+            values = next(
+                (hourly[k] for k in hourly if k.startswith(api_var + '_')), None)
+        if values is None:
+            continue
+        for ts, val in zip(times, values):
+            if val is not None and start_utc <= ts <= end_utc:
+                rows.append({
+                    'spot': slug,
+                    'ts_utc': ts.isoformat(),
+                    'variable': variable,
+                    'value': float(val),
+                    'source': source,
+                })
+    return rows
+
+
+def fetch_hourly_rows_batch(url, coords, varmap, source, start_utc, end_utc,
+                            extra_params):
+    """Fetch hourly variables for many coordinates in ONE request.
+
+    coords is a list of (slug, lat, lon). Open-Meteo accepts comma-joined
+    latitude/longitude and returns a JSON array, one object per coordinate in
+    input order (a single coordinate returns a bare object, normalized here).
+
+    Returns (rows, snapped): rows are store rows for all locations; snapped
+    maps slug -> (resp_lat, resp_lon), the grid coordinate each location
+    reported it actually used, so callers can cache the resolved cell.
+    """
+    params = {
+        'latitude': ','.join(str(lat) for _, lat, _ in coords),
+        'longitude': ','.join(str(lon) for _, _, lon in coords),
+        'hourly': ','.join(varmap),
+        'start_date': start_utc.date().isoformat(),
+        'end_date': end_utc.date().isoformat(),
+        'timezone': 'GMT',
+    }
+    params.update(extra_params)
+
+    data = get_json(url, params)
+    if isinstance(data, dict):
+        data = [data]
+
+    rows = []
+    snapped = {}
+    for i, (slug, _, _) in enumerate(coords):
+        if i >= len(data):
+            break
+        obj = data[i]
+        if not obj or not obj.get('hourly'):
+            continue
+        rows.extend(_parse_hourly(obj, slug, varmap, source, start_utc, end_utc))
+        if obj.get('latitude') is not None and obj.get('longitude') is not None:
+            snapped[slug] = (obj['latitude'], obj['longitude'])
+    return rows, snapped

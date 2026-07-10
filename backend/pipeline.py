@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 from adapters import ADAPTERS
 from builders import build_all
 from buoys import build_buoys
-from spots import load_spots
+from spots import load_spots, save_spots
 from store import ForecastStore
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -47,10 +47,34 @@ def main():
     store = ForecastStore()
     critical_failures = []
 
+    # A single window covering every spot's local-day range. Spots share a
+    # timezone in practice but not by guarantee; the builders clip each spot's
+    # own local days, so a slightly wider batch fetch is harmless.
+    windows = [spot_window_utc(spot) for spot in spots]
+    batch_start = min(w[0] for w in windows)
+    batch_end = max(w[1] for w in windows)
+
+    # Adapters exposing fetch_batch (the Open-Meteo sources) fetch all spots in
+    # one multi-coordinate request; the rest keep the per-spot loop.
+    batch_adapters = [a for a in ADAPTERS if hasattr(a, 'fetch_batch')]
+    per_spot_adapters = [a for a in ADAPTERS if not hasattr(a, 'fetch_batch')]
+
+    for adapter in batch_adapters:
+        try:
+            rows = adapter.fetch_batch(spots, batch_start, batch_end)
+            store.extend(rows)
+            print(f"\n{adapter.NAME}: {len(rows)} rows (batched, {len(spots)} spots)")
+            if not rows and adapter.CRITICAL:
+                critical_failures.append(('(all)', adapter.NAME, 'no rows'))
+        except Exception as e:
+            print(f"\nX {adapter.NAME} failed: {e}")
+            if adapter.CRITICAL:
+                critical_failures.append(('(all)', adapter.NAME, e))
+
     for spot in spots:
         start_utc, end_utc = spot_window_utc(spot)
         print(f"\n{spot.name} ({spot.latitude:.3f}, {spot.longitude:.3f})")
-        for adapter in ADAPTERS:
+        for adapter in per_spot_adapters:
             try:
                 rows = adapter.fetch(spot, start_utc, end_utc)
                 store.extend(rows)
@@ -75,6 +99,12 @@ def main():
         build_buoys(API_DIR)
     except Exception as e:
         print(f"  X buoys failed: {e}")
+
+    # Persist any newly resolved marine cells so future runs batch straight
+    # through without re-running the per-spot dead-cell search. Runs even if
+    # buoys failed above.
+    save_spots(LOCATIONS_FILE, spots)
+    print(f"\nUpdated resolved cells -> {LOCATIONS_FILE}")
 
     if critical_failures:
         print("\n❌ Critical source failures — refusing to publish a degraded snapshot:")

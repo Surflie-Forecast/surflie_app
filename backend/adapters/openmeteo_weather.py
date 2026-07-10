@@ -18,12 +18,26 @@ VARMAP = {
 }
 
 
+EXTRA_PARAMS = {
+    'models': MODEL,
+    'wind_speed_unit': 'kn',
+    'cell_selection': 'nearest',
+}
+
+
 def fetch(spot, start_utc, end_utc):
     return _openmeteo.fetch_hourly_rows(
         URL, spot, VARMAP, SOURCE, start_utc, end_utc,
-        extra_params={
-            'models': MODEL,
-            'wind_speed_unit': 'kn',
-            'cell_selection': 'nearest',
-        },
+        extra_params=EXTRA_PARAMS,
     )
+
+
+def fetch_batch(spots, start_utc, end_utc):
+    """One multi-coordinate request for all spots. Weather uses
+    cell_selection=nearest, so no dead-cell logic is needed."""
+    coords = [(s.slug, s.latitude, s.longitude) for s in spots]
+    rows, _ = _openmeteo.fetch_hourly_rows_batch(
+        URL, coords, VARMAP, SOURCE, start_utc, end_utc,
+        extra_params=EXTRA_PARAMS,
+    )
+    return rows
