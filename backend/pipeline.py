@@ -93,10 +93,12 @@ def main():
     build_all(store, spots, API_DIR)
 
     # Non-critical: the buoy comparison view degrades to absent, never
-    # blocks publishing the forecast snapshot.
+    # blocks publishing the forecast snapshot. Also fills any spot's blank
+    # closest_buoy (persisted below by save_spots; it lands in spots.json on
+    # the next run).
     print("\nBuilding buoy comparison files...")
     try:
-        build_buoys(API_DIR)
+        build_buoys(API_DIR, spots)
     except Exception as e:
         print(f"  X buoys failed: {e}")
 

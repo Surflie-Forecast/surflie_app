@@ -7,6 +7,9 @@ let currentUnit = localStorage.getItem('surfForecastUnit') || 'imperial';
 // Spot slugs (populated from spots.json) — slugs are the stable API file ids
 window._spotSlugs = {};
 window.apiSpotId = (name) => window._spotSlugs[name] || encodeURIComponent(name);
+// Spot name -> preassigned closest CDIP buoy id (also from spots.json);
+// the Buoys view opens this station's comparison file.
+window._spotBuoys = {};
 
 window.toFeet = (meters) => (meters * 3.28084).toFixed(1);
 window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
@@ -706,6 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 availableSpots = await spotsRes.json();
                 availableSpots.forEach(s => {
                     if (s.slug) window._spotSlugs[s.name] = s.slug;
+                    if (s.closest_buoy) window._spotBuoys[s.name] = s.closest_buoy;
                 });
             } else {
                 console.error("Failed to fetch spots list");

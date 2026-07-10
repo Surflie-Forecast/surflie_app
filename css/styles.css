@@ -1243,9 +1243,10 @@ input:checked+.slider:before {
 .model-compare-btn {
   position: absolute;
   /* Sits over the hero's bottom edge, clear of the chart area so the
-     day-highlight box never slides underneath it */
+     day-highlight box never slides underneath it. Left of the Buoys
+     button, which owns the corner slot (right: 12px, below). */
   top: -38px;
-  right: 12px;
+  right: 88px;
   height: 22px;
   display: inline-flex;
   align-items: center;
@@ -1261,7 +1262,8 @@ input:checked+.slider:before {
   letter-spacing: 0.02em;
   cursor: pointer;
   transition: background-color 0.2s, color 0.2s,
-    top 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+    top 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    right 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .model-compare-btn:hover {
@@ -1310,13 +1312,6 @@ input:checked+.slider:before {
   cursor: pointer;
   border: 1px solid transparent;
   transition: border-color 0.15s, background-color 0.15s, color 0.15s;
-}
-
-/* Non-interactive title chip (buoy view): names the buoy being compared */
-.model-legend .legend-chip--title {
-  background: #131929;
-  color: #fff;
-  cursor: default;
 }
 
 /* Hot = hovered directly, or its line is hovered in the plot */
@@ -1479,10 +1474,8 @@ input:checked+.slider:before {
   top: 6px;
 }
 
-.hero.compact+.chart-gap-container .model-legend {
-  right: 96px;
-  max-width: calc(100% - 120px);
-}
+/* (No compact legend override: the legend only shows while a compare view
+   is on, where the body.models-mode / body.buoys-mode rules place it.) */
 
 .hero.compact~.chart-section #waveChartContainer .chart-highlight-overlay {
   top: 32px;
@@ -1497,8 +1490,6 @@ input:checked+.slider:before {
 
   .model-legend {
     top: 6px;
-    right: 86px;
-    max-width: calc(100% - 106px);
   }
 
   /* Legend wraps to several rows on narrow screens: drop the highlight
@@ -1512,17 +1503,75 @@ input:checked+.slider:before {
 
 /* --- Buoy comparison view --- */
 
-/* Sits left of the Models button in the hero; when active it slides into
-   the Models slot (the Models button hides while the buoy view is on) */
+/* Owns the corner slot, right of the Models button (relabelled
+   "Closest buoy" in JS whenever either compare view is on). */
 .buoy-compare-btn {
-  right: 88px;
-  transition: background-color 0.2s, color 0.2s,
-    top 0.65s cubic-bezier(0.22, 1, 0.36, 1),
-    right 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+  right: 12px;
 }
 
-.buoy-compare-btn.active {
+/* Either compare view on: both buttons drop into the boundary strip —
+   [legend][Models][Closest buoy] — so each view is one click from the
+   other. The Models button slides further left so the corner button's
+   wider "Closest buoy" label fits beside it. */
+body.models-mode .model-compare-btn,
+body.buoys-mode .model-compare-btn {
+  top: 6px;
+  right: 124px;
+}
+
+body.models-mode .buoy-compare-btn,
+body.buoys-mode .buoy-compare-btn {
   right: 12px;
+}
+
+body.models-mode .model-legend,
+body.buoys-mode .model-legend {
+  right: 202px;
+  max-width: calc(100% - 214px);
+}
+
+/* Buoy view hero: the h1 itself is re-filled by JS as
+   "CDIP {id}" + buoy name in the .hero-region slot + a .buoy-hero-sub line
+   ("the closest buoy to {spot}"). On desktop the sub line renders as the
+   separate bottom-left #buoyHeroLabel instead; on small screens it stays
+   inside the title block (the search bar owns the hero bottom there). */
+.buoy-hero-label {
+  display: none;
+  position: absolute;
+  left: 20px;
+  bottom: 12px;
+  z-index: 2;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-align: left;
+}
+
+body.buoys-mode .buoy-hero-label {
+  display: block;
+}
+
+/* In-title variant of the sub line: small-screen only */
+.buoy-hero-sub {
+  display: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  opacity: 0.9;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 768px) {
+  body.buoys-mode .buoy-hero-label {
+    display: none;
+  }
+
+  .buoy-hero-sub {
+    display: block;
+  }
 }
 
 /* Buoy view has its own time axis (it reaches 3 days into the past, which the

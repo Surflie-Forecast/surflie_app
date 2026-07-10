@@ -283,6 +283,9 @@ def build_all(store, spots, out_dir):
             'region': s.region,
             'latitude': s.latitude,
             'longitude': s.longitude,
+            # Preassigned CDIP station for the Buoys view ('' until the
+            # first pipeline run after the spot is added).
+            'closest_buoy': s.closest_buoy,
         }
         for s in built
     ])

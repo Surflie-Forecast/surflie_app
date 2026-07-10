@@ -374,9 +374,14 @@ function clearModelOverlay() {
         renderBarYAxis(container); // back to the bars' scale
     }
     if (btn) btn.classList.remove('active');
-    // The Buoys button steps aside while the model view owns the strip
+    // Model view off: the Buoys button leaves the strip and goes back to
+    // being the plain "Buoys" toggle (toggleBuoyView re-labels it if we're
+    // switching straight into the buoy view).
+    document.body.classList.remove('models-mode');
     const buoyBtn = document.getElementById('buoyCompareBtn');
-    if (buoyBtn) buoyBtn.style.visibility = '';
+    if (buoyBtn && !buoyBtn.classList.contains('active')) {
+        buoyBtn.textContent = 'Buoys';
+    }
     if (legend) {
         legend.classList.remove('visible');
         legend.innerHTML = '';
@@ -401,8 +406,11 @@ async function toggleModelOverlay() {
         if (!data.models || data.models.length === 0) throw new Error('no models');
 
         clearBuoyView();
+        // Model view on: the Buoys button drops into the strip alongside
+        // (body.models-mode) and narrows its offer to the spot's station.
+        document.body.classList.add('models-mode');
         const buoyBtn = document.getElementById('buoyCompareBtn');
-        if (buoyBtn) buoyBtn.style.visibility = 'hidden';
+        if (buoyBtn) buoyBtn.textContent = 'Closest buoy';
 
         container._modelData = data;
         drawModelOverlay(data);
@@ -623,6 +631,8 @@ function drawModelOverlay(data) {
 // the left (checkable against the forecast lines), each model drawn out to
 // its own horizon on the right.
 
+// Fallback when a spot has no preassigned closest buoy yet (spots.json's
+// closest_buoy is filled by the pipeline; see window._spotBuoys in app.js).
 const DEFAULT_BUOY = '071'; // Harvest
 
 // No fixed window: the buoy view spans the full extent of whatever data the
@@ -642,6 +652,7 @@ function setupBuoyCompare(spotName) {
     }
 
     btn.style.display = 'inline-flex';
+    btn.dataset.spot = spotName; // resolves the spot's closest buoy on click
 
     if (!btn._bound) {
         btn._bound = true;
@@ -652,7 +663,6 @@ function setupBuoyCompare(spotName) {
 function clearBuoyView() {
     const container = document.getElementById('waveChartContainer');
     const btn = document.getElementById('buoyCompareBtn');
-    const modelBtn = document.getElementById('modelCompareBtn');
     const legend = document.getElementById('modelLegend');
 
     // Restore the normal page layout (forecast cards back, chart back to
@@ -662,6 +672,18 @@ function clearBuoyView() {
     if (stats) {
         stats.style.display = 'none';
         stats.innerHTML = '';
+    }
+    const heroLabel = document.getElementById('buoyHeroLabel');
+    if (heroLabel) heroLabel.textContent = '';
+    // Give the hero title back to the spot — but only if it still shows our
+    // buoy caption (a spot switch re-renders the title before this runs,
+    // and that fresh title must not be clobbered with the stale one).
+    const titleEl = document.getElementById('spotName');
+    if (titleEl && titleEl._spotTitleHTML != null) {
+        if (titleEl.innerHTML === titleEl._buoyTitleHTML) {
+            titleEl.innerHTML = titleEl._spotTitleHTML;
+        }
+        titleEl._spotTitleHTML = titleEl._buoyTitleHTML = null;
     }
 
     if (container) {
@@ -684,8 +706,14 @@ function clearBuoyView() {
             }
         }
     }
-    if (btn) btn.classList.remove('active');
-    if (modelBtn) modelBtn.style.visibility = '';
+    if (btn) {
+        btn.classList.remove('active');
+        // Back to the generic label unless the model view still owns the
+        // strip (there the button keeps offering the closest buoy).
+        if (!document.body.classList.contains('models-mode')) {
+            btn.textContent = 'Buoys';
+        }
+    }
 }
 
 async function toggleBuoyView() {
@@ -694,25 +722,62 @@ async function toggleBuoyView() {
     if (!btn || !container) return;
 
     if (container._buoyData) {
+        // Leaving the buoy view steps back UP to the models view (the level
+        // it hangs off), not all the way out to the bars. Enter models-mode
+        // BEFORE clearing so both buttons hold their strip positions through
+        // the hand-off instead of bouncing up to the hero and back.
+        document.body.classList.add('models-mode');
         clearBuoyView();
         if (window.updateUrlView) window.updateUrlView({ buoys: false });
+        await toggleModelOverlay();
+        if (!container._modelData) {
+            // Models view failed to come back: fall out to the default view
+            document.body.classList.remove('models-mode');
+            btn.textContent = 'Buoys';
+        }
         return;
     }
 
     try {
-        const res = await fetch(`api/buoys/${DEFAULT_BUOY}.json`);
+        // The spot's preassigned closest buoy (from spots.json via app.js)
+        const buoyId = window._spotBuoys?.[btn.dataset.spot] || DEFAULT_BUOY;
+        const res = await fetch(`api/buoys/${buoyId}.json`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!data.models || data.models.length === 0) throw new Error('no series');
 
-        // Mutually exclusive with the model overlay
+        // Mutually exclusive with the model overlay — but the Models button
+        // stays in the strip (body.buoys-mode positions it), one click from
+        // switching back.
         clearModelOverlay();
-        const modelBtn = document.getElementById('modelCompareBtn');
-        if (modelBtn) modelBtn.style.visibility = 'hidden';
 
         container._buoyData = data;
         drawBuoyChart(data);
         btn.classList.add('active');
+        btn.textContent = 'Closest buoy'; // it's showing exactly that
+        // The hero title becomes the station: "CDIP {id}" where the spot
+        // name goes, the buoy's name in the region slot (same h1 +
+        // .hero-region structure as a spot title, so every hero state —
+        // desktop / mobile / compact — styles it for free), and "the
+        // closest buoy to {spot}" bottom-left (inside the title block on
+        // small screens, via .buoy-hero-sub).
+        const esc = s => s.replace(/[&<>"]/g, c => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const subText = `the closest buoy to ${btn.dataset.spot}`;
+        const titleEl = document.getElementById('spotName');
+        if (titleEl) {
+            if (titleEl._spotTitleHTML == null) {
+                titleEl._spotTitleHTML = titleEl.innerHTML;
+            }
+            const buoyName = (data.label || '').split('—').pop().trim();
+            titleEl._buoyTitleHTML =
+                `CDIP ${esc(String(data.id))}` +
+                `<span class="hero-region">${esc(buoyName)}</span>` +
+                `<span class="buoy-hero-sub">${esc(subText)}</span>`;
+            titleEl.innerHTML = titleEl._buoyTitleHTML;
+        }
+        const heroLabel = document.getElementById('buoyHeroLabel');
+        if (heroLabel) heroLabel.textContent = subText;
         if (window.updateUrlView) window.updateUrlView({ buoys: true, models: false });
     } catch (e) {
         console.warn('Buoy comparison unavailable:', e);
@@ -1000,8 +1065,9 @@ function drawBuoyChart(data) {
     container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
 
     if (legend) {
+        // No title chip: the hero caption ("CDIP {id}, the closest buoy
+        // to {spot}") already names the station.
         const chips = [
-            `<span class="legend-chip legend-chip--title">${data.label}</span>`,
             `<span class="legend-chip" data-series-id="observed">` +
             `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>observed Hs</span>`,
             ...data.models.map(m =>

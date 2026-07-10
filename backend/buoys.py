@@ -9,19 +9,24 @@ buoy's coordinates. Left of "now", every line is checkable against reality.
 Outputs:
 
     api/buoys.json          all active California buoys (id, name, position)
-    api/buoys/{id}.json     observed + MOP + per-model Hs for DETAIL_BUOYS
+    api/buoys/{id}.json     observed + MOP + per-model Hs, one per active buoy
 
 One ERDDAP request covers every station's last PAST_DAYS of observations and
 positions; "active" means an observation within the last ACTIVE_WITHIN_H
-hours, "California" is taken from the station name (', CA '). Detail files
-are only built for DETAIL_BUOYS for now — each one costs a THREDDS read plus
-one Open-Meteo call per model.
+hours, "California" is taken from the station name (', CA '). Every active
+buoy gets a detail file — each one costs a THREDDS read plus one Open-Meteo
+call per model — so any spot's preassigned closest buoy is always openable.
+
+build_buoys also fills in each spot's closest_buoy where the CSV left it
+blank (new spots): nearest active buoy by great-circle distance, persisted
+back to locations.csv by the pipeline's save_spots so it's computed once.
 
 This runs outside the store: buoys aren't spots, and the panel needs past
 observations the store's forecast window never holds. Non-critical — the
 pipeline logs and moves on if any of it fails.
 """
 import csv
+import math
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -42,7 +47,6 @@ PAST_DAYS = 3            # observation window shown left of "now"
 # so 15 requests the widest horizon the API allows without being clipped.
 FORECAST_DAYS = 15
 ACTIVE_WITHIN_H = 24     # a buoy is active if it reported within this window
-DETAIL_BUOYS = ('071',)  # buoys that get a full comparison file (071 = Harvest)
 
 ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/wave_agg.csv'
 SST_ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/sst_agg.csv'
@@ -208,12 +212,41 @@ def _series_json(series):
     return [{'t': _fmt_local(ts), 'v': round(v, 2)} for ts, v in series]
 
 
-def build_buoys(api_dir):
+def _km(lat1, lon1, lat2, lon2):
+    """Great-circle distance (haversine), km."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = (math.sin(math.radians(lat2 - lat1) / 2) ** 2
+         + math.cos(p1) * math.cos(p2)
+         * math.sin(math.radians(lon2 - lon1) / 2) ** 2)
+    return 2 * 6371 * math.asin(math.sqrt(a))
+
+
+def _assign_closest_buoys(spots, buoys):
+    """Fill each spot's blank closest_buoy with the nearest active station.
+
+    Runs once per new spot: the pipeline persists the value to locations.csv
+    right after, and a non-blank (including hand-edited) value is left alone.
+    """
+    for spot in spots:
+        if spot.closest_buoy:
+            continue
+        sid = min(buoys, key=lambda s: _km(
+            spot.latitude, spot.longitude,
+            buoys[s]['latitude'], buoys[s]['longitude']))
+        # Spot is frozen (identity fields); this is the one sanctioned fill.
+        object.__setattr__(spot, 'closest_buoy', sid)
+        print(f"  ✓ {spot.name}: closest buoy assigned -> "
+              f"{sid} ({buoys[sid]['name']})")
+
+
+def build_buoys(api_dir, spots=()):
     now = datetime.now(timezone.utc)
     start_utc = now - timedelta(days=PAST_DAYS)
     end_utc = now + timedelta(days=FORECAST_DAYS)
 
     buoys = _fetch_observations(start_utc)
+    if buoys:
+        _assign_closest_buoys(spots, buoys)
     _write_json(os.path.join(api_dir, 'buoys.json'), [
         {
             'id': sid,
@@ -225,10 +258,7 @@ def build_buoys(api_dir):
     ])
     print(f"  ✓ buoys.json: {len(buoys)} active CA buoys")
 
-    for sid in DETAIL_BUOYS:
-        if sid not in buoys:
-            print(f"  ! buoy {sid} not active; skipping detail file")
-            continue
+    for sid in sorted(buoys):
         e = buoys[sid]
 
         models_out = []

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surflie | Forecast</title>
     <link rel="icon" type="image/png" href="images/favicon.png?v=4">
-    <link rel="stylesheet" href="css/styles.css?v=19">
+    <link rel="stylesheet" href="css/styles.css?v=24">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -71,6 +71,10 @@
                     </div>
                 </div>
 
+                <!-- Buoy-view sub line: "the closest buoy to {spot}"
+                     (bottom-left; the title itself becomes the buoy code) -->
+                <div id="buoyHeroLabel" class="buoy-hero-label"></div>
+
                 <!-- Map Overlay -->
                 <div id="mapOverlay" class="map-overlay">
                     <button id="closeMapBtn" class="close-map-btn">&times;</button>
@@ -78,14 +82,15 @@
                 </div>
             </section>
 
-            <!-- Zero-height container: floats the model-compare button in the
-                 hero/chart boundary without adding vertical space -->
+            <!-- Zero-height container: floats the compare buttons in the
+                 hero/chart boundary without adding vertical space. Buoys owns
+                 the corner slot; Models sits to its left. -->
             <div class="chart-gap-container">
                 <div id="modelLegend" class="model-legend"></div>
                 <button id="modelCompareBtn" class="model-compare-btn" style="display: none;"
                     title="Overlay all wave models (combined Hs)">Models</button>
                 <button id="buoyCompareBtn" class="model-compare-btn buoy-compare-btn" style="display: none;"
-                    title="Observed Hs vs MOP forecast vs global models at the buoy">Buoys</button>
+                    title="Observed Hs vs MOP forecast vs global models at the spot's closest buoy">Buoys</button>
             </div>
 
             <section class="chart-section" id="waveChartSection" style="display: none;">
@@ -124,9 +129,9 @@
     <!-- Bump ?v= whenever these files change so cached copies are dropped -->
     <script src="js/rating.js?v=2"></script>
     <script src="js/hourly.js?v=2"></script>
-    <script src="js/chart.js?v=14"></script>
+    <script src="js/chart.js?v=20"></script>
 
-    <script src="js/app.js?v=8"></script>
+    <script src="js/app.js?v=9"></script>
 </body>
 
 </html>
