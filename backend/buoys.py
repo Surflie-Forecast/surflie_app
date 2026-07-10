@@ -45,6 +45,7 @@ ACTIVE_WITHIN_H = 24     # a buoy is active if it reported within this window
 DETAIL_BUOYS = ('071',)  # buoys that get a full comparison file (071 = Harvest)
 
 ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/wave_agg.csv'
+SST_ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/sst_agg.csv'
 MOP_URL = ('https://thredds.cdip.ucsd.edu/thredds/dodsC/'
            'cdip/model/MOP_validation/BP{sid}_forecast.nc')
 FILL_CUTOFF = -100.0     # values below this are the -999.99 fill
@@ -87,6 +88,52 @@ def _fetch_observations(start_utc):
     return {
         sid: e for sid, e in buoys.items()
         if e['observed'] and max(ts for ts, _ in e['observed']) >= cutoff}
+
+
+def _erddap_latest(url, sid, columns):
+    """The single most recent row for one station: {column: value|None}.
+
+    orderByMax(time) asks the server for just that row, so this is one tiny
+    request per dataset. Returns {} if the station has no data.
+    """
+    query = (f"?{','.join(columns)}"
+             f'&station_id="{sid}"&orderByMax("time")')
+    r = requests.get(url + query, timeout=60)
+    if r.status_code != 200:
+        return {}
+    reader = csv.DictReader(StringIO(r.text))
+    next(reader, None)  # units row
+    row = next(reader, None)
+    if not row:
+        return {}
+    return {c: (float(row[c]) if c != 'time' and row.get(c) else row.get(c))
+            for c in columns}
+
+
+def _fetch_latest_obs(sid):
+    """Latest observed wave state at the buoy — the values CDIP's station page
+    headlines: Hs (m), peak period Tp (s), peak direction Dp (deg), water
+    temperature SST (°C), and the reading's local timestamp. Missing metrics
+    are omitted; SST comes from a separate dataset and may be absent."""
+    wave = _erddap_latest(
+        ERDDAP, sid, ['time', 'waveHs', 'waveTp', 'waveDp'])
+    if not wave or wave.get('waveHs') is None:
+        return None
+
+    sst = _erddap_latest(SST_ERDDAP, sid, ['time', 'sstSeaSurfaceTemperature'])
+
+    ts = datetime.fromisoformat(wave['time'].replace('Z', '+00:00'))
+    out = {
+        'time': _fmt_local(ts),
+        'hs': round(wave['waveHs'], 2),
+    }
+    if wave.get('waveTp') is not None:
+        out['tp'] = round(wave['waveTp'], 1)
+    if wave.get('waveDp') is not None:
+        out['dp'] = round(wave['waveDp'])
+    if sst.get('sstSeaSurfaceTemperature') is not None:
+        out['sst'] = round(sst['sstSeaSurfaceTemperature'], 1)
+    return out
 
 
 def _fetch_mop_forecast(sid, start_utc):
@@ -200,14 +247,22 @@ def build_buoys(api_dir):
                 {'id': model_id, 'label': label,
                  'series': _series_json(series)})
 
+        try:
+            latest = _fetch_latest_obs(sid)
+        except Exception as err:
+            latest = None
+            print(f"    ! buoy {sid} latest observation: {err}")
+
         _write_json(os.path.join(api_dir, 'buoys', f'{sid}.json'), {
             'id': sid,
             'label': f"CDIP {sid} — {e['name']}",
             'latitude': e['latitude'],
             'longitude': e['longitude'],
             'unit': 'm',
+            'latest': latest,
             'observed': _series_json(e['observed']),
             'models': models_out,
         })
         print(f"  ✓ buoys/{sid}.json: {len(e['observed'])} obs, "
-              f"{len(models_out)} forecast series")
+              f"{len(models_out)} forecast series"
+              f"{', latest obs' if latest else ''}")

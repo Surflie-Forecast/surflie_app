@@ -1558,6 +1558,109 @@ input:checked+.slider:before {
   display: none !important;
 }
 
+/* --- Buoy mode (whole page): the forecast-day cards are replaced by the
+   latest-observation cards, and the chart grows into the freed space. --- */
+body.buoys-mode .forecast-wrapper,
+body.buoys-mode .forecast-days-counter {
+  display: none !important;
+}
+
+body.buoys-mode .chart-container {
+  height: 320px;
+  transition: height 0.4s ease;
+}
+
+/* Latest-observation cards (CDIP station-page style) */
+.buoy-stats {
+  width: 100%;
+  max-width: 1100px;
+  margin: 8px auto 24px;
+  padding: 0 16px;
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.buoy-stats-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-bottom: 10px;
+}
+
+.buoy-stats-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+.buoy-stats-sub {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.buoy-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.buoy-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.buoy-stat-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.buoy-stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text-primary);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.buoy-stat-value .swell-arrow {
+  font-size: 1rem;
+  color: var(--accent-blue);
+  display: inline-block;
+}
+
+.buoy-stat-unit {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .buoy-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .buoy-stat-value {
+    font-size: 1.35rem;
+  }
+
+  body.buoys-mode .chart-container {
+    height: 260px;
+  }
+}
+
 /* Wave Height Chart */
 .chart-section {
   width: 100%;

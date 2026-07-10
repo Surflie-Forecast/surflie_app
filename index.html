@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surflie | Forecast</title>
     <link rel="icon" type="image/png" href="images/favicon.png?v=4">
-    <link rel="stylesheet" href="css/styles.css?v=18">
+    <link rel="stylesheet" href="css/styles.css?v=19">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -100,6 +100,9 @@
                 </div>
             </section>
 
+            <!-- Latest-observation cards, shown only in the Buoys view -->
+            <div id="buoyStats" class="buoy-stats" style="display: none;"></div>
+
             <!-- Zero-height container for elements between chart and forecast list -->
             <div class="forecast-gap-container">
                 <div class="forecast-days-counter" id="forecastDaysCounter" style="display: none;"></div>
@@ -121,7 +124,7 @@
     <!-- Bump ?v= whenever these files change so cached copies are dropped -->
     <script src="js/rating.js?v=2"></script>
     <script src="js/hourly.js?v=2"></script>
-    <script src="js/chart.js?v=13"></script>
+    <script src="js/chart.js?v=14"></script>
 
     <script src="js/app.js?v=8"></script>
 </body>

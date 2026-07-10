@@ -303,11 +303,13 @@ function renderModelYAxis(svg, scaleMax, yForOffset) {
         v => svg.getBoundingClientRect().top + yForOffset(v));
 }
 
-// Redraw the axis in the new unit once app.js has updated currentUnit
+// Redraw the axis (and, in buoy view, the latest-observation cards) in the
+// new unit once app.js has updated currentUnit
 document.querySelectorAll('.unit-toggle').forEach(t =>
     t.addEventListener('change', () => setTimeout(() => {
         const container = document.getElementById('waveChartContainer');
         if (container && container._axisRender) container._axisRender();
+        if (container && container._buoyData) renderBuoyStats(container._buoyData);
     }, 60)));
 
 // --- Model Comparison Overlay ---
@@ -653,6 +655,15 @@ function clearBuoyView() {
     const modelBtn = document.getElementById('modelCompareBtn');
     const legend = document.getElementById('modelLegend');
 
+    // Restore the normal page layout (forecast cards back, chart back to
+    // its default height) and hide the latest-observation cards.
+    document.body.classList.remove('buoys-mode');
+    const stats = document.getElementById('buoyStats');
+    if (stats) {
+        stats.style.display = 'none';
+        stats.innerHTML = '';
+    }
+
     if (container) {
         const wasActive = !!container._buoyData;
         container._buoyData = null;
@@ -718,7 +729,10 @@ function drawBuoyChart(data) {
     const old = container.querySelector('.buoy-overlay-svg');
     if (old) old.remove();
 
-    // Open the side gutters BEFORE measuring (they reflow the container)
+    // Enter buoy mode (taller chart, forecast cards hidden) and open the side
+    // gutters BEFORE measuring — both reflow the container, and the chart's
+    // new height must be in effect so the lines fill it.
+    document.body.classList.add('buoys-mode');
     const section = document.getElementById('waveChartSection');
     if (section) section.classList.add('models-gutters');
 
@@ -743,15 +757,23 @@ function drawBuoyChart(data) {
     const tMax = allT.length ? Math.max(...allT) : now + 8 * 86400e3;
     const spanDays = Math.max((tMax - tMin) / 86400e3, 1);
 
-    // Measure the bars' vertical band and pixels-per-day NOW, while they're
-    // still laid out — activating the buoy view below collapses them. We build
+    // Measure the drawing band and pixels-per-day. buoys-mode grows the chart
+    // via a CSS height transition, so the bar wrappers (still mid-animation)
+    // would read short — suppress the transition for this frame so the
+    // container reports its FINAL height, measure, then restore it. We build
     // our own wide, scrollable timeline at the SAME density as the bars; the
     // observation window fills the screen first, the forecast tail scrolls in.
+    const prevTransition = container.style.transition;
+    container.style.transition = 'none';
+    // eslint-disable-next-line no-unused-expressions
+    container.offsetHeight; // force reflow at the final height
     const wrappers = container.querySelectorAll('.chart-bar-wrapper');
-    const top = wrappers.length ? wrappers[0].offsetTop : 8;
-    const barH = wrappers.length
-        ? wrappers[0].offsetHeight
-        : Math.max(container.clientHeight - 16, 100);
+    const cs = getComputedStyle(container);
+    const padTop = parseFloat(cs.paddingTop) || 0;
+    const padBottom = parseFloat(cs.paddingBottom) || 0;
+    const top = padTop;
+    const barH = Math.max(container.clientHeight - padTop - padBottom, 100);
+    container.style.transition = prevTransition;
 
     const viewW = container.clientWidth;
     let pxPerDay = (viewW - 2 * PADX) / spanDays;
@@ -891,17 +913,32 @@ function drawBuoyChart(data) {
         const baseWidth = isMop ? 2.2 : 1.5;
         const baseOpacity = isMop ? '1' : '0.85';
 
-        const path = document.createElementNS(ns, 'path');
-        path.setAttribute('d', toPathD(pts));
-        path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', color);
-        path.setAttribute('stroke-width', baseWidth);
-        path.setAttribute('stroke-linejoin', 'round');
-        path.setAttribute('opacity', baseOpacity);
-        svg.appendChild(path);
-        refs[model.id] = { paths: [path], baseWidth, baseOpacity };
+        // The final 24 h of every line is drawn dashed — the forecast is
+        // running out — exactly like the site's models view. (Here all lines
+        // end inside the plot, so all get a dashed tail.)
+        const cutoff = pts[pts.length - 1].t.getTime() - 24 * 3600 * 1000;
+        const solidPts = pts.filter(p => p.t.getTime() <= cutoff);
+        const dashPts = pts.filter(p => p.t.getTime() >= cutoff);
+        if (solidPts.length) dashPts.unshift(solidPts[solidPts.length - 1]);
 
-        // Invisible wide twin of the line as the hover hit area
+        const paths = [];
+        [[solidPts, false], [dashPts, true]].forEach(([segment, dashed]) => {
+            if (segment.length < 2) return;
+            const path = document.createElementNS(ns, 'path');
+            path.setAttribute('d', toPathD(segment));
+            path.setAttribute('fill', 'none');
+            path.setAttribute('stroke', color);
+            path.setAttribute('stroke-width', baseWidth);
+            path.setAttribute('stroke-linejoin', 'round');
+            path.setAttribute('opacity', baseOpacity);
+            if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+            svg.appendChild(path);
+            paths.push(path);
+        });
+        if (paths.length === 0) return;
+        refs[model.id] = { paths, baseWidth, baseOpacity };
+
+        // Invisible wide twin of the whole line as the hover hit area
         const hit = document.createElementNS(ns, 'path');
         hit.setAttribute('d', toPathD(pts));
         hit.setAttribute('fill', 'none');
@@ -939,9 +976,9 @@ function drawBuoyChart(data) {
     if (dots.length) refs.observed = { dots };
 
     // The SVG is absolutely positioned (out of flow), so on its own it can't
-    // widen the scrollport. The bars only span the forecast window; our
-    // timeline is wider (3 extra past days). A zero-height spacer at width W
-    // gives the container the right scrollWidth so it scrolls the full span.
+    // widen the scrollport. Our timeline spans the full data extent, wider
+    // than the bars. A zero-height spacer at width W gives the container the
+    // right scrollWidth so it scrolls the full span.
     const spacer = document.createElement('div');
     spacer.className = 'buoy-scroll-spacer';
     spacer.style.cssText =
@@ -949,10 +986,9 @@ function drawBuoyChart(data) {
     container.appendChild(spacer);
 
     // Fade in over the bars fading out (shared CSS transition). Start at the
-    // left edge: with "now" only 3 days into an 18-day span, the past
-    // observations + the near-term forecast (where the models are checkable
-    // against the dots) already fill the screen; the forecast tail is a
-    // scroll to the right, exactly like the bars/models views.
+    // left edge: the past observations and the near-term forecast (where the
+    // models are checkable against the dots) already fill the screen; the
+    // forecast tail is a scroll to the right, like the bars/models views.
     svg.style.opacity = '0';
     container.appendChild(svg);
     container.scrollLeft = 0;
@@ -981,6 +1017,63 @@ function drawBuoyChart(data) {
             chip.addEventListener('mouseleave', () => setHot(id, false));
         });
     }
+
+    renderBuoyStats(data);
+}
+
+// Latest-observation cards — the values CDIP's station page headlines
+// (cdip.ucsd.edu/m/products/?stn=071p1): significant wave height, peak
+// period, peak direction, water temp, and how long ago the buoy reported.
+function renderBuoyStats(data) {
+    const el = document.getElementById('buoyStats');
+    if (!el) return;
+    const o = data.latest;
+    if (!o) {
+        el.style.display = 'none';
+        el.innerHTML = '';
+        return;
+    }
+
+    // "X min/hours ago" from the reading's local timestamp
+    const readAt = new Date(o.time.replace(' ', 'T'));
+    const agoMin = Math.max(0, Math.round((Date.now() - readAt.getTime()) / 60000));
+    const ago = agoMin < 60 ? `${agoMin} min ago`
+        : agoMin < 1440 ? `${Math.round(agoMin / 60)} h ago`
+            : `${Math.round(agoMin / 1440)} d ago`;
+
+    const hsVal = formatHeight(o.hs, currentUnit);
+    const hsUnit = getHeightUnit(currentUnit);
+    const cards = [
+        { label: 'Wave Height', value: hsVal, unit: hsUnit },
+        o.tp != null && { label: 'Peak Period', value: o.tp, unit: 's' },
+        o.dp != null && {
+            label: 'Direction', value: `${o.dp}°`, unit: '',
+            arrow: o.dp,
+        },
+        o.sst != null && {
+            label: 'Water Temp',
+            value: currentUnit === 'imperial' ? Math.round(o.sst * 9 / 5 + 32) : o.sst,
+            unit: currentUnit === 'imperial' ? '°F' : '°C',
+        },
+    ].filter(Boolean);
+
+    el.innerHTML =
+        `<div class="buoy-stats-head">` +
+        `<span class="buoy-stats-title">${data.label}</span>` +
+        `<span class="buoy-stats-sub">Latest observation &bull; ${ago}</span>` +
+        `</div>` +
+        `<div class="buoy-stats-grid">` +
+        cards.map(c =>
+            `<div class="buoy-stat-card">` +
+            `<span class="buoy-stat-label">${c.label}</span>` +
+            `<span class="buoy-stat-value">` +
+            (c.arrow != null
+                ? `<span class="swell-arrow" style="transform: rotate(${c.arrow + 90}deg)">➤</span> `
+                : '') +
+            `${c.value}${c.unit ? `<span class="buoy-stat-unit">${c.unit}</span>` : ''}` +
+            `</span></div>`).join('') +
+        `</div>`;
+    el.style.display = 'block';
 }
 
 // --- Tide Chart Implementation ---
