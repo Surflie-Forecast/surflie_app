@@ -202,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const heroBuoyMarkers = {}; // buoy id -> hero-map circleMarker
     let heroBuoyFocusedId = null; // buoy the hero map is zoomed out onto
     let lastHeroView = null; // latest spot the hero map was asked to show
+    let heroSpotMarker = null; // blue dot marking the current spot
     const buoysPromise = fetch('api/buoys.json')
         .then(r => r.ok ? r.json() : [])
         .catch(() => [])
@@ -280,10 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
             maxZoom: 13
         }).addTo(map);
 
-        // 2. TOP LAYER: Satellite (Transparent)
+        // 2. TOP LAYER: Satellite — same near-opaque weight as the hero
+        // background so both maps read identically
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Esri, USGS',
-            opacity: 0.75,
+            opacity: 0.95,
             maxZoom: 17
         }).addTo(map);
 
@@ -338,16 +340,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (heroBuoyFocusedId != null) return;
             heroMap.invalidateSize();
 
-            // Set view to location
-            const zoomLevel = 13; // Wider coastline context
+            // Spot centered like the buoy view, blue dot marking it (the
+            // map symbology's surf-spot hue vs the buoys' ink/red)
+            const zoomLevel = 11; // regional coastline context
             heroMap.setView([lat, lon], zoomLevel, { animate: false });
-
-            // Offset logic: Move map center to the LEFT so location appears on right
-            // Target: Location at 75% of width
-            const mapSize = heroMap.getSize();
-            const offsetX = -mapSize.x * 0.25; // Negative pans view left (objects move right)
-
-            heroMap.panBy([offsetX, 0], { animate: false });
+            if (!heroSpotMarker) {
+                heroSpotMarker = L.circleMarker([lat, lon], {
+                    radius: 7,
+                    color: '#fff',
+                    weight: 2,
+                    fillColor: '#0078A8',
+                    fillOpacity: 0.95,
+                    interactive: false,
+                }).addTo(heroMap);
+            } else {
+                heroSpotMarker.setLatLng([lat, lon]);
+            }
+            heroSpotMarker.bringToFront();
         }, 100);
     }
 

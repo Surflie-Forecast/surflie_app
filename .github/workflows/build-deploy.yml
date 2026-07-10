@@ -3,6 +3,15 @@
 #
 # One-time setup: repo Settings → Pages → Source = "GitHub Actions".
 #
+# Two kinds of runs:
+#   - schedule / manual dispatch: full data build, then deploy. Each build
+#     also saves api/ to the actions cache.
+#   - push: REDEPLOY ONLY — restores api/ from the most recent build and
+#     skips the pipeline, so code changes go live in ~1 min instead of
+#     re-fetching 30+ min of data that the 6-hourly schedule already keeps
+#     fresh. If no cached data exists (first run, cache evicted), the push
+#     falls back to a full build rather than deploying an empty site.
+#
 # If the pipeline fails (a critical data source is down), the deploy is
 # skipped and the previously published snapshot stays live.
 name: Build and Deploy
@@ -11,7 +20,7 @@ on:
   schedule:
     - cron: '0 */6 * * *'   # refresh data every 6 hours
   push:
-    branches: [main]         # redeploy on code changes
+    branches: [main]         # redeploy on code changes (no data rebuild)
   workflow_dispatch:
 
 permissions:
@@ -30,7 +39,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Push runs reuse the newest built api/ instead of rebuilding. The
+      # run_id key never matches, so restore-keys always picks the most
+      # recent save from a scheduled/dispatched build.
+      - name: Restore forecast data from the last build
+        if: github.event_name == 'push'
+        id: api-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: api
+          key: api-data-${{ github.run_id }}
+          restore-keys: api-data-
+
+      - name: Decide whether to build
+        id: mode
+        run: echo "build=${{ github.event_name != 'push' || steps.api-cache.outputs.cache-matched-key == '' }}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
+        if: steps.mode.outputs.build == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -38,6 +64,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
+        if: steps.mode.outputs.build == 'true'
         run: pip install -r backend/requirements.txt
 
       # MOP publishes a pure forward forecast, so elapsed timesteps vanish
@@ -46,6 +73,7 @@ jobs:
       # here since the repo never commits data. The run_id key always misses,
       # so each run restores the newest previous cache and saves its own.
       - name: Restore MOP cache
+        if: steps.mode.outputs.build == 'true'
         uses: actions/cache@v4
         with:
           path: data/mop_cache
@@ -53,7 +81,16 @@ jobs:
           restore-keys: mop-cache-
 
       - name: Run data pipeline
+        if: steps.mode.outputs.build == 'true'
         run: python backend/pipeline.py
+
+      # Every full build leaves its api/ behind for push-triggered redeploys
+      - name: Save forecast data for push redeploys
+        if: steps.mode.outputs.build == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: api
+          key: api-data-${{ github.run_id }}
 
       - name: Assemble site
         run: |

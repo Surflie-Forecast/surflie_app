@@ -21,11 +21,17 @@ build_buoys also fills in each spot's closest_buoy where the CSV left it
 blank (new spots): nearest active buoy by great-circle distance, persisted
 back to locations.csv by the pipeline's save_spots so it's computed once.
 
+On top of that static assignment, every run re-points spots.json's
+closest_buoy at a swell-aware pick: the nearest buoy lying TOWARD today's
+swell source (it samples the waves before they arrive), falling back to
+plain proximity when no active buoy faces the swell.
+
 This runs outside the store: buoys aren't spots, and the panel needs past
 observations the store's forecast window never holds. Non-critical — the
 pipeline logs and moves on if any of it fails.
 """
 import csv
+import json
 import math
 import os
 import re
@@ -238,6 +244,81 @@ def _km(lat1, lon1, lat2, lon2):
     return 2 * 6371 * math.asin(math.sqrt(a))
 
 
+def _bearing(lat1, lon1, lat2, lon2):
+    """Initial great-circle bearing from point 1 to point 2, degrees 0-360."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dl = math.radians(lon2 - lon1)
+    y = math.sin(dl) * math.cos(p2)
+    x = (math.cos(p1) * math.sin(p2)
+         - math.sin(p1) * math.cos(p2) * math.cos(dl))
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
+
+
+def _ang_diff(a, b):
+    """Smallest absolute difference between two bearings, degrees 0-180."""
+    return abs((a - b + 180) % 360 - 180)
+
+
+SWELL_CONE_DEG = 75  # a buoy "faces" the swell within this half-angle
+
+
+def _swell_direction(api_dir, slug):
+    """Today's swell FROM-direction at the spot, read from the forecast file
+    build_all just wrote (None if it's missing or malformed)."""
+    try:
+        with open(os.path.join(api_dir, 'forecast', f'{slug}.json')) as f:
+            return float(json.load(f)['forecast'][0]['swell']['direction'])
+    except Exception:
+        return None
+
+
+def _pick_swell_buoys(spots, buoys, api_dir):
+    """slug -> station id: the nearest buoy lying TOWARD today's swell source
+    (bearing spot->buoy within SWELL_CONE_DEG of the swell's FROM-direction),
+    so it samples the waves before they reach the spot. Falls back to the
+    CSV's plain-proximity closest_buoy when no buoy faces the swell or the
+    swell direction is unknown."""
+    picks = {}
+    for spot in spots:
+        swell_from = _swell_direction(api_dir, spot.slug)
+        pick = None
+        if swell_from is not None:
+            in_cone = [
+                (_km(spot.latitude, spot.longitude,
+                     e['latitude'], e['longitude']), sid)
+                for sid, e in buoys.items()
+                if _ang_diff(_bearing(spot.latitude, spot.longitude,
+                                      e['latitude'], e['longitude']),
+                             swell_from) <= SWELL_CONE_DEG]
+            if in_cone:
+                dist, pick = min(in_cone)
+                print(f"  ✓ {spot.name}: swell from {swell_from:.0f}° -> "
+                      f"buoy {pick} ({buoys[pick]['name']}, {dist:.0f} km)")
+        if pick is None and spot.closest_buoy:
+            pick = spot.closest_buoy
+            print(f"  ✓ {spot.name}: no buoy toward the swell; "
+                  f"falling back to nearest ({pick})")
+        if pick:
+            picks[spot.slug] = pick
+    return picks
+
+
+def _patch_spots_json(api_dir, picks):
+    """Point spots.json's closest_buoy at the per-run swell-aware picks
+    (build_all wrote it before the buoy step, with the CSV's static
+    proximity values)."""
+    path = os.path.join(api_dir, 'spots.json')
+    try:
+        with open(path) as f:
+            entries = json.load(f)
+        for e in entries:
+            if picks.get(e.get('slug')):
+                e['closest_buoy'] = picks[e['slug']]
+        _write_json(path, entries)
+    except Exception as err:
+        print(f"  ! spots.json buoy patch failed: {err}")
+
+
 def _assign_closest_buoys(spots, buoys):
     """Fill each spot's blank closest_buoy with the nearest active station.
 
@@ -264,6 +345,9 @@ def build_buoys(api_dir, spots=()):
     buoys = _fetch_observations(start_utc)
     if buoys:
         _assign_closest_buoys(spots, buoys)
+        # Per-run swell-aware pick: the "Closest buoy" button opens the
+        # nearest station toward today's swell source, not just the nearest
+        _patch_spots_json(api_dir, _pick_swell_buoys(spots, buoys, api_dir))
     _write_json(os.path.join(api_dir, 'buoys.json'), [
         {
             'id': sid,
