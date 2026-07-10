@@ -1,8 +1,27 @@
 """Shared plumbing for Open-Meteo APIs (weather + marine)."""
+import re
 import time
 from datetime import datetime, timezone
 
 import requests
+
+# Open-Meteo rejects the whole request with 400 when end_date exceeds a
+# model's current forecast horizon, naming the allowed max in the body:
+#   {"reason":"Parameter 'end_date' is out of allowed range from ... to 2026-07-25","error":true}
+# The horizon shifts day-to-day with each model run, so we clamp end_date to
+# the stated max and retry once rather than losing the entire (critical) source.
+_END_DATE_RANGE_RE = re.compile(
+    r"end_date.*allowed range from \S+ to (\d{4}-\d{2}-\d{2})")
+
+
+def _clamp_end_date_from_error(body):
+    """Return the allowed max end_date (str) if body is that 400, else None."""
+    try:
+        reason = (body or {}).get('reason', '')
+    except AttributeError:
+        return None
+    m = _END_DATE_RANGE_RE.search(reason)
+    return m.group(1) if m else None
 
 
 def get_json(url, params, retries=3, backoff_s=5):
@@ -10,6 +29,13 @@ def get_json(url, params, retries=3, backoff_s=5):
     for attempt in range(retries):
         try:
             r = requests.get(url, params=params, timeout=60)
+            if r.status_code == 400 and 'end_date' in params:
+                capped = _clamp_end_date_from_error(_safe_json(r))
+                if capped and capped < str(params['end_date']):
+                    print(f"    end_date {params['end_date']} beyond horizon; "
+                          f"clamping to {capped}")
+                    params = {**params, 'end_date': capped}
+                    continue  # retry immediately with the clamped window
             r.raise_for_status()
             return r.json()
         except Exception as e:
@@ -17,6 +43,13 @@ def get_json(url, params, retries=3, backoff_s=5):
             if attempt < retries - 1:
                 time.sleep(backoff_s)
     raise RuntimeError(f"Open-Meteo request failed after {retries} attempts: {last_err}")
+
+
+def _safe_json(response):
+    try:
+        return response.json()
+    except ValueError:
+        return None
 
 
 def fetch_hourly_rows(url, spot, varmap, source, start_utc, end_utc, extra_params):
