@@ -42,10 +42,11 @@ from spots import Spot
 PAST_DAYS = 3            # observation window shown left of "now"
 # Fetch each model to its full native horizon: shorter models (MFWAM ~10,
 # GWAM ~8, MOP ~8) simply end sooner and the frontend draws each to wherever
-# its data runs out. Open-Meteo marine caps the request at today_UTC + 15
-# (an end_date beyond that 400s), which is also GFS Wave's practical reach —
-# so 15 requests the widest horizon the API allows without being clipped.
-FORECAST_DAYS = 15
+# its data runs out. Open-Meteo accepts end_date up to today_UTC + 16 and
+# null-pads past each model's real horizon (GFS Wave ~today+15 18:00 UTC),
+# so 16 requests the widest horizon; _fetch_models_at retries a day shorter
+# if a date skew ever pushes the request over the cap.
+FORECAST_DAYS = 16
 ACTIVE_WITHIN_H = 24     # a buoy is active if it reported within this window
 
 ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/wave_agg.csv'

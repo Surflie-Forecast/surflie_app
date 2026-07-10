@@ -640,6 +640,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mapBtn) mapBtn.addEventListener('click', openMap);
     if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
 
+    // Brand → back to the landing state: drop the hash (spot/date/view) and
+    // reload, so the site comes up exactly like a first visit
+    const brand = document.querySelector('.brand');
+    if (brand) {
+        brand.addEventListener('click', () => {
+            window.location.href = window.location.pathname + window.location.search;
+        });
+    }
+
     // Initial Load
     let availableSpots = []; // Array of {name, region}
     // Helper: Haversine distance

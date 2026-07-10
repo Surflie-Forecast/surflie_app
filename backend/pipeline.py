@@ -23,11 +23,13 @@ LOCATIONS_FILE = os.path.join(BASE_DIR, '..', 'data', 'locations.csv')
 STORE_DUMP = os.path.join(BASE_DIR, '..', 'data', 'store.csv')
 API_DIR = os.path.join(BASE_DIR, '..', 'api')
 
-# Window upper bound, not a promise: Open-Meteo serves at most today+15
-# days (the 16-day GFS horizon counting today). Builders keep only the full
-# days each spot's default model actually delivers, so shorter models just
-# end sooner.
-FORECAST_DAYS = 15
+# Window upper bound, not a promise: Open-Meteo accepts end_date up to
+# today+16 and null-pads past each model's real horizon (GFS Wave runs to
+# ~today+15 18:00 UTC — enough to complete 15 full LOCAL days after today,
+# which a +15 window clipped one short of). Builders keep only the full
+# days each spot's default model actually delivers, so shorter models and
+# the null-padded tail just end sooner.
+FORECAST_DAYS = 16
 
 
 def spot_window_utc(spot):

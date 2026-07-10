@@ -73,6 +73,8 @@ header {
   /* Italic to match Surfline */
   letter-spacing: -0.03em;
   color: #131929;
+  cursor: pointer;
+  /* Clicking the brand returns to the landing view */
   /* Solid Navy */
   text-transform: capitalize;
   /* "Surflie" not uppercase */
