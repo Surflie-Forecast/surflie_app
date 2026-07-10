@@ -23,7 +23,8 @@ BUILDERS  (backend/builders.py — aggregation, ratings, local-time conversion)
         ▼
 STATIC JSON  (api/ — the only contract the frontend knows)
         ▼
-GitHub Pages  (deployed as a build artifact; data is never committed to git)
+GitHub Pages  (deployed as a build artifact; api/ may also be committed
+               after a local run to publish without a CI rebuild)
 ```
 
 Key properties:
@@ -70,9 +71,12 @@ python -m http.server 8000       # open http://localhost:8000
 `.github/workflows/build-deploy.yml` runs the pipeline and deploys the site
 as a GitHub Pages artifact:
 
-- every 6 hours (data refresh),
-- on every push to `main` (code changes),
-- or manually from the Actions tab.
+- every 6 hours (full data build + deploy),
+- on every push to `main`: **no data rebuild** — deploys the newer (by
+  `api/meta.json`) of the repo's committed `api/` and the last scheduled
+  build's cache, so pushing after a local `./run_pipeline.sh` publishes that
+  snapshot directly,
+- or manually from the Actions tab (full build).
 
 **One-time setup:** repo *Settings → Pages → Source = "GitHub Actions"*.
 No repository secrets are required.

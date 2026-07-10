@@ -1,16 +1,17 @@
-# Builds fresh forecast data and deploys the site to GitHub Pages as an
-# artifact — no data is ever committed to the repository.
+# Builds fresh forecast data on a schedule and deploys the site to GitHub
+# Pages as an artifact.
 #
 # One-time setup: repo Settings → Pages → Source = "GitHub Actions".
 #
 # Two kinds of runs:
 #   - schedule / manual dispatch: full data build, then deploy. Each build
 #     also saves api/ to the actions cache.
-#   - push: REDEPLOY ONLY — restores api/ from the most recent build and
-#     skips the pipeline, so code changes go live in ~1 min instead of
-#     re-fetching 30+ min of data that the 6-hourly schedule already keeps
-#     fresh. If no cached data exists (first run, cache evicted), the push
-#     falls back to a full build rather than deploying an empty site.
+#   - push: NEVER rebuilds data. Deploys the newer (by api/meta.json) of the
+#     repo's committed api/ — pushed after a local pipeline run — and the
+#     last scheduled build's cache, so a code-only push can't roll the live
+#     data back in time. Only if neither yields usable data (first run,
+#     cache evicted, nothing committed) does the push fall back to a full
+#     build rather than deploying an empty site.
 #
 # If the pipeline fails (a critical data source is down), the deploy is
 # skipped and the previously published snapshot stays live.
@@ -20,7 +21,7 @@ on:
   schedule:
     - cron: '0 */6 * * *'   # refresh data every 6 hours
   push:
-    branches: [main]         # redeploy on code changes (no data rebuild)
+    branches: [main]         # redeploy on code/data changes (no data rebuild)
   workflow_dispatch:
 
 permissions:
@@ -39,21 +40,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Push runs reuse the newest built api/ instead of rebuilding. The
-      # run_id key never matches, so restore-keys always picks the most
-      # recent save from a scheduled/dispatched build.
-      - name: Restore forecast data from the last build
+      # Push runs deploy prebuilt data. Stash the repo's committed api/ so
+      # the cache restore below can't clobber it before the freshness pick.
+      - name: Stash committed forecast data
         if: github.event_name == 'push'
-        id: api-cache
+        run: |
+          rm -rf repo-api
+          if [ -d api ]; then mv api repo-api; fi
+
+      # The run_id key never matches, so restore-keys always picks the most
+      # recent save from a scheduled/dispatched build.
+      - name: Restore forecast data from the last scheduled build
+        if: github.event_name == 'push'
         uses: actions/cache/restore@v4
         with:
           path: api
           key: api-data-${{ github.run_id }}
           restore-keys: api-data-
 
+      # Keep whichever snapshot is newer per api/meta.json (ISO-8601 UTC, so
+      # plain string comparison orders correctly). Data without a meta stamp
+      # (pre-stamp cache, failed run) loses to a stamped one.
+      - name: Pick newest prebuilt data
+        if: github.event_name == 'push'
+        id: prebuilt
+        run: |
+          committed=$(jq -r '.generated_utc // empty' repo-api/meta.json 2>/dev/null || true)
+          cached=$(jq -r '.generated_utc // empty' api/meta.json 2>/dev/null || true)
+          echo "committed: ${committed:-none}  cached: ${cached:-none}"
+          if [ -d repo-api ] && { [ ! -d api ] || [ "$committed" \> "$cached" ]; }; then
+            rm -rf api
+            mv repo-api api
+            echo "deploying committed api/"
+          elif [ -d api ]; then
+            echo "deploying cached api/"
+          fi
+          have_data=false
+          if [ -s api/spots.json ] && [ "$(jq 'length' api/spots.json)" -gt 0 ]; then
+            have_data=true
+          fi
+          echo "have_data=$have_data" >> "$GITHUB_OUTPUT"
+
       - name: Decide whether to build
         id: mode
-        run: echo "build=${{ github.event_name != 'push' || steps.api-cache.outputs.cache-matched-key == '' }}" >> "$GITHUB_OUTPUT"
+        run: echo "build=${{ github.event_name != 'push' || steps.prebuilt.outputs.have_data != 'true' }}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         if: steps.mode.outputs.build == 'true'
@@ -70,7 +100,7 @@ jobs:
       # MOP publishes a pure forward forecast, so elapsed timesteps vanish
       # from the source. The adapter keeps a tiny per-spot cache
       # (data/mop_cache/) to backfill the current day; persist it across runs
-      # here since the repo never commits data. The run_id key always misses,
+      # here since the repo never commits it. The run_id key always misses,
       # so each run restores the newest previous cache and saves its own.
       - name: Restore MOP cache
         if: steps.mode.outputs.build == 'true'

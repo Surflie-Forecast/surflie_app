@@ -12,3 +12,6 @@ python backend/pipeline.py
 echo ""
 echo "✅ Done. Serve the site locally with:"
 echo "   python -m http.server 8000   # then open http://localhost:8000"
+echo ""
+echo "To publish this snapshot without a CI rebuild:"
+echo "   git add api data/locations.csv && git commit -m 'Data refresh' && git push"

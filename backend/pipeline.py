@@ -7,6 +7,7 @@ Usage:
 Exits non-zero if any CRITICAL source produced no data for any spot, so the
 CI deploy is skipped and the previously published snapshot stays live.
 """
+import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -115,6 +116,13 @@ def main():
         for spot_name, adapter_name, err in critical_failures:
             print(f"  {spot_name} / {adapter_name}: {err}")
         sys.exit(1)
+
+    # Stamp the snapshot so push deploys can pick the newest of the repo's
+    # committed api/ vs. the CI cache. Written only on full success — a run
+    # with critical failures exits above and never marks its output
+    # publishable.
+    with open(os.path.join(API_DIR, 'meta.json'), 'w') as f:
+        json.dump({'generated_utc': started.isoformat()}, f)
 
     elapsed = (datetime.now(timezone.utc) - started).total_seconds()
     print(f"\n✓ Pipeline finished in {elapsed:.1f}s")

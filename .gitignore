@@ -31,8 +31,9 @@ setup_env.sh
 *.key
 gee_key.json
 
-# Generated data — built by the pipeline, deployed as a Pages artifact, never committed
-api/
+# Generated data. api/ IS committed: pushing it after a local pipeline run
+# publishes that snapshot without a CI rebuild (see build-deploy.yml). The
+# intermediate store dump and caches stay local.
 data/*
 !data/locations.csv
 _site/
