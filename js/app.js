@@ -199,6 +199,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // the full map so the Buoys view's data sources are visible in place.
     let availableBuoys = [];
     let heroBuoysAdded = false;
+    const heroBuoyMarkers = {}; // buoy id -> hero-map circleMarker
+    let heroBuoyFocusedId = null; // buoy the hero map is zoomed out onto
+    let lastHeroView = null; // latest spot the hero map was asked to show
     const buoysPromise = fetch('api/buoys.json')
         .then(r => r.ok ? r.json() : [])
         .catch(() => [])
@@ -222,8 +225,45 @@ document.addEventListener('DOMContentLoaded', () => {
     function addHeroBuoyMarkers() {
         if (!heroMap || heroBuoysAdded || availableBuoys.length === 0) return;
         heroBuoysAdded = true;
-        availableBuoys.forEach(b => buoyMarker(b, 5, false).addTo(heroMap));
+        availableBuoys.forEach(b => {
+            heroBuoyMarkers[b.id] = buoyMarker(b, 5, false).addTo(heroMap);
+        });
     }
+
+    // Buoy view backdrop: keep every hero element in place but swap the map
+    // background — zoom out from the spot's coastline to the regional view
+    // (the "View Map" overlay's scale), buoy centered and tinted red.
+    const HERO_BUOY_ZOOM = 8;
+    const resetHeroBuoyStyle = (id) => {
+        const m = heroBuoyMarkers[id];
+        if (m) {
+            m.setStyle({ fillColor: '#131929', weight: 1.5 });
+            m.setRadius(5);
+        }
+    };
+    window.focusHeroBuoy = (buoyId) => {
+        const b = availableBuoys.find(x => x.id === buoyId);
+        if (!b || !heroMap) return;
+        // Switching stations: put the previous one back to normal
+        if (heroBuoyFocusedId && heroBuoyFocusedId !== buoyId) {
+            resetHeroBuoyStyle(heroBuoyFocusedId);
+        }
+        heroBuoyFocusedId = buoyId;
+        const m = heroBuoyMarkers[buoyId];
+        if (m) {
+            m.setStyle({ fillColor: '#e34948', weight: 2 });
+            m.setRadius(7);
+            m.bringToFront();
+        }
+        heroMap.setView([b.latitude, b.longitude], HERO_BUOY_ZOOM, { animate: false });
+    };
+    window.blurHeroBuoy = () => {
+        if (heroBuoyFocusedId == null) return;
+        resetHeroBuoyStyle(heroBuoyFocusedId);
+        heroBuoyFocusedId = null;
+        // Back to the (latest) spot's coastline framing
+        if (lastHeroView) updateHeroMap(lastHeroView.lat, lastHeroView.lon);
+    };
 
     // Initialize Map Function
     function initMap() {
@@ -289,9 +329,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update Hero Map Position
     function updateHeroMap(lat, lon) {
         if (!heroMap) initHeroMap();
+        lastHeroView = { lat, lon }; // blurHeroBuoy restores this framing
 
         // Slight delay to ensure container size is correct
         setTimeout(() => {
+            // A focused buoy owns the backdrop; don't pan back to the spot
+            // out from under it (blur re-issues this view when it ends).
+            if (heroBuoyFocusedId != null) return;
             heroMap.invalidateSize();
 
             // Set view to location
@@ -374,28 +418,27 @@ document.addEventListener('DOMContentLoaded', () => {
             // Attach metadata to marker for event handlers
             marker.spotData = spot;
 
-            // Add Popup with placeholders
-            const safeName = spot.name.replace(/[^a-zA-Z0-9]/g, '_');
-            const popupContent = `
-                <div class="popup-wrapper" id="popup-${safeName}">
-                    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px; margin-bottom: 4px;">
-                        <div class="popup-name" style="margin: 0; line-height: 1.2;">${spot.name}</div>
-                        <button class="popup-btn" style="margin: 0; width: auto; padding: 4px 10px; font-size: 0.7rem;" onclick="document.dispatchEvent(new CustomEvent('map-spot-select', { detail: '${spot.name}' }))">
-                            View Forecast
-                        </button>
-                    </div>
+            // Hover card instead of a click-popup: the 3-day summary fills
+            // in lazily on first hover; clicking the pin opens the spot.
+            const tooltipContent = `
+                <div class="popup-wrapper">
+                    <div class="popup-name" style="margin: 0 0 4px; line-height: 1.2;">${spot.name}</div>
                     <div class="popup-dynamic-content" style="min-height: 40px; display: flex; align-items: center; justify-content: center; margin: 4px 0;">
-                        <!-- Content injected on open -->
+                        <!-- Content injected on first hover -->
                         <div class="loader" style="font-size: 0.8rem; color: #888;">Loading...</div>
                     </div>
                 </div>
             `;
 
-            marker.bindPopup(popupContent, {
-                closeButton: false,
-                className: 'custom-popup',
-                offset: [0, -35], // Position popup above the pin
-                autoPanPadding: [30, 30] // Add margin when auto-panning to show popup
+            marker.bindTooltip(tooltipContent, {
+                direction: 'top',
+                offset: [0, -38], // Above the pin
+                className: 'spot-hover-card',
+                opacity: 1,
+            });
+
+            marker.on('click', () => {
+                document.dispatchEvent(new CustomEvent('map-spot-select', { detail: spot.name }));
             });
 
             markers.push(marker);
@@ -407,12 +450,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // Wait for all markers to be created
         await Promise.all(markerPromises);
 
-        // Buoys on the full map get a hover tooltip naming the station
-        // (bounds stay spot-driven — offshore buoys shouldn't zoom us out)
+        // Buoys on the full map: hover names the station, a click opens its
+        // comparison view right away (bounds stay spot-driven — offshore
+        // buoys shouldn't zoom us out)
         const buoys = await buoysPromise;
         buoys.forEach(b => {
             const m = buoyMarker(b, 6, true).addTo(map);
             m.bindTooltip(`CDIP ${b.id} — ${b.name}`, { direction: 'top' });
+            m.on('click', () => {
+                closeMap();
+                if (typeof openBuoyView === 'function') openBuoyView(String(b.id));
+            });
             markers.push(m);
         });
 
@@ -421,17 +469,17 @@ document.addEventListener('DOMContentLoaded', () => {
             map.fitBounds(bounds, { padding: [50, 50] });
         }
 
-        // Add Event Listener for Popup Open (Lazy Load Data)
-        map.on('popupopen', async (e) => {
-            const marker = e.popup._source;
+        // Lazy-load the hover card's 3-day summary on first hover
+        map.on('tooltipopen', async (e) => {
+            const marker = e.tooltip._source;
             if (!marker || !marker.spotData) return;
 
             const spot = marker.spotData;
-            const container = e.popup.getElement();
-            // Leaflet popup content wrapper
+            const container = e.tooltip.getElement();
+            if (!container) return;
             const dynamicContainer = container.querySelector('.popup-dynamic-content');
 
-            if (!dynamicContainer || dynamicContainer.dataset.loaded === 'true') return;
+            if (!dynamicContainer || marker._cardLoaded) return;
 
             try {
                 // 1. Fetch Main Forecast Summary (for ratings, colors, and valid dates)
@@ -493,7 +541,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 dynamicContainer.innerHTML = `<div style="display:flex; flex-direction:column; width: 100%;">${rowsHtml}</div>`;
-                dynamicContainer.dataset.loaded = 'true';
+                // Persist into the bound content — tooltips re-render from it
+                // on every hover, so without this each hover refetches
+                const wrapper = container.querySelector('.popup-wrapper');
+                if (wrapper) marker.setTooltipContent(wrapper.outerHTML);
+                marker._cardLoaded = true;
 
             } catch (err) {
                 console.warn("Failed to load map info", err);
@@ -512,6 +564,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Open/Close Handlers
     function openMap() {
         mapOverlay.classList.add('active');
+        // Lets CSS clear the boundary strip for the site name row (the
+        // compare buttons/legend drop below it while the map is open)
+        document.body.classList.add('map-open');
 
         // Show Map Site Name Container
         const mapSiteNameContainer = document.getElementById('mapSiteNameContainer');
@@ -539,41 +594,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const hero = document.querySelector('.hero');
         if (hero) hero.classList.remove('compact');
 
-        // Helper to open the specific popup
-        const openCurrentSpotPopup = () => {
-            if (lastRenderedSpot && markers.length > 0) {
-                const targetMarker = markers.find(m => m.spotData && m.spotData.name === lastRenderedSpot);
-                if (targetMarker) {
-                    // Slight delay to ensure map animation/sizing is done
-                    setTimeout(() => {
-                        targetMarker.openPopup();
-                        // Optional: Center map on marker if needed
-                        // map.panTo(targetMarker.getLatLng()); 
-                    }, 200);
-                }
-            }
-        };
-
-        // Initialize map if needed (lazy load)
+        // Initialize map if needed (lazy load). Spot cards are hover-only
+        // now, so nothing to auto-open — the header names the current site.
         if (!map) {
             initMap();
             // Tiny delay to ensure container has size before fitting bounds
             setTimeout(async () => {
                 map.invalidateSize();
                 await populateMapMarkers();
-                openCurrentSpotPopup();
             }, 100);
         } else {
             // Just refresh size in case window changed
             setTimeout(() => {
                 map.invalidateSize();
-                openCurrentSpotPopup();
             }, 300); // Wait for transition
         }
     }
 
     function closeMap() {
         mapOverlay.classList.remove('active');
+        document.body.classList.remove('map-open');
 
         // Hide Map Site Name Container
         const mapSiteNameContainer = document.getElementById('mapSiteNameContainer');
@@ -581,10 +621,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mapSiteNameContainer.classList.remove('active');
         }
 
-        // Force close any open popup so that the 'popupopen' event 
-        // fires reliably the next time the map is opened.
+        // Close any hover card a click left open
         if (map) {
-            map.closePopup();
+            markers.forEach(m => m.closeTooltip && m.closeTooltip());
         }
 
         // Restore hero state logic
@@ -793,75 +832,124 @@ document.addEventListener('DOMContentLoaded', () => {
 
     init();
 
-    // Search logic
-    searchInput.addEventListener('input', (e) => {
-        const query = e.target.value.toLowerCase();
+    // --- Search: surf spots AND buoys in one panel ---
+    const searchContainer = document.querySelector('.search-container');
+
+    // Portal the panel to <body>: the hero's backdrop-filter creates a
+    // stacking context that would trap it under the chart controls no matter
+    // its z-index. Fixed-positioned under the input on open instead.
+    document.body.appendChild(searchResults);
+
+    function hideSearchResults() {
+        searchResults.style.display = 'none';
+    }
+
+    function positionSearchResults() {
+        const r = searchContainer.getBoundingClientRect();
+        searchResults.style.left = `${r.left}px`;
+        searchResults.style.top = `${r.bottom + 8}px`;
+        searchResults.style.width = `${r.width}px`;
+    }
+
+    // Spots and buoys, filtered by the query — or, for an empty query, the
+    // suggestion set: every spot, then buoys (current spot's closest first).
+    function searchMatches(query) {
+        const q = query.trim().toLowerCase();
+        const spots = availableSpots
+            .filter(s => !q || s.name.toLowerCase().includes(q)
+                || s.region.toLowerCase().includes(q))
+            .map(s => ({
+                kind: 'spot',
+                label: `${s.name}, ${s.region}`,
+                run: () => renderForecast(s.name),
+            }));
+        let buoyList = availableBuoys.filter(b =>
+            !q || b.name.toLowerCase().includes(q) || `cdip ${b.id}`.includes(q));
+        if (!q) {
+            const closest = window._spotBuoys[lastRenderedSpot];
+            if (closest) {
+                buoyList = [
+                    ...buoyList.filter(b => b.id === closest),
+                    ...buoyList.filter(b => b.id !== closest),
+                ];
+            }
+        }
+        const buoys = buoyList.map(b => ({
+            kind: 'buoy',
+            label: `CDIP ${b.id} — ${b.name}`,
+            run: () => {
+                if (typeof openBuoyView === 'function') openBuoyView(String(b.id));
+            },
+        }));
+        return [...spots, ...buoys];
+    }
+
+    function renderSearchResults(query) {
+        const matches = searchMatches(query);
         searchResults.innerHTML = '';
 
-        if (!query) {
-            searchResults.style.display = 'none';
+        if (matches.length === 0) {
+            hideSearchResults();
             return;
         }
 
-        // Filter by name OR region
-        const matches = availableSpots.filter(spot =>
-            spot.name.toLowerCase().includes(query) ||
-            spot.region.toLowerCase().includes(query)
-        );
+        const limit = 5;
+        matches.slice(0, limit).forEach(match => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            item.innerHTML =
+                `<span class="sri-dot sri-dot--${match.kind}"></span>` +
+                `<span class="sri-label"></span>` +
+                `<span class="sri-kind">${match.kind === 'spot' ? 'Surf spot' : 'Buoy'}</span>`;
+            item.querySelector('.sri-label').textContent = match.label;
+            item.onclick = () => {
+                match.run();
+                searchInput.value = '';
+                hideSearchResults();
+            };
+            searchResults.appendChild(item);
+        });
 
-        if (matches.length > 0) {
-            searchResults.style.display = 'block';
-
-            // Show only first 5
-            const limit = 5;
-            const displayMatches = matches.slice(0, limit);
-
-            displayMatches.forEach(match => {
-                const item = document.createElement('div');
-                item.className = 'search-result-item';
-                // Display: Name, Region
-                item.textContent = `${match.name}, ${match.region}`;
-                item.onclick = () => {
-                    renderForecast(match.name);
-                    searchInput.value = '';
-                    searchResults.style.display = 'none';
-                };
-                searchResults.appendChild(item);
-            });
-
-            // "And X more" label
-            if (matches.length > limit) {
-                const moreItem = document.createElement('div');
-                moreItem.className = 'search-result-item';
-                moreItem.style.color = 'var(--text-secondary)';
-                moreItem.style.fontStyle = 'italic';
-                moreItem.style.cursor = 'default';
-                moreItem.textContent = `...and ${matches.length - limit} more`;
-                // Prevent clicking "more" from doing anything or maybe it should act as "keep typing"?
-                // User requirement: "display a label of more"
-                searchResults.appendChild(moreItem);
-            }
-
-        } else {
-            searchResults.style.display = 'none';
+        // "And X more" label
+        if (matches.length > limit) {
+            const moreItem = document.createElement('div');
+            moreItem.className = 'search-result-item';
+            moreItem.style.color = 'var(--text-secondary)';
+            moreItem.style.fontStyle = 'italic';
+            moreItem.style.cursor = 'default';
+            moreItem.textContent = `...and ${matches.length - limit} more`;
+            searchResults.appendChild(moreItem);
         }
-    });
 
-    // Trigger search on Enter key
+        positionSearchResults();
+        searchResults.style.display = 'block';
+    }
+
+    searchInput.addEventListener('input', (e) => renderSearchResults(e.target.value));
+    // Clicking into the bar unfolds the suggestion set right away
+    searchInput.addEventListener('focus', () => renderSearchResults(searchInput.value));
+
+    // Enter picks the top match (spot or buoy)
     searchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-            const query = searchInput.value.toLowerCase();
-            const match = availableSpots.find(spot =>
-                spot.name.toLowerCase().includes(query) ||
-                spot.region.toLowerCase().includes(query)
-            );
+            const match = searchMatches(searchInput.value)[0];
             if (match) {
-                renderForecast(match.name);
+                match.run();
                 searchInput.value = '';
-                searchResults.style.display = 'none';
+                hideSearchResults();
             }
         }
     });
+
+    // The panel lives on <body>: fold it on any outside interaction, and on
+    // scroll/resize (its fixed position would drift from the input)
+    document.addEventListener('click', (e) => {
+        if (!searchContainer.contains(e.target) && !searchResults.contains(e.target)) {
+            hideSearchResults();
+        }
+    });
+    window.addEventListener('resize', hideSearchResults);
+    window.addEventListener('scroll', hideSearchResults, { passive: true });
 
     // Scroll Indicator Setup
     const forecastContainer = document.getElementById('forecastContainer');

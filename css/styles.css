@@ -326,30 +326,71 @@ input:checked+.slider:before {
   transform: scale(1.05);
 }
 
+/* Lives on <body> (app.js portals it out of the hero — its backdrop-filter
+   creates a stacking context that would trap the panel under the chart
+   controls) and is positioned under the input in JS. Highest z on the page
+   so it unfolds in front of everything. */
 .search-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 10px;
-  background: rgba(255, 255, 255, 0.95);
-  /* Light background */
+  position: fixed;
+  background: rgba(255, 255, 255, 0.97);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   overflow: hidden;
   display: none;
-  z-index: 9999;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  z-index: 99999;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
 }
 
 .search-result-item {
-  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0.85rem 1rem;
   cursor: pointer;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   /* Light border */
   transition: background 0.2s;
   color: var(--text-primary);
   text-align: left;
+}
+
+/* Result-kind markers: map symbology — blue pin-dot = surf spot,
+   ink dot = buoy — plus a small uppercase tag on the right */
+.search-result-item .sri-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.search-result-item .sri-dot--spot {
+  background: #0078A8;
+}
+
+.search-result-item .sri-dot--buoy {
+  background: #131929;
+}
+
+.search-result-item .sri-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-result-item .sri-kind {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 7px;
+  border-radius: 999px;
 }
 
 .search-result-item:hover {
@@ -1530,6 +1571,32 @@ body.buoys-mode .model-legend {
   max-width: calc(100% - 214px);
 }
 
+/* Station picked off the map or the search (not the spot's closest): the
+   corner button hides and Models alone sits in the corner, pressed but
+   inert — a state marker, not a control. */
+body.buoy-solo .model-compare-btn {
+  right: 12px;
+  pointer-events: none;
+}
+
+body.buoy-solo .model-legend {
+  right: 88px;
+  max-width: calc(100% - 100px);
+}
+
+/* Map overlay open while a compare view is on: the site name
+   (mapSiteNameContainer) owns the first line under the map — the buttons
+   and legend step down a line so the two never overlap */
+body.map-open.models-mode .model-compare-btn,
+body.map-open.buoys-mode .model-compare-btn {
+  top: 48px;
+}
+
+body.map-open.models-mode .model-legend,
+body.map-open.buoys-mode .model-legend {
+  top: 48px;
+}
+
 /* Buoy view hero: the h1 itself is re-filled by JS as
    "CDIP {id}" + buoy name in the .hero-region slot + a .buoy-hero-sub line
    ("the closest buoy to {spot}"). On desktop the sub line renders as the
@@ -2376,6 +2443,16 @@ body.buoys-mode .chart-container {
 
 .popup-wrapper {
   min-width: 140px;
+}
+
+/* Spot hover card on the full map (replaces the old click-popup): Leaflet
+   tooltips default to nowrap single-line — open it up into a small card */
+.leaflet-tooltip.spot-hover-card {
+  white-space: normal;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
 
 .popup-btn {

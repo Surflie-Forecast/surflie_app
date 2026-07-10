@@ -158,12 +158,28 @@ def _fetch_mop_forecast(sid, start_utc):
         return [float(v) for v in
                 body.split(f'{name}[{count}]')[1].strip().splitlines()[0].split(',')]
 
-    # Regular hourly axis: origin + step give the slice start directly (the
-    # actual timestamps come back with the data, so a mild irregularity only
-    # shifts where the slice begins, never what the points mean).
+    # The axis is hourly but NOT gap-free: offline stretches are simply
+    # absent, so a validation file can run thousands of indices short of a
+    # regular grid (e.g. 029 Point Reyes). A regular-grid estimate therefore
+    # lands AT OR AFTER the wanted time, never before — use it as an upper
+    # bound and page the real axis backwards to the true slice start.
     t0, t1 = values(ascii_body('waveTime%5B0:1:1%5D'), 'waveTime', 2)
     step = t1 - t0
-    i0 = max(0, min(n - 1, int((start_utc.timestamp() - t0) // step)))
+    target = start_utc.timestamp()
+    lo = max(0, min(n - 1, int((target - t0) // step) + 2))
+    i0 = lo
+    while True:
+        chunk_lo = max(0, lo - 4096)
+        ts = values(ascii_body(f'waveTime%5B{chunk_lo}:1:{lo}%5D'),
+                    'waveTime', lo - chunk_lo + 1)
+        k = next((k for k, t in enumerate(ts) if t >= target), None)
+        if k is None:
+            i0 = lo  # whole file predates start; the final filter empties it
+            break
+        if k > 0 or chunk_lo == 0:
+            i0 = chunk_lo + k
+            break
+        lo = chunk_lo  # boundary is even earlier — page back another chunk
 
     body = ascii_body(f'waveTime%5B{i0}:1:{n - 1}%5D,waveHs%5B{i0}:1:{n - 1}%5D')
     times = values(body, 'waveTime', n - i0)

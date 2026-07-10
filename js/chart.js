@@ -640,6 +640,12 @@ const DEFAULT_BUOY = '071'; // Harvest
 // right — so every series is drawn to where its own data actually runs out.
 const BUOY_INK = '#0b0b0b'; // observations are ink, not a series hue
 
+// Same hues the site's models view shows: there GFS Wave (the usual default)
+// is drawn in the bars' blue, so the buoy panel matches — and the near-black
+// MODEL_COLORS.gfswave025 would collide with the ink observation dots here.
+// MOP keeps its reserved red.
+const BUOY_MODEL_COLORS = { ...MODEL_COLORS, gfswave025: '#38bdf8' };
+
 function setupBuoyCompare(spotName) {
     const btn = document.getElementById('buoyCompareBtn');
     if (!btn) return;
@@ -675,6 +681,8 @@ function clearBuoyView() {
     }
     const heroLabel = document.getElementById('buoyHeroLabel');
     if (heroLabel) heroLabel.textContent = '';
+    // Hero backdrop back to the spot's coastline (no-op unless focused)
+    if (window.blurHeroBuoy) window.blurHeroBuoy();
     // Give the hero title back to the spot — but only if it still shows our
     // buoy caption (a spot switch re-renders the title before this runs,
     // and that fresh title must not be clobbered with the stale one).
@@ -714,6 +722,16 @@ function clearBuoyView() {
             btn.textContent = 'Buoys';
         }
     }
+    // Leaving a picked-station view: un-press the inert Models button and
+    // bring the corner button back out
+    if (document.body.classList.contains('buoy-solo')) {
+        document.body.classList.remove('buoy-solo');
+        if (btn) btn.style.display = 'inline-flex';
+        const modelBtn = document.getElementById('modelCompareBtn');
+        if (modelBtn && !(container && container._modelData)) {
+            modelBtn.classList.remove('active');
+        }
+    }
 }
 
 async function toggleBuoyView() {
@@ -738,9 +756,20 @@ async function toggleBuoyView() {
         return;
     }
 
+    // The spot's preassigned closest buoy (from spots.json via app.js)
+    openBuoyView(window._spotBuoys?.[btn.dataset.spot] || DEFAULT_BUOY, true);
+}
+
+// Open the comparison view for a specific station — the button's toggle
+// lands on the spot's closest buoy (viaToggle), the map's buoy dots and the
+// search results on themselves. Re-entrant: called while another buoy is
+// showing, it just swaps stations.
+async function openBuoyView(buoyId, viaToggle = false) {
+    const btn = document.getElementById('buoyCompareBtn');
+    const container = document.getElementById('waveChartContainer');
+    if (!btn || !container) return;
+
     try {
-        // The spot's preassigned closest buoy (from spots.json via app.js)
-        const buoyId = window._spotBuoys?.[btn.dataset.spot] || DEFAULT_BUOY;
         const res = await fetch(`api/buoys/${buoyId}.json`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
@@ -753,17 +782,34 @@ async function toggleBuoyView() {
 
         container._buoyData = data;
         drawBuoyChart(data);
-        btn.classList.add('active');
-        btn.textContent = 'Closest buoy'; // it's showing exactly that
+        const modelBtn = document.getElementById('modelCompareBtn');
+        if (viaToggle) {
+            // The button's own toggle flow: it sits active in the corner,
+            // Models beside it ready to switch back.
+            document.body.classList.remove('buoy-solo');
+            btn.style.display = 'inline-flex';
+            btn.classList.add('active');
+            btn.textContent = 'Closest buoy';
+        } else {
+            // Station picked off the map or the search — even if it happens
+            // to be the closest one: the toggle button stands down and only
+            // Models shows, pressed but inert (body.buoy-solo pins it in
+            // the corner, unclickable).
+            document.body.classList.add('buoy-solo');
+            btn.classList.remove('active');
+            btn.style.display = 'none';
+            if (modelBtn) modelBtn.classList.add('active');
+        }
         // The hero title becomes the station: "CDIP {id}" where the spot
         // name goes, the buoy's name in the region slot (same h1 +
         // .hero-region structure as a spot title, so every hero state —
-        // desktop / mobile / compact — styles it for free), and "the
-        // closest buoy to {spot}" bottom-left (inside the title block on
-        // small screens, via .buoy-hero-sub).
+        // desktop / mobile / compact — styles it for free). "the closest
+        // buoy to {spot}" bottom-left (inside the title block on small
+        // screens, via .buoy-hero-sub) — only in the button's own flow;
+        // a station picked off the map or the search shows no phrase.
         const esc = s => s.replace(/[&<>"]/g, c => (
             { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        const subText = `the closest buoy to ${btn.dataset.spot}`;
+        const subText = viaToggle ? `the closest buoy to ${btn.dataset.spot}` : '';
         const titleEl = document.getElementById('spotName');
         if (titleEl) {
             if (titleEl._spotTitleHTML == null) {
@@ -773,11 +819,13 @@ async function toggleBuoyView() {
             titleEl._buoyTitleHTML =
                 `CDIP ${esc(String(data.id))}` +
                 `<span class="hero-region">${esc(buoyName)}</span>` +
-                `<span class="buoy-hero-sub">${esc(subText)}</span>`;
+                (subText ? `<span class="buoy-hero-sub">${esc(subText)}</span>` : '');
             titleEl.innerHTML = titleEl._buoyTitleHTML;
         }
         const heroLabel = document.getElementById('buoyHeroLabel');
         if (heroLabel) heroLabel.textContent = subText;
+        // Hero backdrop: zoom the map out onto the buoy (red, centered)
+        if (window.focusHeroBuoy) window.focusHeroBuoy(String(data.id));
         if (window.updateUrlView) window.updateUrlView({ buoys: true, models: false });
     } catch (e) {
         console.warn('Buoy comparison unavailable:', e);
@@ -973,7 +1021,7 @@ function drawBuoyChart(data) {
         pts.forEach(p => { p.y = yFor(p.v); });
         if (pts.length < 2) return;
 
-        const color = MODEL_COLORS[model.id] || '#64748b';
+        const color = BUOY_MODEL_COLORS[model.id] || '#64748b';
         const isMop = model.id === 'mop';
         const baseWidth = isMop ? 2.2 : 1.5;
         const baseOpacity = isMop ? '1' : '0.85';
@@ -1072,7 +1120,7 @@ function drawBuoyChart(data) {
             `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>observed Hs</span>`,
             ...data.models.map(m =>
                 `<span class="legend-chip" data-series-id="${m.id}">` +
-                `<i style="background:${MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}</span>`),
+                `<i style="background:${BUOY_MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}</span>`),
         ];
         legend.innerHTML = chips.join('');
         legend.classList.add('visible');
