@@ -17,12 +17,12 @@ swell partition (period/direction) qualifies it and drives the rating.
 import json
 import os
 import shutil
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime
 from statistics import mean, median
 from zoneinfo import ZoneInfo
 
-from rating_config import RatingConfig
+from rating_config import build_profile, bucket_for_score, score_conditions
 
 HOURLY_STEP_H = 3          # cadence of hourly entries (matches the old 3-hourly data)
 RATING_HOURS = (7, 19)     # local hours (inclusive) considered for the daily rating
@@ -84,10 +84,11 @@ def _day_label(date_obj, today):
     return date_obj.strftime('%A')
 
 
-def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d):
+def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile):
     """3-hourly entries per local date where waves and wind both exist.
 
     height is combined Hs; period/direction are the primary swell partition.
+    Each entry carries a direction-aware 0-100 `score` and its bucketed label.
     """
     by_date = defaultdict(list)
     for dt, height in wave_h.items():
@@ -95,6 +96,10 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d):
             continue
         if not (dt in swell_p and dt in swell_d and dt in wind_s and dt in wind_d):
             continue
+        score = round(score_conditions(
+            height, swell_p[dt], swell_d[dt], wind_s[dt], wind_d[dt],
+            profile=profile))
+        rating, color = bucket_for_score(score)
         by_date[dt.date()].append({
             'datetime': _fmt_dt(dt),
             'swell': {
@@ -106,24 +111,27 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d):
                 'speed': round(wind_s[dt], 2),
                 'direction': round(wind_d[dt]),
             },
+            'score': score,
+            'rating': rating,
+            'color': color,
         })
     return by_date
 
 
 def _daily_rating(hourly_entries):
-    """Most common hourly rating during prime hours (7am-7pm local)."""
-    ratings = []
-    for entry in hourly_entries:
-        hour = int(entry['datetime'][11:13])
-        if RATING_HOURS[0] <= hour <= RATING_HOURS[1]:
-            ratings.append(RatingConfig.get_rating(
-                entry['swell']['height'],
-                entry['swell']['period'],
-                entry['wind']['speed'],
-            ))
-    if not ratings:
-        return 'Poor', '#ef4444'
-    return Counter(ratings).most_common(1)[0][0]
+    """Daily label/color/score from the prime-hours (7am-7pm) window.
+
+    Averages the continuous hourly scores over daylight, then buckets - so a
+    day reads by its typical daytime quality rather than by a mode over coarse
+    labels. Returns (rating, color, score).
+    """
+    scores = [e['score'] for e in hourly_entries
+              if RATING_HOURS[0] <= int(e['datetime'][11:13]) <= RATING_HOURS[1]]
+    if not scores:
+        return 'Poor', '#ef4444', 0
+    day_score = round(mean(scores))
+    rating, color = bucket_for_score(day_score)
+    return rating, color, day_score
 
 
 def _tide_extremes(date_obj, tide_peaks, tide_raw):
@@ -143,6 +151,9 @@ def _tide_extremes(date_obj, tide_peaks, tide_raw):
 
 def build_spot(store, spot, out_dir):
     tz = ZoneInfo(spot.timezone)
+    # Rating profile: hand-entered CSV cells win; anything missing is derived
+    # from the spot's coastline orientation (swell window + offshore wind).
+    profile = build_profile(spot.rating_meta, coast_normal=spot.coast_normal)
     wave_src = _pick_wave_source(store, spot.slug)
     if wave_src is None:
         print(f"  ! no usable wave model for {spot.name}; skipping")
@@ -172,7 +183,7 @@ def build_spot(store, spot, out_dir):
     hourly_by_date = {
         d: entries
         for d, entries in _build_hourly(wave_h, swell_p, swell_d,
-                                        wind_s, wind_d).items()
+                                        wind_s, wind_d, profile).items()
         if len(entries) >= full_day}
     for date_obj, entries in hourly_by_date.items():
         entries.sort(key=lambda e: e['datetime'])
@@ -192,7 +203,7 @@ def build_spot(store, spot, out_dir):
     for date_obj in sorted(d for d in hourly_by_date
                            if by_date[d]['height'] and d >= today):
         vals = by_date[date_obj]
-        rating, color = _daily_rating(hourly_by_date.get(date_obj, []))
+        rating, color, day_score = _daily_rating(hourly_by_date.get(date_obj, []))
         tide_min, tide_min_t, tide_max, tide_max_t = _tide_extremes(
             date_obj, tide_peaks, tide_raw)
         forecast.append({
@@ -216,6 +227,7 @@ def build_spot(store, spot, out_dir):
             },
             'rating': rating,
             'color': color,
+            'score': day_score,
         })
 
     _write_json(os.path.join(out_dir, 'forecast', f'{spot.slug}.json'), {

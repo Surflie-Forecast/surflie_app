@@ -17,10 +17,29 @@ import csv
 import json
 from dataclasses import dataclass, field
 
+# Optional per-spot rating tuning. Any blank/absent column is derived from the
+# spot's coastline orientation at rating time (see rating_config.build_profile),
+# so these are refinements, not requirements — a new spot needs only lat/lon.
+RATING_FIELDS = [
+    'swell_min', 'swell_ideal', 'swell_max', 'offshore_dir',
+    'size_min', 'size_ideal', 'size_max', 'tide_min', 'tide_max',
+]
+
 FIELDNAMES = [
     'site_name', 'slug', 'region', 'latitude', 'longitude', 'timezone',
-    'closest_buoy', 'resolved_cells',
+    'closest_buoy', 'resolved_cells', *RATING_FIELDS,
 ]
+
+
+def _opt_float(row, key):
+    """Parse an optional numeric CSV cell; blank/missing/bad -> None."""
+    raw = (row.get(key) or '').strip()
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
 
 
 @dataclass(frozen=True)
@@ -38,6 +57,22 @@ class Spot:
     # protects the identity fields; the dict CONTENTS are mutated in place as
     # models resolve during a run (never reassign the attribute).
     resolved_cells: dict = field(default_factory=dict)
+    # Hand-entered rating tuning: {RATING_FIELDS key: float}. Only keys the CSV
+    # actually filled in are present; the rest are derived from coastline
+    # orientation when the profile is built. Empty dict => fully derived.
+    rating_meta: dict = field(default_factory=dict)
+
+    @property
+    def coast_normal(self):
+        """Compass bearing (deg) this spot's coastline faces the open ocean.
+
+        Used to DERIVE a rating profile (swell window + offshore wind) when the
+        CSV supplies none. We have no coastline dataset, so this is a coarse
+        default: US West Coast breaks face broadly west. Override precisely by
+        filling swell_ideal / offshore_dir in locations.csv for any spot where
+        this is wrong (e.g. a south- or east-facing break).
+        """
+        return 270.0
 
 
 def load_spots(path):
@@ -52,6 +87,8 @@ def load_spots(path):
                     resolved = json.loads(raw)
                 except Exception:
                     resolved = {}
+            rating_meta = {k: v for k in RATING_FIELDS
+                           if (v := _opt_float(row, k)) is not None}
             spots.append(Spot(
                 name=row['site_name'].strip(),
                 slug=row['slug'].strip(),
@@ -61,6 +98,7 @@ def load_spots(path):
                 timezone=row['timezone'].strip(),
                 closest_buoy=(row.get('closest_buoy') or '').strip(),
                 resolved_cells=resolved,
+                rating_meta=rating_meta,
             ))
     return spots
 
@@ -75,7 +113,7 @@ def save_spots(path, spots):
             blob = ''
             if spot.resolved_cells:
                 blob = json.dumps(spot.resolved_cells, separators=(',', ':'))
-            writer.writerow({
+            row = {
                 'site_name': spot.name,
                 'slug': spot.slug,
                 'region': spot.region,
@@ -84,4 +122,9 @@ def save_spots(path, spots):
                 'timezone': spot.timezone,
                 'closest_buoy': spot.closest_buoy,
                 'resolved_cells': blob,
-            })
+            }
+            # Only write back rating cells the CSV actually supplied, so derived
+            # spots stay blank (and keep deriving) rather than being frozen.
+            for k in RATING_FIELDS:
+                row[k] = spot.rating_meta.get(k, '')
+            writer.writerow(row)

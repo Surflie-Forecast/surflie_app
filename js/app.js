@@ -1456,11 +1456,18 @@ function generateMiniHourlyPlot(hourlyData, maxH = 3.0) {
     // We want 24 bars, assuming hourlyData matches hours?
     // Hourly data usually has datetime. We can just iterate array.
     hourlyData.forEach(h => {
-        // Calculate Rating Color using shared logic
+        // Prefer the backend's direction- and spot-aware color; fall back to
+        // the shared engine (now passing swell/wind direction) for older data.
         const windSpd = parseFloat(h.wind.speed) || 0;
         const swellH = parseFloat(h.swell.height) || 0;
         const swellP = parseFloat(h.swell.period) || 0;
-        const rating = getRatingAndColor(swellH, swellP, windSpd);
+        const swellDir = parseFloat(h.swell.direction);
+        const windDir = parseFloat(h.wind.direction);
+        const rating = (typeof h.color === 'string')
+            ? { color: h.color }
+            : getRatingAndColor(swellH, swellP, windSpd,
+                isNaN(swellDir) ? null : swellDir,
+                isNaN(windDir) ? null : windDir);
 
         // Height percentage (clamp at 100%)
         let pct = (swellH / maxH) * 100;

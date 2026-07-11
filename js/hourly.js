@@ -42,9 +42,16 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
             const windSpeed = Math.round(hour.wind.speed);
             const windDir = Math.round(hour.wind.direction);
 
-            // Calculate rating color using centralized rating.js (includes wind speed)
-            const result = getRatingAndColor(hour.swell.height, hour.swell.period, hour.wind.speed);
-            const color = result.color;
+            // Prefer the score computed by the backend (direction- and
+            // spot-aware); fall back to the shared JS engine for older data.
+            let color;
+            if (typeof hour.color === 'string') {
+                color = hour.color;
+            } else {
+                color = getRatingAndColor(
+                    hour.swell.height, hour.swell.period, hour.wind.speed,
+                    hour.swell.direction, hour.wind.direction).color;
+            }
 
             html += `
                 <div class="hourly-row">
