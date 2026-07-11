@@ -1,0 +1,129 @@
+# Refreshes ONLY the buoy observations (observed series + latest reading +
+# stale flags) and redeploys the site. Forecasts are untouched — the full
+# 6-hour build (build-deploy.yml) owns those.
+#
+# Why this exists: CDIP buoys report every 30 minutes and the sample lands
+# in ERDDAP ~25-35 min after measurement, so between 6-hour builds the
+# published observations go up to 6h stale. This job costs two ERDDAP
+# requests and a redeploy.
+#
+# Timing: cron fires at :23 and :53 — GitHub schedules run ~5-15 min late
+# (worst at :00/:30 load spikes), so actual starts land ~:28-:38, right as
+# the previous half-hour sample finishes ingesting. Best case the site
+# publishes a ~35-min-old observation, near the floor CDIP's own lag allows.
+#
+# Data flow: restore the newest api/ from the actions cache (a full build or
+# a previous obs refresh), patch the obs fields in place, save it back under
+# the same cache namespace so push redeploys and later refreshes chain off
+# it, deploy. If there's no cached data or the patch fails, exit without
+# deploying — the published snapshot stays live.
+name: Refresh Buoy Observations
+
+on:
+  schedule:
+    - cron: '23,53 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Same group as build-deploy.yml: an obs refresh never runs concurrently
+# with a full build, so they can't trample each other's cache or deploy.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Cache entries are versioned by their path, so the restore must use
+      # the same path the builds save (api). Stash the repo's committed api/
+      # first so the restore can't clobber it before the freshness pick.
+      - name: Stash committed forecast data
+        run: |
+          rm -rf repo-api
+          if [ -d api ]; then mv api repo-api; fi
+
+      # The run_id key never matches, so restore-keys picks the most recent
+      # save — from the last full build or the last obs refresh.
+      - name: Restore latest forecast data
+        uses: actions/cache/restore@v4
+        with:
+          path: api
+          key: api-data-${{ github.run_id }}
+          restore-keys: api-data-
+
+      # Prefer the newer per api/meta.json (same pick as build-deploy.yml's
+      # push path). Obs refreshes never touch meta.json, so the stamp always
+      # reflects forecast recency.
+      - name: Pick newest prebuilt data
+        id: data
+        run: |
+          committed=$(jq -r '.generated_utc // empty' repo-api/meta.json 2>/dev/null || true)
+          cached=$(jq -r '.generated_utc // empty' api/meta.json 2>/dev/null || true)
+          echo "committed: ${committed:-none}  cached: ${cached:-none}"
+          if [ -d repo-api ] && { [ ! -d api ] || [ "$committed" \> "$cached" ]; }; then
+            rm -rf api
+            mv repo-api api
+            echo "using committed api/"
+          else
+            echo "using cached api/"
+          fi
+          if [ -s api/buoys.json ]; then
+            echo "have_data=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_data=false" >> "$GITHUB_OUTPUT"
+            echo "no buoy data to patch; skipping refresh and deploy"
+          fi
+
+      - name: Set up Python
+        if: steps.data.outputs.have_data == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        if: steps.data.outputs.have_data == 'true'
+        run: pip install -r backend/requirements.txt
+
+      - name: Refresh observations
+        if: steps.data.outputs.have_data == 'true'
+        run: python backend/buoys.py --refresh-obs
+
+      # Chain the patched snapshot: later obs refreshes and push redeploys
+      # restore this instead of the older full-build save.
+      - name: Save refreshed data
+        if: steps.data.outputs.have_data == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: api
+          key: api-data-${{ github.run_id }}
+
+      - name: Assemble site
+        if: steps.data.outputs.have_data == 'true'
+        run: |
+          mkdir _site
+          cp index.html _site/
+          cp -r css js images api _site/
+
+      - name: Upload Pages artifact
+        if: steps.data.outputs.have_data == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        if: steps.data.outputs.have_data == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4

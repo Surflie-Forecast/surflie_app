@@ -16,13 +16,29 @@ Not every model serves every variable (ECMWF WAM is Hs-only); missing
 variables simply yield no rows. A single model failing degrades to the
 remaining models, never the whole source: the adapter only fails if no
 model returned anything.
+
+Models publish on different cycles (GFS Wave / ECMWF every 6h, MFWAM /
+GWAM twice daily), so on a 6h schedule roughly two fetches in four return
+byte-identical data. plan_models compares each model's
+last_run_availability_time (from Open-Meteo's per-model meta.json — the
+same feed its model-updates dashboard reads) against the stamp of our last
+successful fetch, so scheduled runs fetch only what's actually new and
+carry the rest forward. Meta being unreachable counts as due: fail open,
+never silently stale.
 """
+import json
+
+import requests
+
 from . import _openmeteo
 
 NAME = 'openmeteo-marine'
 CRITICAL = True
 
 URL = 'https://marine-api.open-meteo.com/v1/marine'
+META_URL = 'https://marine-api.open-meteo.com/data/{model}/static/meta.json'
+# meta.json slugs that differ from the API's `models=` parameter name
+META_SLUGS = {'gwam': 'dwd_gwam'}
 
 # api model name -> source tag (the store/builders contract), preference order
 MODELS = [
@@ -46,6 +62,58 @@ VARMAP = {
 # scaled by one then two 25 km cells.
 DIRECTIONS = [(0, -1), (-1, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (1, 1), (0, 1)]
 OFFSET_RINGS_DEG = (0.25, 0.5)
+
+
+def plan_models(state_path):
+    """Split MODELS into (due, skipped) for a scheduled run.
+
+    A model is due when its last_run_availability_time on Open-Meteo differs
+    from the stamp of our last successful fetch (state_path, JSON:
+    source tag -> availability epoch). Missing state or unreachable meta
+    counts as due — fail open, never silently stale.
+
+    Returns (due, skipped, avail) where due/skipped are [(model, source)]
+    and avail maps source -> the availability stamp to persist once that
+    model's fetch succeeds (see stamp_models).
+    """
+    try:
+        with open(state_path) as f:
+            state = json.load(f)
+    except Exception:
+        state = {}
+
+    due, skipped, avail = [], [], {}
+    for model, source in MODELS:
+        ts = None
+        try:
+            slug = META_SLUGS.get(model, model)
+            r = requests.get(META_URL.format(model=slug), timeout=15)
+            r.raise_for_status()
+            ts = r.json().get('last_run_availability_time')
+        except Exception as e:
+            print(f"    ! meta for {model} unreachable ({e}); fetching anyway")
+        avail[source] = ts
+        if ts is not None and state.get(source) == ts:
+            skipped.append((model, source))
+        else:
+            due.append((model, source))
+    return due, skipped, avail
+
+
+def stamp_models(state_path, avail, fetched_sources):
+    """Persist availability stamps for the models whose fetch produced rows,
+    merging over the previous state so skipped models keep their stamps. A
+    due model that failed keeps its old stamp and stays due next run."""
+    try:
+        with open(state_path) as f:
+            state = json.load(f)
+    except Exception:
+        state = {}
+    for source in fetched_sources:
+        if avail.get(source) is not None:
+            state[source] = avail[source]
+    with open(state_path, 'w') as f:
+        json.dump(state, f, indent=1)
 
 
 def _usable(rows):
@@ -96,13 +164,14 @@ def _group_by_slug(rows):
     return grouped
 
 
-def fetch_batch(spots, start_utc, end_utc):
-    """Fetch every model for every spot, batching cached cells into one request
-    per model. Mutates each spot's resolved_cells with newly resolved coords."""
+def fetch_batch(spots, start_utc, end_utc, models=None):
+    """Fetch every model (or just `models`, a [(model, source)] subset from
+    plan_models) for every spot, batching cached cells into one request per
+    model. Mutates each spot's resolved_cells with newly resolved coords."""
     out = []
     failures = []
 
-    for model, source in MODELS:
+    for model, source in (MODELS if models is None else models):
         try:
             known = [s for s in spots if source in s.resolved_cells]
             unknown = [s for s in spots if source not in s.resolved_cells]

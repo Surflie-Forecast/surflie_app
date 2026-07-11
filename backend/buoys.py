@@ -8,63 +8,129 @@ buoy's coordinates. Left of "now", every line is checkable against reality.
 
 Outputs:
 
-    api/buoys.json          all active California buoys (id, name, position)
-    api/buoys/{id}.json     observed + MOP + per-model Hs, one per active buoy
+    api/buoys.json          the roster (id, name, position, stale flag)
+    api/buoys/{id}.json     observed + MOP + per-model Hs, one per buoy
 
-One ERDDAP request covers every station's last PAST_DAYS of observations and
-positions; "active" means an observation within the last ACTIVE_WITHIN_H
-hours, "California" is taken from the station name (', CA '). Every active
-buoy gets a detail file — each one costs a THREDDS read plus one Open-Meteo
-call per model — so any spot's preassigned closest buoy is always openable.
+WHICH buoys is static: data/buoys.csv, committed like locations.csv, is the
+roster the scheduled pipeline builds — no per-run discovery, so the set of
+detail files never changes on its own. Refresh it explicitly with
 
-build_buoys also fills in each spot's closest_buoy where the CSV left it
-blank (new spots): nearest active buoy by great-circle distance, persisted
-back to locations.csv by the pipeline's save_spots so it's computed once.
+    python backend/buoys.py --refresh-roster
+
+which re-queries ERDDAP for active California stations ("active" = an
+observation within ACTIVE_WITHIN_H hours, "California" = ', CA ' in the
+station name) and rewrites the CSV for you to review and commit. Every
+roster buoy gets a detail file, because the frontend lets the user open ANY
+buoy (map markers and search) — not just each spot's assigned one.
+
+The live data for that fixed roster is fetched with a fixed, small request
+budget (~300 sequential requests before; ~2 + 5 + 2/buoy now, the per-buoy
+part parallelized):
+
+  - ONE ERDDAP query for every station's last PAST_DAYS of Hs/Tp/Dp (the
+    observed series AND the "latest" headline come out of it), plus ONE for
+    the latest SST of every station.
+  - FIVE Open-Meteo multi-coordinate requests (one per wave model, all
+    buoys batched — same pattern the spot pipeline uses).
+  - TWO THREDDS reads per buoy for the MOP validation forecast (shape +
+    tail), run through a small thread pool. A shared Session keeps
+    connections alive; requests carry a 30s timeout instead of 90s so a
+    slow run degrades instead of snowballing into a CI timeout.
+
+build_buoys also fills in each spot's blank closest_buoy (new spots):
+nearest roster buoy by great-circle distance, persisted back to
+locations.csv by the pipeline's save_spots so it's computed once.
 
 On top of that static assignment, every run re-points spots.json's
-closest_buoy at a swell-aware pick: the nearest buoy lying TOWARD today's
-swell source (it samples the waves before they arrive), falling back to
-plain proximity when no active buoy faces the swell.
+closest_buoy at a swell-aware pick: the nearest fresh buoy lying TOWARD
+today's swell source (it samples the waves before they arrive), falling
+back to plain proximity when no fresh buoy faces the swell.
 
 This runs outside the store: buoys aren't spots, and the panel needs past
 observations the store's forecast window never holds. Non-critical — the
-pipeline logs and moves on if any of it fails.
+pipeline logs and moves on if any of it fails, and a single buoy's failure
+never blocks the others.
 """
 import csv
 import json
 import math
 import os
 import re
+import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from zoneinfo import ZoneInfo
 
 import requests
+from requests.adapters import HTTPAdapter
 
 from adapters import _openmeteo, openmeteo_marine
 from builders import WAVE_MODELS, _write_json
-from spots import Spot
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROSTER_FILE = os.path.join(BASE_DIR, '..', 'data', 'buoys.csv')
+ROSTER_FIELDS = ['station_id', 'name', 'latitude', 'longitude']
 
 PAST_DAYS = 3            # observation window shown left of "now"
 # Fetch each model to its full native horizon: shorter models (MFWAM ~10,
 # GWAM ~8, MOP ~8) simply end sooner and the frontend draws each to wherever
 # its data runs out. Open-Meteo accepts end_date up to today_UTC + 16 and
 # null-pads past each model's real horizon (GFS Wave ~today+15 18:00 UTC),
-# so 16 requests the widest horizon; _fetch_models_at retries a day shorter
+# so 16 requests the widest horizon; _openmeteo.get_json clamps and retries
 # if a date skew ever pushes the request over the cap.
 FORECAST_DAYS = 16
-ACTIVE_WITHIN_H = 24     # a buoy is active if it reported within this window
+ACTIVE_WITHIN_H = 24     # roster refresh: active = reported within this
+# MOP validation tail: the axis is hourly but NOT gap-free (offline
+# stretches are simply absent), so index math can't find "PAST_DAYS ago".
+# The window we display is PAST_DAYS + the ~8-day MOP horizon ≈ 264 hourly
+# samples; a 480-sample tail covers it with slack even across gaps, in one
+# read instead of the old estimate-then-page-back walk.
+MOP_TAIL_SAMPLES = 480
+MOP_WORKERS = 6          # THREDDS reads in flight; be polite to CDIP
 
 ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/wave_agg.csv'
 SST_ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/sst_agg.csv'
 MOP_URL = ('https://thredds.cdip.ucsd.edu/thredds/dodsC/'
            'cdip/model/MOP_validation/BP{sid}_forecast.nc')
 FILL_CUTOFF = -100.0     # values below this are the -999.99 fill
+TIMEOUT = 30             # seconds; retries below make up for the short leash
 TZ = ZoneInfo('America/Los_Angeles')  # CA buoys only, so one timezone
+
+# Keep-alive across the ~60 CDIP requests per run: from a GitHub runner each
+# fresh TLS handshake costs seconds, and it's pure waste against two hosts.
+_session = requests.Session()
+_session.mount('https://', HTTPAdapter(max_retries=1, pool_maxsize=MOP_WORKERS + 2))
+
+
+def _get(url, timeout=TIMEOUT):
+    r = _session.get(url, timeout=timeout)
+    r.raise_for_status()
+    return r
 
 
 def _fmt_local(ts_utc):
     return ts_utc.astimezone(TZ).strftime('%Y-%m-%d %H:%M:%S')
+
+
+def _parse_utc(s):
+    return datetime.fromisoformat(s.replace('Z', '+00:00'))
+
+
+# ---------------------------------------------------------------------------
+# Static roster (data/buoys.csv)
+
+def load_roster(path=ROSTER_FILE):
+    """{station_id: {'name', 'latitude', 'longitude'}} from the static CSV."""
+    roster = {}
+    with open(path, newline='') as f:
+        for row in csv.DictReader(f):
+            roster[row['station_id'].strip()] = {
+                'name': row['name'].strip(),
+                'latitude': float(row['latitude']),
+                'longitude': float(row['longitude']),
+            }
+    return roster
 
 
 def _pretty_name(meta_name):
@@ -72,168 +138,158 @@ def _pretty_name(meta_name):
     return meta_name.split(' BUOY')[0].rsplit(', CA', 1)[0].strip().title()
 
 
-def _fetch_observations(start_utc):
-    """{station_id: {'name', 'latitude', 'longitude', 'observed': [(ts, hs)]}}
-    for every active California buoy, from a single ERDDAP request."""
+def refresh_roster(path=ROSTER_FILE):
+    """Rewrite the roster CSV from a live ERDDAP discovery of active CA
+    stations. Explicit-only (never run by the pipeline): review the diff,
+    prune what you don't want, commit."""
+    start = datetime.now(timezone.utc) - timedelta(hours=ACTIVE_WITHIN_H)
     query = ('?station_id,metaStationName,time,latitude,longitude,waveHs'
-             f"&time>={start_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}")
-    r = requests.get(ERDDAP + query, timeout=90)
-    r.raise_for_status()
+             f"&time>={start.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    r = _get(ERDDAP + query, timeout=90)
 
     reader = csv.DictReader(StringIO(r.text))
     next(reader)  # row 1 = units
-    buoys = {}
+    stations = {}
     for row in reader:
         sid, name = row['station_id'], row['metaStationName']
-        if not sid or ', CA ' not in name:
+        if not sid or ', CA ' not in name or not row['waveHs']:
             continue
-        entry = buoys.setdefault(sid, {
-            'name': _pretty_name(name), 'observed': []})
-        entry['latitude'] = float(row['latitude'])
-        entry['longitude'] = float(row['longitude'])
-        if row['waveHs']:
-            ts = datetime.fromisoformat(row['time'].replace('Z', '+00:00'))
-            entry['observed'].append((ts, float(row['waveHs'])))
+        stations[sid] = {
+            'station_id': sid,
+            'name': _pretty_name(name),
+            'latitude': float(row['latitude']),
+            'longitude': float(row['longitude']),
+        }
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=ACTIVE_WITHIN_H)
-    return {
-        sid: e for sid, e in buoys.items()
-        if e['observed'] and max(ts for ts, _ in e['observed']) >= cutoff}
+    with open(path, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=ROSTER_FIELDS)
+        writer.writeheader()
+        for sid in sorted(stations):
+            writer.writerow(stations[sid])
+    print(f"✓ {path}: {len(stations)} active CA stations "
+          f"(reported within {ACTIVE_WITHIN_H}h)")
 
 
-def _erddap_latest(url, sid, columns):
-    """The single most recent row for one station: {column: value|None}.
+# ---------------------------------------------------------------------------
+# Batched live fetches
 
-    orderByMax(time) asks the server for just that row, so this is one tiny
-    request per dataset. Returns {} if the station has no data.
-    """
-    query = (f"?{','.join(columns)}"
-             f'&station_id="{sid}"&orderByMax("time")')
-    r = requests.get(url + query, timeout=60)
-    if r.status_code != 200:
-        return {}
+def _fetch_observations(station_ids, start_utc):
+    """{sid: {'observed': [(ts, hs)], 'latest': {...}}} for every roster
+    station, from ONE ERDDAP request covering Hs/Tp/Dp. 'latest' is the
+    newest reading — the values CDIP's station page headlines (SST is merged
+    in separately by _fetch_latest_sst)."""
+    query = ('?station_id,time,waveHs,waveTp,waveDp'
+             f"&time>={start_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    r = _get(ERDDAP + query, timeout=90)
+
     reader = csv.DictReader(StringIO(r.text))
-    next(reader, None)  # units row
-    row = next(reader, None)
-    if not row:
-        return {}
-    return {c: (float(row[c]) if c != 'time' and row.get(c) else row.get(c))
-            for c in columns}
+    next(reader)  # row 1 = units
+    wanted = set(station_ids)
+    out = {}
+    for row in reader:
+        sid = row['station_id']
+        if sid not in wanted or not row['waveHs']:
+            continue
+        ts = _parse_utc(row['time'])
+        e = out.setdefault(sid, {'observed': [], 'latest': None, '_ts': None})
+        e['observed'].append((ts, float(row['waveHs'])))
+        if e['_ts'] is None or ts > e['_ts']:  # don't trust row order
+            latest = {'time': _fmt_local(ts),
+                      'hs': round(float(row['waveHs']), 2)}
+            if row.get('waveTp'):
+                latest['tp'] = round(float(row['waveTp']), 1)
+            if row.get('waveDp'):
+                latest['dp'] = round(float(row['waveDp']))
+            e['latest'], e['_ts'] = latest, ts
+    for e in out.values():
+        e['observed'].sort()
+        del e['_ts']
+    return out
 
 
-def _fetch_latest_obs(sid):
-    """Latest observed wave state at the buoy — the values CDIP's station page
-    headlines: Hs (m), peak period Tp (s), peak direction Dp (deg), water
-    temperature SST (°C), and the reading's local timestamp. Missing metrics
-    are omitted; SST comes from a separate dataset and may be absent."""
-    wave = _erddap_latest(
-        ERDDAP, sid, ['time', 'waveHs', 'waveTp', 'waveDp'])
-    if not wave or wave.get('waveHs') is None:
-        return None
+def _fetch_latest_sst(station_ids, since_utc):
+    """{sid: sst_degC}: the newest SST per station, one ERDDAP request.
+    orderByMax("station_id,time") groups by station and keeps each group's
+    latest row; the time floor bounds the server-side scan."""
+    query = ('?station_id,time,sstSeaSurfaceTemperature'
+             f"&time>={since_utc.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+             '&orderByMax(%22station_id,time%22)')
+    r = _get(SST_ERDDAP + query)
 
-    sst = _erddap_latest(SST_ERDDAP, sid, ['time', 'sstSeaSurfaceTemperature'])
+    reader = csv.DictReader(StringIO(r.text))
+    next(reader)  # units row
+    wanted = set(station_ids)
+    return {
+        row['station_id']: round(float(row['sstSeaSurfaceTemperature']), 1)
+        for row in reader
+        if row['station_id'] in wanted and row['sstSeaSurfaceTemperature']}
 
-    ts = datetime.fromisoformat(wave['time'].replace('Z', '+00:00'))
-    out = {
-        'time': _fmt_local(ts),
-        'hs': round(wave['waveHs'], 2),
-    }
-    if wave.get('waveTp') is not None:
-        out['tp'] = round(wave['waveTp'], 1)
-    if wave.get('waveDp') is not None:
-        out['dp'] = round(wave['waveDp'])
-    if sst.get('sstSeaSurfaceTemperature') is not None:
-        out['sst'] = round(sst['sstSeaSurfaceTemperature'], 1)
+
+def _fetch_models(roster, start_utc, end_utc, skipped_sources=()):
+    """{sid: [(model_id, label, [(ts, hs)])]}: per-model Hs at every buoy's
+    coordinates, ONE multi-coordinate Open-Meteo request per model (the same
+    batching the spot pipeline uses). A model whose cell is dry at a buoy
+    (all ~0) is dropped for that buoy, as before. Sources in skipped_sources
+    (no new run upstream — see pipeline --scheduled) aren't fetched; the
+    detail writer carries their series over from the previous files."""
+    coords = [(sid, e['latitude'], e['longitude'])
+              for sid, e in sorted(roster.items())]
+    out = {sid: [] for sid in roster}
+    for model, source in openmeteo_marine.MODELS:
+        if source in skipped_sources:
+            continue
+        try:
+            rows, _ = _openmeteo.fetch_hourly_rows_batch(
+                'https://marine-api.open-meteo.com/v1/marine', coords,
+                {'wave_height': 'wave_height'}, source, start_utc, end_utc,
+                extra_params={'models': model, 'cell_selection': 'sea'})
+        except Exception as e:
+            print(f"    ! models batch {model}: {e}")
+            continue
+        by_sid = {}
+        for row in rows:
+            by_sid.setdefault(row['spot'], []).append(
+                (datetime.fromisoformat(row['ts_utc']), row['value']))
+        for sid, series in by_sid.items():
+            series.sort()
+            if series and max(v for _, v in series) > 0.01:
+                out[sid].append(
+                    (source.split(':', 1)[1], WAVE_MODELS[source], series))
     return out
 
 
 def _fetch_mop_forecast(sid, start_utc):
     """[(ts, hs)] from the buoy's MOP validation forecast, sliced from
-    start_utc. Same plain-ascii OPeNDAP subsetting as adapters/cdip_mop.py,
-    but the file is a 1-D series at the buoy site — no spatial search."""
+    start_utc. Two reads: the .dds for the axis length, then one tail read
+    of the last MOP_TAIL_SAMPLES points — see the constant for why a fixed
+    tail replaces index math on this gappy axis."""
     base = MOP_URL.format(sid=sid)
 
-    dds = requests.get(f'{base}.dds', timeout=90).text
+    dds = _get(f'{base}.dds').text
     n = int(re.search(r'waveTime = (\d+)', dds).group(1))
+    i0 = max(0, n - MOP_TAIL_SAMPLES)
 
-    def ascii_body(constraint):
-        r = requests.get(f'{base}.ascii?{constraint}', timeout=90)
-        r.raise_for_status()
-        return re.split(r'^-{20,}$', r.text, maxsplit=1, flags=re.M)[1]
+    r = _get(f'{base}.ascii?waveTime%5B{i0}:1:{n - 1}%5D,'
+             f'waveHs%5B{i0}:1:{n - 1}%5D')
+    body = re.split(r'^-{20,}$', r.text, maxsplit=1, flags=re.M)[1]
 
-    def values(body, name, count):
+    def values(name):
         return [float(v) for v in
-                body.split(f'{name}[{count}]')[1].strip().splitlines()[0].split(',')]
+                body.split(f'{name}[{n - i0}]')[1].strip().splitlines()[0].split(',')]
 
-    # The axis is hourly but NOT gap-free: offline stretches are simply
-    # absent, so a validation file can run thousands of indices short of a
-    # regular grid (e.g. 029 Point Reyes). A regular-grid estimate therefore
-    # lands AT OR AFTER the wanted time, never before — use it as an upper
-    # bound and page the real axis backwards to the true slice start.
-    t0, t1 = values(ascii_body('waveTime%5B0:1:1%5D'), 'waveTime', 2)
-    step = t1 - t0
-    target = start_utc.timestamp()
-    lo = max(0, min(n - 1, int((target - t0) // step) + 2))
-    i0 = lo
-    while True:
-        chunk_lo = max(0, lo - 4096)
-        ts = values(ascii_body(f'waveTime%5B{chunk_lo}:1:{lo}%5D'),
-                    'waveTime', lo - chunk_lo + 1)
-        k = next((k for k, t in enumerate(ts) if t >= target), None)
-        if k is None:
-            i0 = lo  # whole file predates start; the final filter empties it
-            break
-        if k > 0 or chunk_lo == 0:
-            i0 = chunk_lo + k
-            break
-        lo = chunk_lo  # boundary is even earlier — page back another chunk
-
-    body = ascii_body(f'waveTime%5B{i0}:1:{n - 1}%5D,waveHs%5B{i0}:1:{n - 1}%5D')
-    times = values(body, 'waveTime', n - i0)
-    hs = values(body, 'waveHs', n - i0)
     return [
         (datetime.fromtimestamp(int(t), tz=timezone.utc), v)
-        for t, v in zip(times, hs)
+        for t, v in zip(values('waveTime'), values('waveHs'))
         if v >= FILL_CUTOFF
         and datetime.fromtimestamp(int(t), tz=timezone.utc) >= start_utc]
-
-
-def _fetch_models_at(sid, latitude, longitude, start_utc, end_utc):
-    """Per-model Hs series at the buoy's coordinates via Open-Meteo.
-
-    Open-Meteo 400s if end_date runs past its forecast horizon (~today_UTC +
-    15). FORECAST_DAYS sits at that edge, so a local/UTC date skew can nudge
-    the request one day over — retry with a day trimmed off before giving up.
-    """
-    buoy_spot = Spot(name=f'buoy {sid}', slug=f'buoy-{sid}', region='',
-                     latitude=latitude, longitude=longitude, timezone=str(TZ))
-
-    def fetch(model, source, end):
-        return _openmeteo.fetch_hourly_rows(
-            'https://marine-api.open-meteo.com/v1/marine', buoy_spot,
-            {'wave_height': 'wave_height'}, source, start_utc, end,
-            extra_params={'models': model, 'cell_selection': 'sea'})
-
-    out = []
-    for model, source in openmeteo_marine.MODELS:
-        try:
-            rows = fetch(model, source, end_utc)
-        except Exception:
-            try:
-                rows = fetch(model, source, end_utc - timedelta(days=1))
-            except Exception as e:
-                print(f"    ! buoy {sid} / {model}: {e}")
-                continue
-        series = sorted(
-            (datetime.fromisoformat(r['ts_utc']), r['value']) for r in rows)
-        if series and max(v for _, v in series) > 0.01:
-            out.append((source.split(':', 1)[1], WAVE_MODELS[source], series))
-    return out
 
 
 def _series_json(series):
     return [{'t': _fmt_local(ts), 'v': round(v, 2)} for ts, v in series]
 
+
+# ---------------------------------------------------------------------------
+# Spot -> buoy assignment (static fill + per-run swell-aware pick)
 
 def _km(lat1, lon1, lat2, lon2):
     """Great-circle distance (haversine), km."""
@@ -275,9 +331,10 @@ def _swell_direction(api_dir, slug):
 def _pick_swell_buoys(spots, buoys, api_dir):
     """slug -> station id: the nearest buoy lying TOWARD today's swell source
     (bearing spot->buoy within SWELL_CONE_DEG of the swell's FROM-direction),
-    so it samples the waves before they reach the spot. Falls back to the
-    CSV's plain-proximity closest_buoy when no buoy faces the swell or the
-    swell direction is unknown."""
+    so it samples the waves before they reach the spot. Only buoys with
+    recent observations qualify — a silent station can't vouch for the
+    swell. Falls back to the CSV's plain-proximity closest_buoy when no
+    fresh buoy faces the swell or the swell direction is unknown."""
     picks = {}
     for spot in spots:
         swell_from = _swell_direction(api_dir, spot.slug)
@@ -296,7 +353,7 @@ def _pick_swell_buoys(spots, buoys, api_dir):
                       f"buoy {pick} ({buoys[pick]['name']}, {dist:.0f} km)")
         if pick is None and spot.closest_buoy:
             pick = spot.closest_buoy
-            print(f"  ✓ {spot.name}: no buoy toward the swell; "
+            print(f"  ✓ {spot.name}: no fresh buoy toward the swell; "
                   f"falling back to nearest ({pick})")
         if pick:
             picks[spot.slug] = pick
@@ -319,8 +376,8 @@ def _patch_spots_json(api_dir, picks):
         print(f"  ! spots.json buoy patch failed: {err}")
 
 
-def _assign_closest_buoys(spots, buoys):
-    """Fill each spot's blank closest_buoy with the nearest active station.
+def _assign_closest_buoys(spots, roster):
+    """Fill each spot's blank closest_buoy with the nearest roster station.
 
     Runs once per new spot: the pipeline persists the value to locations.csv
     right after, and a non-blank (including hand-edited) value is left alone.
@@ -328,72 +385,191 @@ def _assign_closest_buoys(spots, buoys):
     for spot in spots:
         if spot.closest_buoy:
             continue
-        sid = min(buoys, key=lambda s: _km(
+        sid = min(roster, key=lambda s: _km(
             spot.latitude, spot.longitude,
-            buoys[s]['latitude'], buoys[s]['longitude']))
+            roster[s]['latitude'], roster[s]['longitude']))
         # Spot is frozen (identity fields); this is the one sanctioned fill.
         object.__setattr__(spot, 'closest_buoy', sid)
         print(f"  ✓ {spot.name}: closest buoy assigned -> "
-              f"{sid} ({buoys[sid]['name']})")
+              f"{sid} ({roster[sid]['name']})")
 
 
-def build_buoys(api_dir, spots=()):
+# ---------------------------------------------------------------------------
+
+def build_buoys(api_dir, spots=(), roster_path=ROSTER_FILE,
+                skipped_sources=()):
     now = datetime.now(timezone.utc)
     start_utc = now - timedelta(days=PAST_DAYS)
     end_utc = now + timedelta(days=FORECAST_DAYS)
 
-    buoys = _fetch_observations(start_utc)
-    if buoys:
-        _assign_closest_buoys(spots, buoys)
-        # Per-run swell-aware pick: the "Closest buoy" button opens the
-        # nearest station toward today's swell source, not just the nearest
-        _patch_spots_json(api_dir, _pick_swell_buoys(spots, buoys, api_dir))
+    try:
+        roster = load_roster(roster_path)
+    except FileNotFoundError:
+        print(f"  ! no buoy roster at {roster_path} — "
+              "run: python backend/buoys.py --refresh-roster")
+        return
+    if not roster:
+        print(f"  ! empty buoy roster at {roster_path}")
+        return
+
+    _assign_closest_buoys(spots, roster)
+
+    # One request each: every station's 3-day obs series (+ latest Hs/Tp/Dp)
+    # and every station's latest SST. Either failing degrades that field to
+    # absent — never the whole build.
+    try:
+        obs = _fetch_observations(roster, start_utc)
+    except Exception as err:
+        obs = {}
+        print(f"  ! observations fetch failed: {err}")
+    try:
+        sst = _fetch_latest_sst(roster, now - timedelta(days=2))
+    except Exception as err:
+        sst = {}
+        print(f"  ! SST fetch failed: {err}")
+
+    # Per-run swell-aware pick among FRESH buoys: the "Closest buoy" button
+    # opens the nearest station toward today's swell source, not just the
+    # nearest. No obs (fetch failed or station silent) -> CSV fallback.
+    fresh = {sid: {**roster[sid], **obs[sid]} for sid in obs}
+    _patch_spots_json(api_dir, _pick_swell_buoys(spots, fresh, api_dir))
+
     _write_json(os.path.join(api_dir, 'buoys.json'), [
         {
             'id': sid,
             'name': e['name'],
             'latitude': e['latitude'],
             'longitude': e['longitude'],
+            **({} if sid in obs else {'stale': True}),
         }
-        for sid, e in sorted(buoys.items())
+        for sid, e in sorted(roster.items())
     ])
-    print(f"  ✓ buoys.json: {len(buoys)} active CA buoys")
+    print(f"  ✓ buoys.json: {len(roster)} roster buoys "
+          f"({len(obs)} reporting)")
 
-    for sid in sorted(buoys):
-        e = buoys[sid]
+    # 1 request per model with a new run upstream; the rest carry forward
+    models = _fetch_models(roster, start_utc, end_utc, skipped_sources)
+    carried_ids = {s.split(':', 1)[1] for s in skipped_sources}
+
+    # The only remaining per-buoy requests: the two MOP THREDDS reads.
+    # Independent per buoy -> a small pool; failures are per-buoy and logged.
+    def fetch_mop(sid):
+        try:
+            return sid, _fetch_mop_forecast(sid, start_utc), None
+        except Exception as err:
+            return sid, [], err
+
+    with ThreadPoolExecutor(max_workers=MOP_WORKERS) as pool:
+        mop_results = list(pool.map(fetch_mop, sorted(roster)))
+
+    for sid, mop, mop_err in mop_results:
+        e = roster[sid]
+        if mop_err:
+            print(f"    ! buoy {sid} MOP forecast: {mop_err}")
+        path = os.path.join(api_dir, 'buoys', f'{sid}.json')
+
+        # Skipped models keep the series the previous file already has
+        # (built from the same upstream run the skip detected).
+        carried = []
+        if carried_ids:
+            try:
+                with open(path) as f:
+                    carried = [m for m in json.load(f).get('models', [])
+                               if m['id'] in carried_ids]
+            except Exception:
+                pass  # no previous file — that model sits this run out
 
         models_out = []
-        try:
-            mop = _fetch_mop_forecast(sid, start_utc)
-            if mop:
-                models_out.append(
-                    {'id': 'mop', 'label': 'CDIP MOP forecast',
-                     'series': _series_json(mop)})
-        except Exception as err:
-            print(f"    ! buoy {sid} MOP forecast: {err}")
-
-        for model_id, label, series in _fetch_models_at(
-                sid, e['latitude'], e['longitude'], start_utc, end_utc):
+        if mop:
+            models_out.append({'id': 'mop', 'label': 'CDIP MOP forecast',
+                               'series': _series_json(mop)})
+        for model_id, label, series in models.get(sid, []):
             models_out.append(
                 {'id': model_id, 'label': label,
                  'series': _series_json(series)})
+        models_out.extend(carried)
 
-        try:
-            latest = _fetch_latest_obs(sid)
-        except Exception as err:
-            latest = None
-            print(f"    ! buoy {sid} latest observation: {err}")
+        latest = (obs.get(sid) or {}).get('latest')
+        if latest and sid in sst:
+            latest['sst'] = sst[sid]
+        observed = (obs.get(sid) or {}).get('observed', [])
 
-        _write_json(os.path.join(api_dir, 'buoys', f'{sid}.json'), {
+        _write_json(path, {
             'id': sid,
             'label': f"CDIP {sid} — {e['name']}",
             'latitude': e['latitude'],
             'longitude': e['longitude'],
             'unit': 'm',
             'latest': latest,
-            'observed': _series_json(e['observed']),
+            'observed': _series_json(observed),
             'models': models_out,
         })
-        print(f"  ✓ buoys/{sid}.json: {len(e['observed'])} obs, "
+        print(f"  ✓ buoys/{sid}.json: {len(observed)} obs, "
               f"{len(models_out)} forecast series"
               f"{', latest obs' if latest else ''}")
+
+
+def refresh_observations(api_dir, roster_path=ROSTER_FILE):
+    """Patch ONLY the live-observation fields into the already-built files:
+    observed + latest in each buoys/{id}.json, stale flags in buoys.json.
+    Forecast series (MOP + models) are left exactly as the last full build
+    wrote them.
+
+    This is the 30-minute job: CDIP buoys report every half hour and the
+    sample lands in ERDDAP ~25-35 min after measurement, so a full 6h
+    pipeline run leaves most of the day's observations unpublished. Two
+    ERDDAP requests, no THREDDS, no Open-Meteo. Raises if the files or the
+    fetch are missing/broken — the caller (CI) should then skip the deploy
+    and leave the published snapshot alone.
+    """
+    now = datetime.now(timezone.utc)
+    roster = load_roster(roster_path)
+    obs = _fetch_observations(roster, now - timedelta(days=PAST_DAYS))
+    try:
+        sst = _fetch_latest_sst(roster, now - timedelta(days=2))
+    except Exception as err:
+        sst = {}
+        print(f"! SST fetch failed (continuing without): {err}")
+
+    index_path = os.path.join(api_dir, 'buoys.json')
+    with open(index_path) as f:
+        index = json.load(f)
+    for e in index:
+        if e['id'] in obs:
+            e.pop('stale', None)
+        else:
+            e['stale'] = True
+    _write_json(index_path, index)
+
+    patched = 0
+    for sid in roster:
+        path = os.path.join(api_dir, 'buoys', f'{sid}.json')
+        try:
+            with open(path) as f:
+                detail = json.load(f)
+        except FileNotFoundError:
+            continue  # not in the last full build; nothing to patch
+        latest = (obs.get(sid) or {}).get('latest')
+        if latest and sid in sst:
+            latest['sst'] = sst[sid]
+        detail['latest'] = latest
+        detail['observed'] = _series_json(
+            (obs.get(sid) or {}).get('observed', []))
+        _write_json(path, detail)
+        patched += 1
+
+    if not patched:
+        raise RuntimeError('no buoy detail files found to patch')
+    print(f"✓ observations refreshed: {patched} buoys patched, "
+          f"{len(obs)} reporting")
+
+
+if __name__ == '__main__':
+    api_dir = os.path.join(BASE_DIR, '..', 'api')
+    if '--refresh-roster' in sys.argv:
+        refresh_roster()
+    elif '--refresh-obs' in sys.argv:
+        refresh_observations(api_dir)
+    else:
+        sys.exit('usage: python backend/buoys.py '
+                 '--refresh-roster | --refresh-obs')

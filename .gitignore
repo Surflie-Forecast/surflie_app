@@ -36,6 +36,7 @@ gee_key.json
 # intermediate store dump and caches stay local.
 data/*
 !data/locations.csv
+!data/buoys.csv
 _site/
 
 # Temporary files

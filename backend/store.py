@@ -44,6 +44,11 @@ class ForecastStore:
                 out[datetime.fromisoformat(r['ts_utc'])] = r['value']
         return out
 
+    def sources(self):
+        """Set of source tags with at least one row — lets the pipeline tell
+        which planned fetches actually delivered."""
+        return {r['source'] for r in self._rows}
+
     def __len__(self):
         return len(self._rows)
 

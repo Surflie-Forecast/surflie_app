@@ -19,7 +19,14 @@ name: Build and Deploy
 
 on:
   schedule:
-    - cron: '0 */6 * * *'   # refresh data every 6 hours
+    # Every 6h, phased to when new model runs land on Open-Meteo (measured
+    # from marine-api.open-meteo.com/data/{model}/static/meta.json, July
+    # 2026): GFS Wave ~H+5.3h, ECMWF WAM9 ~H+6.2h, WAM25 ~H+7.0h after each
+    # 00/06/12/18Z init; MFWAM lands ~00:05/12:05, GWAM ~04:25/16:25 UTC.
+    # 01:45/07:45/13:45/19:45 fetches every model's freshest completed run
+    # (the old 0 */6 missed MFWAM's noon drop by 5 min — publishing a
+    # 24h-old run). GH cron fires ~5-15 min late, adding margin.
+    - cron: '45 1,7,13,19 * * *'
   push:
     branches: [main]         # redeploy on code/data changes (no data rebuild)
   workflow_dispatch:
@@ -110,9 +117,33 @@ jobs:
           key: mop-cache-${{ github.run_id }}
           restore-keys: mop-cache-
 
+      # --scheduled state: the previous run's store dump feeds carry-forward
+      # of wave models that had no new run upstream, and model_state.json
+      # holds the per-model availability stamps that decide the skip.
+      - name: Restore pipeline state (carry-forward + model stamps)
+        if: steps.mode.outputs.build == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/store.csv
+            data/model_state.json
+          key: pipeline-state-${{ github.run_id }}
+          restore-keys: pipeline-state-
+
+      # Buoy detail files carry skipped models' series over from their
+      # previous versions, so give the build the newest published api/ (the
+      # pipeline overwrites everything it generates).
+      - name: Restore previous api for buoy carry-forward
+        if: steps.mode.outputs.build == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: api
+          key: api-data-${{ github.run_id }}
+          restore-keys: api-data-
+
       - name: Run data pipeline
         if: steps.mode.outputs.build == 'true'
-        run: python backend/pipeline.py
+        run: python backend/pipeline.py --scheduled
 
       # Every full build leaves its api/ behind for push-triggered redeploys
       - name: Save forecast data for push redeploys
