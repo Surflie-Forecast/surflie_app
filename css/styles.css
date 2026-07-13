@@ -2557,3 +2557,203 @@ body.buoys-mode .chart-container {
   font-size: 1.2rem;
   margin-left: 4px;
 }
+/* ---------------------------------------------------------------------------
+   Account (auth.js): header button, dropdown panel, hero favorite star
+   --------------------------------------------------------------------------- */
+.account-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-btn:hover {
+  background: rgba(19, 25, 41, 0.06);
+}
+
+.account-panel {
+  position: fixed;
+  width: 280px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  z-index: 99999;
+  padding: 1rem;
+}
+
+.account-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.account-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.account-email {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.account-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.magic-link-form {
+  display: flex;
+  gap: 6px;
+}
+
+.magic-link-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: #fff;
+}
+
+.magic-link-form button,
+.account-action {
+  padding: 0.55rem 0.9rem;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-blue);
+  color: #fff;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.magic-link-form button:hover,
+.account-action:hover {
+  opacity: 0.85;
+}
+
+.account-signout {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--glass-border);
+}
+
+.account-status {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  min-height: 1em;
+}
+
+.account-favs {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-fav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.5rem 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.account-fav:hover {
+  background: rgba(0, 120, 168, 0.08);
+}
+
+.account-fav-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-default-tag {
+  flex: 0 0 auto;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+
+/* Favorite star: hero top-right corner */
+.fav-star-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(19, 25, 41, 0.35);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s, color 0.2s;
+}
+
+.fav-star-btn:hover {
+  background: rgba(19, 25, 41, 0.55);
+}
+
+.fav-star-btn.active {
+  color: #ffd166;
+}
+
+/* Favorites list kind markers: same symbology as search results */
+.account-fav .fav-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.account-fav .fav-dot--spot {
+  background: #0078A8;
+}
+
+.account-fav .fav-dot--buoy {
+  background: #131929;
+}
+
+.account-error {
+  color: #b3261e;
+}
