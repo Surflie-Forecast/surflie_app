@@ -2580,7 +2580,7 @@ body.buoys-mode .chart-container {
 
 .account-panel {
   position: fixed;
-  width: 280px;
+  width: 330px;
   max-height: calc(100vh - 90px);
   overflow-y: auto;
   background: rgba(255, 255, 255, 0.97);
@@ -3017,4 +3017,242 @@ body.buoys-mode .chart-container {
 .alarm-slide .alarm-range {
   width: 100%;
   height: 12px;
+}
+
+/* Session ratings: half-star widget + per-spot session log */
+.star-row {
+  display: inline-flex;
+  gap: 2px;
+  line-height: 1;
+}
+
+.star {
+  position: relative;
+  font-size: 20px;
+  color: rgba(19, 25, 41, 0.15);
+  user-select: none;
+}
+
+.star-input .star {
+  cursor: pointer;
+  font-size: 32px;
+}
+
+.star-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  color: #f5b301;
+  pointer-events: none;
+}
+
+.account-session {
+  padding: 0.45rem 0.4rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.03);
+  margin-bottom: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-session:hover {
+  background: rgba(0, 120, 168, 0.08);
+}
+
+.account-session-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account-session-head .star-row .star {
+  font-size: 17px;
+}
+
+.account-session-when {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-session-detail {
+  margin-top: 4px;
+}
+
+.account-session-conds {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.account-session-note {
+  font-size: 0.76rem;
+  color: var(--text-primary);
+  font-style: italic;
+  margin-top: 3px;
+}
+
+.session-select {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  font-family: var(--font-main);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  background: #fff;
+}
+
+.session-note {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  font-family: var(--font-main);
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  resize: vertical;
+  background: #fff;
+}
+
+/* Session snapshot rendered as a forecast-card hourly row + a tide cell.
+   Sized down to fit the 280px panel: tighter gaps, shrinkable cells
+   (min-width 0) so the tide column never spills past the panel edge. */
+.session-cond-header {
+  display: grid;
+  grid-template-columns: 4px 1.6fr 1.2fr 2.4rem;
+  margin-top: 6px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.session-cond-header span:last-child {
+  text-align: right;
+}
+
+.session-cond-row {
+  grid-template-columns: 4px 1.6fr 1.2fr 2.4rem;
+  font-size: 0.72rem;
+  border-top: none;
+}
+
+.session-cond-row > div {
+  min-width: 0;
+}
+
+.session-cond-row .hourly-swell,
+.session-cond-row .hourly-wind {
+  gap: 0.25rem;
+  font-size: 0.72rem;
+}
+
+.session-cond-row .hourly-swell {
+  padding-left: 0.2rem !important;
+}
+
+.session-cond-row .time-hour {
+  font-size: 0.8rem;
+}
+
+.session-cond-row .direction-degrees {
+  font-size: 0.68rem;
+}
+
+/* thin bar like the cards': kill the cell padding that fattened it */
+.session-cond-row .hourly-rating-bar {
+  padding: 0 !important;
+  width: 5px;
+  justify-self: center;
+}
+
+.session-tide {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  color: var(--text-secondary);
+  padding-right: 2px;
+}
+
+.session-tide-arrow {
+  font-size: 0.6rem;
+  color: var(--accent-blue);
+}
+
+/* Phone: the account panel centers and takes most of the viewport
+   (!important beats the JS-set inline right from the desktop anchoring) */
+@media (max-width: 768px) {
+  .account-panel {
+    left: 10px !important;
+    right: 10px !important;
+    width: auto;
+    max-height: calc(100dvh - 100px);
+  }
+}
+
+/* Email + unit preference on one panel row; small ghost default-view action */
+.account-email-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.account-email-row .account-email {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.account-units {
+  flex: 0 0 auto;
+  transform: scale(0.82);
+  transform-origin: right center;
+}
+
+.account-action-small {
+  align-self: flex-start;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent-blue);
+  font-family: var(--font-main);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-action-small:hover {
+  background: rgba(0, 120, 168, 0.08);
+}
+
+/* The account panel owns the unit toggle now; the header one stays in the
+   DOM (app.js display logic routes through it) but out of sight */
+header .unit-toggle-wrapper {
+  display: none;
+}
+
+/* Boxed panel groups: Favorites / Alerts / Sessions each read as one unit */
+.account-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 0.6rem 0.65rem;
+  background: rgba(0, 0, 0, 0.015);
 }

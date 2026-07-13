@@ -16,7 +16,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ctbhSSA00mkgOyWSAfvD8w_OIT7NHzB
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-window.surfUser = { session: null, profile: null, favorites: new Set(), alarms: [] };
+window.surfUser = { session: null, profile: null, favorites: new Set(), alarms: [], sessions: [] };
 
 // DOM-ready gate so events/UI never fire before app.js has registered its
 // listeners (all app.js code runs at DOMContentLoaded).
@@ -62,19 +62,23 @@ async function loadUserData() {
         window.surfUser.favorites = new Set();
         return;
     }
-    const [profileRes, favRes, alarmRes] = await Promise.all([
+    const [profileRes, favRes, alarmRes, sessionRes] = await Promise.all([
         sb.from('profiles').select('*').eq('id', user.id).maybeSingle(),
         sb.from('favorites').select('kind, item_id').eq('user_id', user.id),
         sb.from('alarms').select('*').eq('user_id', user.id)
             .order('created_at'),
+        sb.from('session_ratings').select('*').eq('user_id', user.id)
+            .order('session_at', { ascending: false }),
     ]);
     if (profileRes.error) console.error('profile load failed', profileRes.error);
     if (favRes.error) console.error('favorites load failed', favRes.error);
     if (alarmRes.error) console.error('alarms load failed', alarmRes.error);
+    if (sessionRes.error) console.error('sessions load failed', sessionRes.error);
     window.surfUser.profile = profileRes.data || null;
     window.surfUser.favorites =
         new Set((favRes.data || []).map(r => favKey(r.kind, r.item_id)));
     window.surfUser.alarms = alarmRes.data || [];
+    window.surfUser.sessions = sessionRes.data || [];
 }
 
 async function toggleFavorite(kind, id) {
@@ -119,7 +123,46 @@ async function setDefault(kind, id) {
         window.surfUser.profile.default_kind = kind;
         window.surfUser.profile.default_item = id;
     }
+    // a default is a favorite by definition — the DEFAULT badge lives on
+    // its favorites row, so make sure that row exists
+    const key = favKey(kind, id);
+    if (!window.surfUser.favorites.has(key)) {
+        window.surfUser.favorites.add(key);
+        const { error: favErr } = await sb.from('favorites')
+            .insert({ user_id: user.id, kind, item_id: id });
+        if (favErr) console.error('auto-favorite failed', favErr);
+        updateStar();
+    }
     renderAccountPanel();
+}
+
+// ---------------------------------------------------------------------------
+// Unit preference: header toggle <-> panel toggle <-> profiles.units.
+// The saved preference drives the app on login AND how alert emails format
+// heights (backend/alerts.py reads profiles.units).
+// ---------------------------------------------------------------------------
+
+function applyUnits(units) {
+    const imperial = units === 'imperial';
+    const t = document.querySelector('.unit-toggle');
+    if (t && t.checked !== imperial) {
+        t.checked = imperial;
+        // bubbles so the document-level save listener sees it too
+        // (app.js's own handler on the toggle updates display + storage)
+        t.dispatchEvent(new Event('change', { bubbles: true }));
+    } else {
+        localStorage.setItem('surfForecastUnit', units);
+    }
+}
+
+async function saveUnits(units) {
+    const user = window.surfUser.session?.user;
+    if (!user) return;
+    if (window.surfUser.profile?.units === units) return; // already saved
+    if (window.surfUser.profile) window.surfUser.profile.units = units;
+    const { error } = await sb.from('profiles')
+        .update({ units }).eq('id', user.id);
+    if (error) console.error('units save failed', error);
 }
 
 // Display label for a (kind, id) pair
@@ -235,14 +278,15 @@ function updateStar() {
 // ---------------------------------------------------------------------------
 
 // Forecast models an alarm can watch (spots and buoys alike). full=true
-// models serve period + direction; Hs-only models (MOP, ECMWF WAM) grey
-// out when those conditions are set. MOP is the 1km nearshore model —
-// waves-only and a shorter horizon (~5-8 days), but the sharpest local Hs.
+// models serve period + direction; Hs-only models (ECMWF WAM) grey out
+// when those conditions are set. MOP is the 1km nearshore model — full
+// variables (Hs + peak period/direction) at a shorter horizon (~5-8 days),
+// the sharpest local data.
 const ALARM_MODELS = [
     { id: 'gfswave025', label: 'GFS Wave 25km', full: true },
     { id: 'mfwam', label: 'MFWAM 8km', full: true },
     { id: 'gwam', label: 'DWD GWAM 25km', full: true },
-    { id: 'mop', label: 'CDIP MOP (nearshore)', full: false },
+    { id: 'mop', label: 'CDIP MOP (nearshore)', full: true },
     { id: 'ecmwf_wam9', label: 'ECMWF WAM 9km', full: false },
     { id: 'ecmwf_wam25', label: 'ECMWF WAM 25km', full: false },
 ];
@@ -287,6 +331,8 @@ async function toggleAlarm(id, enabled) {
 }
 
 async function deleteAlarm(id) {
+    const a = window.surfUser.alarms.find(x => x.id === id);
+    if (!confirm(`Delete the ${a ? favLabel(a.kind, a.item_id) : ''} alert?`)) return;
     const { error } = await sb.from('alarms').delete().eq('id', id);
     if (error) { showPanelError(`Couldn't delete alert: ${error.message}`); return; }
     window.surfUser.alarms = window.surfUser.alarms.filter(a => a.id !== id);
@@ -597,14 +643,237 @@ function renderAlarmForm(panel, target, existing = null) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Session ratings (Phase 3): a star rating joined to a frozen snapshot of
+// the conditions that produced it — the training-data seed for the future
+// surf model. Snapshots are built client-side at save time from the same
+// static api/ files the app renders; past files get pruned, so this is the
+// only moment the pairing can be captured.
+// ---------------------------------------------------------------------------
+
+const fmtWave = (m) => isImperial()
+    ? `${(m / M_PER_FT).toFixed(1)} ft` : `${m.toFixed(1)} m`;
+
+// 5 stars, half-star steps. Click left half = n-0.5, right half = n.
+function starRowHtml(rating, interactive) {
+    let html = `<div class="star-row${interactive ? ' star-input' : ''}" data-rating="${rating || 0}">`;
+    for (let i = 1; i <= 5; i++) {
+        const fill = rating >= i ? 100 : rating >= i - 0.5 ? 50 : 0;
+        html += `<span class="star" data-i="${i}">` +
+            `<span class="star-fill" style="width:${fill}%">★</span>★</span>`;
+    }
+    return html + '</div>';
+}
+
+function wireStarInput(row, onChange) {
+    row.querySelectorAll('.star').forEach(star => {
+        star.addEventListener('click', (e) => {
+            const half = e.offsetX < star.offsetWidth / 2;
+            const val = +star.dataset.i - (half ? 0.5 : 0);
+            row.dataset.rating = val;
+            row.querySelectorAll('.star').forEach(s => {
+                const i = +s.dataset.i;
+                s.querySelector('.star-fill').style.width =
+                    val >= i ? '100%' : val >= i - 0.5 ? '50%' : '0%';
+            });
+            if (onChange) onChange(val);
+        });
+    });
+}
+
+// Frozen conditions for a session hour: the hourly entry (swell/wind/score),
+// tide height nearest the hour, and the closest buoy's OBSERVED state
+// nearest the hour (ground truth). Missing sources = absent keys.
+async function buildConditionSnapshot(slug, spotName, datetime) {
+    const dateIso = datetime.slice(0, 10);
+    const when = new Date(datetime.replace(' ', 'T'));
+    const snap = { units: { height: 'm', wind: 'kts', tide: 'm' } };
+    const getJson = (url) => fetch(url).then(r => r.ok ? r.json() : null).catch(() => null);
+
+    const hours = await getJson(`api/hourly/${slug}/${dateIso}.json`);
+    const entry = (hours || []).find(h => h.datetime === datetime);
+    if (entry) {
+        snap.forecast = { swell: entry.swell, wind: entry.wind,
+                          score: entry.score, rating: entry.rating,
+                          color: entry.color };
+    }
+
+    const tide = await getJson(`api/tide/${slug}.json`);
+    if (tide?.dataset?.length) {
+        let best = null, bestIdx = -1, bestDt = Infinity;
+        tide.dataset.forEach((p, i) => {
+            const dt = Math.abs(new Date(p.t.replace(' ', 'T')) - when);
+            if (dt < bestDt) { bestDt = dt; best = p; bestIdx = i; }
+        });
+        if (best && bestDt <= 60 * 60000) {
+            snap.tide = { t: best.t, height: best.v };
+            // rising/falling from the level ~30 min later (6-min points)
+            const later = tide.dataset[bestIdx + 5];
+            if (later) snap.tide.trend = later.v >= best.v ? 'rising' : 'falling';
+        }
+    }
+
+    const buoyId = (window._spotBuoys || {})[spotName];
+    if (buoyId) {
+        const buoy = await getJson(`api/buoys/${buoyId}.json`);
+        if (buoy?.observed?.length) {
+            let best = null, bestDt = Infinity;
+            for (const p of buoy.observed) {
+                const dt = Math.abs(new Date(p.t.replace(' ', 'T')) - when);
+                if (dt < bestDt) { bestDt = dt; best = p; }
+            }
+            // ±90 min: buoys report half-hourly; beyond that it's a
+            // different sea state, not ground truth for this session
+            if (best && bestDt <= 90 * 60000) {
+                snap.buoy = { id: buoyId, t: best.t, hs: best.v };
+                const lt = buoy.latest?.time
+                    && Math.abs(new Date(buoy.latest.time.replace(' ', 'T')) - when);
+                if (lt != null && lt <= 90 * 60000) {
+                    if (buoy.latest.tp != null) snap.buoy.tp = buoy.latest.tp;
+                    if (buoy.latest.dp != null) snap.buoy.dp = buoy.latest.dp;
+                }
+            }
+        }
+    }
+    return snap;
+}
+
+// The saved conditions rendered as one line in the expanded-forecast-card
+// hourly style: time | score color bar | swell | wind | tide
+function sessionCondRowHtml(s) {
+    const c = s.conditions || {};
+    const f = c.forecast;
+    if (!f?.swell) return '<div class="account-session-conds">no snapshot</div>';
+    const color = f.color || (typeof getRatingAndColor === 'function'
+        ? getRatingAndColor(f.swell.height, f.swell.period, f.wind?.speed || 0,
+            f.swell.direction, f.wind?.direction).color
+        : '#94a3b8');
+    const h = isImperial()
+        ? `${(f.swell.height / M_PER_FT).toFixed(1)}ft`
+        : `${f.swell.height.toFixed(1)}m`;
+    const swellDir = Math.round(f.swell.direction);
+    const windDir = f.wind ? Math.round(f.wind.direction) : null;
+    const tide = c.tide ? (isImperial()
+        ? `${(c.tide.height / M_PER_FT).toFixed(1)}ft`
+        : `${c.tide.height.toFixed(1)}m`) : null;
+    const tideArrow = c.tide?.trend === 'rising' ? '▲'
+        : c.tide?.trend === 'falling' ? '▼' : '';
+    // no time cell: the record's title already says when; the color bar
+    // leads the row like in the cards
+    return '<div class="session-cond-header">' +
+        '<span></span><span>Swell</span><span>Wind</span><span>Tide</span></div>' +
+        '<div class="hourly-row session-cond-row">' +
+        `<div class="hourly-rating-bar" style="background-color: ${color};"></div>` +
+        '<div class="hourly-swell">' +
+        `<span class="hourly-swell-val">${h}</span>` +
+        `<span>${Math.round(f.swell.period)}s</span>` +
+        `<span class="direction-degrees">${swellDir}°</span></div>` +
+        '<div class="hourly-wind">' +
+        (f.wind
+            ? `<span>${Math.round(f.wind.speed)}kts</span>` +
+              `<span class="direction-degrees">${windDir}°</span>`
+            : '<span>—</span>') +
+        '</div>' +
+        `<div class="session-tide">${tide
+            ? `<span class="session-tide-arrow">${tideArrow}</span><span>${tide}</span>`
+            : '<span>—</span>'}</div>` +
+        '</div>';
+}
+
+async function deleteSession(id) {
+    // sessions are training data — deletion loses an unrecoverable snapshot
+    if (!confirm('Delete this session? Its saved conditions can\'t be rebuilt later.')) return;
+    const { error } = await sb.from('session_ratings').delete().eq('id', id);
+    if (error) { showPanelError(`Couldn't delete session: ${error.message}`); return; }
+    window.surfUser.sessions = window.surfUser.sessions.filter(s => s.id !== id);
+    renderAccountPanel();
+}
+
+// Rate-a-session form (today only for now: past hourly files get pruned, so
+// today is what a snapshot can be built from; the timestamp column already
+// supports any moment once a conditions archive exists)
+async function renderSessionForm(panel, slug, spotName) {
+    const today = new Date();
+    const dateIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    let hours = [];
+    try {
+        const r = await fetch(`api/hourly/${slug}/${dateIso}.json`);
+        if (r.ok) hours = await r.json();
+    } catch (e) { /* options stay empty; save disabled below */ }
+
+    // default to the entry closest to now
+    let defIdx = 0, bestDt = Infinity;
+    hours.forEach((h, i) => {
+        const dt = Math.abs(new Date(h.datetime.replace(' ', 'T')) - today);
+        if (dt < bestDt) { bestDt = dt; defIdx = i; }
+    });
+    const hourLabel = dt => new Date(dt.replace(' ', 'T'))
+        .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    panel.innerHTML =
+        '<div class="account-section">' +
+        `<div class="account-title">Rate a session — ${spotName}</div>` +
+        '<p class="account-hint">Today\'s conditions at that hour get saved ' +
+        'with your rating.</p>' +
+        '<div class="alarm-row"><span>When</span>' +
+        `<select id="sessionHour" class="session-select">` +
+        hours.map((h, i) =>
+            `<option value="${h.datetime}"${i === defIdx ? ' selected' : ''}>${hourLabel(h.datetime)}</option>`).join('') +
+        '</select></div>' +
+        '<div class="alarm-row"><span>Rating</span>' + starRowHtml(0, true) + '</div>' +
+        '<textarea id="sessionNote" class="session-note" rows="2" ' +
+        'placeholder="Notes — board, crowd, what worked… (optional)"></textarea>' +
+        '<div class="alarm-actions">' +
+        '<button id="sessionSaveBtn" class="account-action">Save session</button>' +
+        '<button id="sessionCancelBtn" class="account-action account-signout">Cancel</button>' +
+        '</div>' +
+        '<div id="sessionFormStatus" class="account-status account-error"></div>' +
+        '</div>';
+
+    wireStarInput(panel.querySelector('.star-row'));
+    panel.querySelector('#sessionCancelBtn').addEventListener('click',
+        () => renderAccountPanel());
+    panel.querySelector('#sessionSaveBtn').addEventListener('click', async () => {
+        const status = panel.querySelector('#sessionFormStatus');
+        const rating = +panel.querySelector('.star-row').dataset.rating;
+        const datetime = panel.querySelector('#sessionHour')?.value;
+        if (!rating) { status.textContent = 'Tap the stars to rate it.'; return; }
+        if (!datetime) { status.textContent = "No forecast data for today yet."; return; }
+        status.textContent = 'Saving…';
+        const conditions = await buildConditionSnapshot(slug, spotName, datetime);
+        const { data, error } = await sb.from('session_ratings').insert({
+            user_id: window.surfUser.session.user.id,
+            spot_slug: slug,
+            session_at: new Date(datetime.replace(' ', 'T')).toISOString(),
+            rating,
+            note: panel.querySelector('#sessionNote').value.trim() || null,
+            conditions,
+        }).select();
+        if (error) { status.textContent = `Couldn't save: ${error.message}`; return; }
+        window.surfUser.sessions.unshift(data[0]);
+        renderAccountPanel();
+    });
+}
+
 function renderAccountPanel() {
     const panel = document.getElementById('accountPanel');
     if (!panel) return;
     const session = window.surfUser.session;
 
+    const unitsRow = (label) =>
+        '<div class="account-email-row">' +
+        (label ? `<div class="account-email">${label}</div>` : '') +
+        '<div class="unit-toggle-wrapper account-units">' +
+        '<span class="unit-label">M</span>' +
+        `<label class="switch"><input type="checkbox" id="panelUnitToggle"${isImperial() ? ' checked' : ''}>` +
+        '<span class="slider round"></span></label>' +
+        '<span class="unit-label">FT</span></div>' +
+        '</div>';
+
     if (!session) {
         panel.innerHTML =
             '<div class="account-section">' +
+            unitsRow('Units') +
             '<div class="account-title">Sign in</div>' +
             '<p class="account-hint">Get a one-time login link by email. No password needed.</p>' +
             '<form id="magicLinkForm" class="magic-link-form">' +
@@ -613,6 +882,9 @@ function renderAccountPanel() {
             '</form>' +
             '<div id="magicLinkStatus" class="account-status"></div>' +
             '</div>';
+        panel.querySelector('#panelUnitToggle').addEventListener('change', (e) => {
+            applyUnits(e.target.checked ? 'imperial' : 'metric');
+        });
         panel.querySelector('#magicLinkForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = panel.querySelector('#magicLinkEmail').value.trim();
@@ -659,16 +931,18 @@ function renderAccountPanel() {
     const canSetDefault = target && !(target.kind === defKind && target.id === defItem);
     panel.innerHTML =
         '<div class="account-section">' +
-        `<div class="account-email">${session.user.email}</div>` +
+        unitsRow(session.user.email) +
+        // Each concern gets its own boxed group: Favorites / Alerts / Sessions
+        '<div class="account-group">' +
         '<div class="account-title">Favorites</div>' +
         `<div class="account-favs">${favItems}</div>` +
-        '<div class="account-title">Default view</div>' +
-        `<p class="account-hint">${defItem
-            ? `Opens <b>${favLabel(defKind, defItem)}</b> when you visit.`
-            : 'Not set — location detection is used.'}</p>` +
+        // the DEFAULT badge on the favorites row says what opens on visit;
+        // this small action just moves it to the current view
         (canSetDefault
-            ? `<button id="setDefaultBtn" class="account-action">Use ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'current spot')}</button>`
+            ? `<button id="setDefaultBtn" class="account-action-small">Set ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'current spot')} as default view</button>`
             : '') +
+        '</div>' +
+        '<div class="account-group">' +
         '<div class="account-title">Alerts</div>' +
         (window.surfUser.alarms.length
             ? window.surfUser.alarms.map(a =>
@@ -685,6 +959,37 @@ function renderAccountPanel() {
         (target
             ? `<button id="newAlarmBtn" class="account-action">New alert for ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'this spot')}</button>`
             : '') +
+        '</div>' +
+        // Sessions: only when a SPOT owns the hero (buoys aren't surfed)
+        (currentSpot.slug && !buoyMode ? (() => {
+            const spotSessions = window.surfUser.sessions
+                .filter(s => s.spot_slug === currentSpot.slug);
+            const rows = spotSessions.slice(0, 10).map(s => {
+                const d = new Date(s.session_at);
+                const label = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+                    + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                return `<div class="account-session" data-id="${s.id}">` +
+                    '<div class="account-session-head">' +
+                    `<span class="account-session-when">${label}</span>` +
+                    starRowHtml(+s.rating, false) +
+                    '<button class="alarm-del session-del" title="Delete session">&times;</button>' +
+                    '</div>' +
+                    `<div class="account-session-detail" style="display:none">` +
+                    sessionCondRowHtml(s) +
+                    (s.conditions?.buoy
+                        ? `<div class="account-session-conds">buoy ${s.conditions.buoy.id}: ${fmtWave(s.conditions.buoy.hs)}` +
+                          (s.conditions.buoy.tp ? ` · ${s.conditions.buoy.tp}s` : '') +
+                          (s.conditions.buoy.dp ? ` · ${s.conditions.buoy.dp}°` : '') + ' observed</div>'
+                        : '') +
+                    (s.note ? `<div class="account-session-note"></div>` : '') +
+                    '</div></div>';
+            }).join('');
+            return '<div class="account-group">' +
+                `<div class="account-title">Sessions — ${currentSpot.name || ''}</div>` +
+                (rows || '<p class="account-hint">No sessions logged here yet.</p>') +
+                `<button id="rateSessionBtn" class="account-action">Rate a session</button>` +
+                '</div>';
+        })() : '') +
         '<button id="signOutBtn" class="account-action account-signout">Sign out</button>' +
         '</div>';
 
@@ -705,6 +1010,10 @@ function renderAccountPanel() {
         const t = currentFavTarget();
         if (t) setDefault(t.kind, t.id);
     });
+    const unitToggle = panel.querySelector('#panelUnitToggle');
+    if (unitToggle) unitToggle.addEventListener('change', (e) => {
+        applyUnits(e.target.checked ? 'imperial' : 'metric');
+    });
     panel.querySelectorAll('.account-alarm').forEach(el => {
         el.querySelector('.alarm-toggle').addEventListener('change', (e) => {
             el.classList.toggle('off', !e.target.checked);
@@ -724,6 +1033,22 @@ function renderAccountPanel() {
         const t = currentFavTarget();
         if (t) renderAlarmForm(panel, t);
     });
+    panel.querySelectorAll('.account-session').forEach(el => {
+        const s = window.surfUser.sessions.find(x => x.id === el.dataset.id);
+        const note = el.querySelector('.account-session-note');
+        if (note && s?.note) note.textContent = s.note; // textContent: user input
+        el.querySelector('.session-del').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteSession(el.dataset.id);
+        });
+        el.addEventListener('click', () => {
+            const d = el.querySelector('.account-session-detail');
+            d.style.display = d.style.display === 'none' ? '' : 'none';
+        });
+    });
+    const rateBtn = panel.querySelector('#rateSessionBtn');
+    if (rateBtn) rateBtn.addEventListener('click', () =>
+        renderSessionForm(panel, currentSpot.slug, currentSpot.name));
     panel.querySelector('#signOutBtn').addEventListener('click', async () => {
         panel.style.display = 'none';
         await sb.auth.signOut();
@@ -738,6 +1063,8 @@ async function onSession(session) {
     window.surfUser.session = session;
     await loadUserData();
     await domReady;
+    // the saved unit preference wins over this device's localStorage
+    if (window.surfUser.profile?.units) applyUnits(window.surfUser.profile.units);
     updateStar();
     renderAccountPanel();
     document.dispatchEvent(new CustomEvent('auth-changed', { detail: { session } }));
@@ -751,6 +1078,13 @@ async function onSession(session) {
 
 domReady.then(() => {
     buildUI();
+    // header M/FT toggle changes persist to the profile when logged in
+    // (covers the panel toggle too — applyUnits routes through the header)
+    document.addEventListener('change', (e) => {
+        if (e.target.classList && e.target.classList.contains('unit-toggle')) {
+            saveUnits(e.target.checked ? 'imperial' : 'metric');
+        }
+    });
     document.addEventListener('spot-rendered', (e) => {
         currentSpot = e.detail;
         buoyMode = false;

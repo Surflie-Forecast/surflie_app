@@ -271,10 +271,15 @@ def _fmt(ts):
     return ts.astimezone(TZ).strftime('%a %b %-d, %-H:%M')
 
 
-def _conditions_text(alarm):
+M_PER_FT = 0.3048
+
+
+def _conditions_text(alarm, imperial=True):
     parts = []
     if alarm.get('min_height_m') is not None:
-        parts.append(f"waves ≥ {alarm['min_height_m']} m")
+        h = float(alarm['min_height_m'])
+        parts.append(f"waves ≥ {round(h / M_PER_FT, 1)} ft" if imperial
+                     else f"waves ≥ {h} m")
     if alarm.get('min_period_s') is not None:
         parts.append(f"period ≥ {alarm['min_period_s']} s")
     if alarm.get('dir_min') is not None:
@@ -288,7 +293,8 @@ def _conditions_text(alarm):
     return ', '.join(parts)
 
 
-def _send_email(to, label, alarm, start, end, models, site_url, slug_hash):
+def _send_email(to, label, alarm, start, end, models, site_url, slug_hash,
+                imperial=True):
     model_names = ', '.join(MODEL_LABELS.get(m, m) for m in models)
     mode = 'all of' if alarm.get('require_all_models') else ''
     subject = f"Surf alert: {label} — {_fmt(start)}"
@@ -299,7 +305,7 @@ def _send_email(to, label, alarm, start, end, models, site_url, slug_hash):
       <p>Your alert conditions are in the forecast:</p>
       <p style="font-size:1.1em"><b>{_fmt(start)} → {_fmt(end)}</b>
          <span style="color:#64748b">(Pacific)</span></p>
-      <p>Conditions: <b>{_conditions_text(alarm)}</b><br>
+      <p>Conditions: <b>{_conditions_text(alarm, imperial)}</b><br>
          Forecast by: {mode} {model_names}</p>
       <p><a href="{day_link}"
             style="color:#0077be">Check the full forecast on Surflie →</a></p>
@@ -331,8 +337,8 @@ def run():
         return
 
     user_ids = ','.join(sorted({a['user_id'] for a in alarms}))
-    profiles = {p['id']: p.get('email') for p in _sb(
-        'GET', f'profiles?id=in.({user_ids})&select=id,email').json()}
+    profiles = {p['id']: p for p in _sb(
+        'GET', f'profiles?id=in.({user_ids})&select=id,email,units').json()}
 
     # Display labels + deep links
     site_url = os.environ.get('SITE_URL', 'https://pcarbomestre.github.io/surflie')
@@ -357,7 +363,9 @@ def run():
             continue
         start, end, models = result
 
-        email = profiles.get(alarm['user_id'])
+        prof = profiles.get(alarm['user_id']) or {}
+        email = prof.get('email')
+        imperial = prof.get('units', 'imperial') != 'metric'
         if alarm['kind'] == 'spot':
             label = spot_names.get(alarm['item_id'], alarm['item_id'])
             slug_hash = alarm['item_id']
@@ -374,7 +382,7 @@ def run():
             continue
         try:
             _send_email(email, label, alarm, start, end, models,
-                        site_url, slug_hash)
+                        site_url, slug_hash, imperial)
         except Exception as e:
             print(f"    ! send failed: {e}")
             continue

@@ -271,29 +271,42 @@ def _fetch_models(roster, start_utc, end_utc, skipped_sources=()):
 
 
 def _fetch_mop_forecast(sid, start_utc):
-    """[(ts, hs)] from the buoy's MOP validation forecast, sliced from
-    start_utc. Two reads: the .dds for the axis length, then one tail read
-    of the last MOP_TAIL_SAMPLES points — see the constant for why a fixed
-    tail replaces index math on this gappy axis."""
+    """[(ts, {'v','p','d'})] from the buoy's MOP validation forecast, sliced
+    from start_utc: Hs plus peak period/direction, same point shape as the
+    Open-Meteo model series (chart reads 'v', alarms read 'p'/'d'). Two
+    reads: the .dds for the axis length, then one tail read of the last
+    MOP_TAIL_SAMPLES points — see the constant for why a fixed tail replaces
+    index math on this gappy axis."""
     base = MOP_URL.format(sid=sid)
 
     dds = _get(f'{base}.dds').text
     n = int(re.search(r'waveTime = (\d+)', dds).group(1))
     i0 = max(0, n - MOP_TAIL_SAMPLES)
 
-    r = _get(f'{base}.ascii?waveTime%5B{i0}:1:{n - 1}%5D,'
-             f'waveHs%5B{i0}:1:{n - 1}%5D')
+    rng = f'%5B{i0}:1:{n - 1}%5D'
+    r = _get(f'{base}.ascii?waveTime{rng},waveHs{rng},waveTp{rng},waveDp{rng}')
     body = re.split(r'^-{20,}$', r.text, maxsplit=1, flags=re.M)[1]
 
     def values(name):
-        return [float(v) for v in
-                body.split(f'{name}[{n - i0}]')[1].strip().splitlines()[0].split(',')]
+        try:
+            return [float(v) for v in
+                    body.split(f'{name}[{n - i0}]')[1].strip().splitlines()[0].split(',')]
+        except IndexError:
+            return None  # variable absent from this station's file
 
-    return [
-        (datetime.fromtimestamp(int(t), tz=timezone.utc), v)
-        for t, v in zip(values('waveTime'), values('waveHs'))
-        if v >= FILL_CUTOFF
-        and datetime.fromtimestamp(int(t), tz=timezone.utc) >= start_utc]
+    tp, dp = values('waveTp'), values('waveDp')
+    out = []
+    for i, (t, hs) in enumerate(zip(values('waveTime'), values('waveHs'))):
+        ts = datetime.fromtimestamp(int(t), tz=timezone.utc)
+        if hs < FILL_CUTOFF or ts < start_utc:
+            continue
+        pt = {'v': hs}
+        if tp and tp[i] >= FILL_CUTOFF:
+            pt['p'] = tp[i]
+        if dp and dp[i] >= FILL_CUTOFF:
+            pt['d'] = dp[i]
+        out.append((ts, pt))
+    return out
 
 
 def _series_json(series):

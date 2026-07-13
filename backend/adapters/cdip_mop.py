@@ -1,4 +1,4 @@
-"""CDIP MOP 1 km California nearshore forecast (combined Hs only).
+"""CDIP MOP 1 km California nearshore forecast (Hs + peak period/direction).
 
 The only source that models the water inside the Channel Islands' swell
 shadow (post-refraction, ~1 km); global models systematically over-predict
@@ -76,8 +76,19 @@ def _cache_path(spot):
     return os.path.join(CACHE_DIR, f'{spot.slug}.json')
 
 
+# THREDDS grid variable -> (point key, store variable). Tp/Dp are the peak
+# period/direction — the same role the swell partition plays for the global
+# models, so they land in the same store variables and feed alarms/UI alike.
+GRID_VARS = {
+    'waveHs': ('h', 'wave_height'),
+    'waveTp': ('p', 'swell_period'),
+    'waveDp': ('d', 'swell_direction'),
+}
+
+
 def _load_cache(spot, start_utc, end_utc):
-    """Cached rows still inside the window, keyed by ts_utc. {} if none/bad."""
+    """Cached points still inside the window, {ts_utc: {'h','p','d'}}.
+    Pre-Tp/Dp caches stored a bare Hs float per timestamp — normalize."""
     try:
         with open(_cache_path(spot)) as f:
             cached = json.load(f)
@@ -87,54 +98,69 @@ def _load_cache(spot, start_utc, end_utc):
     for ts_utc, value in cached.items():
         ts = datetime.fromisoformat(ts_utc)
         if start_utc <= ts <= end_utc:
-            out[ts_utc] = value
+            out[ts_utc] = value if isinstance(value, dict) else {'h': value}
     return out
 
 
-def _save_cache(spot, rows):
-    """Persist rows as {ts_utc: value}, pruned to the window by the caller."""
+def _save_cache(spot, points):
+    """Persist {ts_utc: point-dict}, pruned to the window by the caller."""
     os.makedirs(CACHE_DIR, exist_ok=True)
-    data = {r['ts_utc']: r['value'] for r in rows}
     with open(_cache_path(spot), 'w') as f:
-        json.dump(data, f, separators=(',', ':'), sort_keys=True)
+        json.dump(points, f, separators=(',', ':'), sort_keys=True)
 
 
-def _row(spot, ts_utc, value):
-    return {
-        'spot': spot.slug,
-        'ts_utc': ts_utc,
-        'variable': 'wave_height',
-        'value': value,
-        'source': SOURCE,
-    }
+def _rows(spot, points):
+    return [
+        {'spot': spot.slug, 'ts_utc': ts_utc, 'variable': var,
+         'value': pt[key], 'source': SOURCE}
+        for ts_utc, pt in points.items()
+        for key, var in GRID_VARS.values()
+        if pt.get(key) is not None
+    ]
 
 
 def fetch(spot, start_utc, end_utc):
-    """Live MOP rows merged with the cached window so the first day stays full.
-
-    Live values win for shared timestamps; cached-only timestamps (the elapsed
-    hours MOP has since dropped) backfill the gap. On a total live failure we
-    still serve the cache — better a slightly stale first day than none — and
-    the cache is left untouched. Non-critical, so we never raise.
+    """Live MOP points merged with the cached window so the first day stays
+    full. Live values win for shared timestamps; cached-only timestamps (the
+    elapsed hours MOP has since dropped) backfill the gap. On a total live
+    failure we still serve the cache — better a slightly stale first day than
+    none — and the cache is left untouched. Non-critical, so we never raise.
     """
     cached = _load_cache(spot, start_utc, end_utc)
     try:
         live = _fetch_live(spot, start_utc, end_utc)
     except Exception as e:
         print(f"    {NAME}: live fetch failed ({e}); serving {len(cached)} cached rows")
-        return [_row(spot, ts, v) for ts, v in cached.items()]
+        return _rows(spot, cached)
 
     merged = dict(cached)
-    for r in live:
-        merged[r['ts_utc']] = r['value']  # live wins
+    merged.update(live)  # live wins per timestamp
 
-    rows = [_row(spot, ts, v) for ts, v in merged.items()]
-    if rows:  # don't litter empty caches for spots outside the CA grid
-        _save_cache(spot, rows)
-    return rows
+    if merged:  # don't litter empty caches for spots outside the CA grid
+        _save_cache(spot, merged)
+    return _rows(spot, merged)
+
+
+def _parse_grid(body, var, n_time, nr, nc):
+    """grid[t][r][c] for one variable's section of a multi-grid .ascii body.
+
+    Each grid prints as a '{var}[nt][nr][nc]' header line followed by
+    '[t][r], v, v, ...' lines; slice the body to this variable's section so
+    the shared line format can't bleed between variables."""
+    m = re.search(rf'^{var}\[\d+\]\[\d+\]\[\d+\]$', body, flags=re.M)
+    if not m:
+        return None
+    nxt = re.search(r'^wave\w+\[\d+\]', body[m.end():], flags=re.M)
+    section = body[m.start():m.end() + nxt.start()] if nxt else body[m.start():]
+    grid = [[[FILL_CUTOFF - 1] * nc for _ in range(nr)] for _ in range(n_time)]
+    for mm in re.finditer(r'^\[(\d+)\]\[(\d+)\],(.+)$', section, flags=re.M):
+        t, r = int(mm.group(1)), int(mm.group(2))
+        grid[t][r] = [float(v) for v in mm.group(3).split(',')]
+    return grid
 
 
 def _fetch_live(spot, start_utc, end_utc):
+    """{ts_utc: {'h','p','d'}} at the nearest water cell, one .ascii read."""
     n_time, n_lat, n_lon = _shape()
     lat0, dlat = _axis('metaLatitude')
     lon0, dlon = _axis('metaLongitude')
@@ -143,27 +169,27 @@ def _fetch_live(spot, start_utc, end_utc):
     lj = round((spot.longitude - lon0) / dlon)
     if not (0 <= li < n_lat and 0 <= lj < n_lon):
         print(f"    {NAME}: {spot.slug} outside the California MOP grid")
-        return []
+        return {}
 
     ra, rb = max(li - HALF, 0), min(li + HALF, n_lat - 1)
     ca, cb = max(lj - HALF, 0), min(lj + HALF, n_lon - 1)
+    subgrid = f'%5B0:1:{n_time - 1}%5D%5B{ra}:1:{rb}%5D%5B{ca}:1:{cb}%5D'
     body = _ascii_body(
         f'waveTime%5B0:1:{n_time - 1}%5D,'
-        f'waveHs.waveHs%5B0:1:{n_time - 1}%5D%5B{ra}:1:{rb}%5D%5B{ca}:1:{cb}%5D')
+        + ','.join(f'{v}.{v}{subgrid}' for v in GRID_VARS))
 
     times = [
         datetime.fromtimestamp(int(v), tz=timezone.utc)
         for v in body.split(f'waveTime[{n_time}]')[1]
         .strip().splitlines()[0].split(',')]
 
-    # hs[t][r][c] from lines like "[0][3], 0.55, 0.58, -999.99, ..."
     nr, nc = rb - ra + 1, cb - ca + 1
-    hs = [[[FILL_CUTOFF - 1] * nc for _ in range(nr)] for _ in range(n_time)]
-    for m in re.finditer(r'^\[(\d+)\]\[(\d+)\],(.+)$', body, flags=re.M):
-        t, r = int(m.group(1)), int(m.group(2))
-        hs[t][r] = [float(v) for v in m.group(3).split(',')]
+    grids = {v: _parse_grid(body, v, n_time, nr, nc) for v in GRID_VARS}
+    hs = grids['waveHs']
+    if hs is None:
+        raise ValueError('waveHs grid missing from response')
 
-    # nearest water cell (validity judged at the first time step)
+    # nearest water cell (validity judged at the first time step of Hs)
     coslat = math.cos(math.radians(spot.latitude))
     best, best_d2 = None, None
     for r in range(nr):
@@ -176,11 +202,18 @@ def _fetch_live(spot, start_utc, end_utc):
                 best, best_d2 = (r, c), d2
     if best is None or best_d2 > MAX_DIST_DEG ** 2:
         print(f"    {NAME}: no water cell within ~5 km of {spot.slug}")
-        return []
+        return {}
 
     r, c = best
-    return [
-        _row(spot, ts.isoformat(), hs[t][r][c])
-        for t, ts in enumerate(times)
-        if hs[t][r][c] >= FILL_CUTOFF and start_utc <= ts <= end_utc
-    ]
+    out = {}
+    for t, ts in enumerate(times):
+        if not (start_utc <= ts <= end_utc) or hs[t][r][c] < FILL_CUTOFF:
+            continue
+        pt = {}
+        for var, (key, _) in GRID_VARS.items():
+            g = grids[var]
+            if g is not None and g[t][r][c] >= FILL_CUTOFF:
+                pt[key] = g[t][r][c]
+        if pt:
+            out[ts.isoformat()] = pt
+    return out
