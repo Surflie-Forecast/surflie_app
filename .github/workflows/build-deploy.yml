@@ -145,6 +145,19 @@ jobs:
         if: steps.mode.outputs.build == 'true'
         run: python backend/pipeline.py --scheduled
 
+      # Swell alarms: evaluate user alerts against this run's fresh forecast
+      # and email matches (backend/alerts.py). Best-effort: the script skips
+      # itself when the secrets are absent and exits 0 on any failure — it
+      # can never sink a good data build.
+      - name: Evaluate swell alarms
+        if: steps.mode.outputs.build == 'true'
+        env:
+          SUPABASE_URL: https://axbjsbtepbecalvaamnu.supabase.co
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERTS_FROM: Surflie <alerts@send.surflie.app>
+        run: python backend/alerts.py
+
       # Every full build leaves its api/ behind for push-triggered redeploys
       - name: Save forecast data for push redeploys
         if: steps.mode.outputs.build == 'true'

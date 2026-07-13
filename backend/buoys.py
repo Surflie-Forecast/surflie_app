@@ -226,33 +226,45 @@ def _fetch_latest_sst(station_ids, since_utc):
 
 
 def _fetch_models(roster, start_utc, end_utc, skipped_sources=()):
-    """{sid: [(model_id, label, [(ts, hs)])]}: per-model Hs at every buoy's
-    coordinates, ONE multi-coordinate Open-Meteo request per model (the same
-    batching the spot pipeline uses). A model whose cell is dry at a buoy
-    (all ~0) is dropped for that buoy, as before. Sources in skipped_sources
-    (no new run upstream — see pipeline --scheduled) aren't fetched; the
-    detail writer carries their series over from the previous files."""
+    """{sid: [(model_id, label, [(ts, {'v','p','d'})])]}: per-model forecast
+    at every buoy's coordinates, ONE multi-coordinate Open-Meteo request per
+    model (the same batching the spot pipeline uses). Each point carries Hs
+    ('v') plus swell period ('p') and direction ('d') where the model serves
+    them (ECMWF WAM is Hs-only) — the extra variables ride the same request
+    and feed the swell alarms (backend/alerts.py); the chart keeps reading
+    'v'. A model whose cell is dry at a buoy (all ~0 Hs) is dropped for that
+    buoy, as before. Sources in skipped_sources (no new run upstream — see
+    pipeline --scheduled) aren't fetched; the detail writer carries their
+    series over from the previous files."""
     coords = [(sid, e['latitude'], e['longitude'])
               for sid, e in sorted(roster.items())]
     out = {sid: [] for sid in roster}
+    keymap = {'wave_height': 'v', 'swell_period': 'p', 'swell_direction': 'd'}
     for model, source in openmeteo_marine.MODELS:
         if source in skipped_sources:
             continue
         try:
             rows, _ = _openmeteo.fetch_hourly_rows_batch(
                 'https://marine-api.open-meteo.com/v1/marine', coords,
-                {'wave_height': 'wave_height'}, source, start_utc, end_utc,
+                {'wave_height': 'wave_height',
+                 'swell_wave_period': 'swell_period',
+                 'swell_wave_direction': 'swell_direction'},
+                source, start_utc, end_utc,
                 extra_params={'models': model, 'cell_selection': 'sea'})
         except Exception as e:
             print(f"    ! models batch {model}: {e}")
             continue
         by_sid = {}
         for row in rows:
-            by_sid.setdefault(row['spot'], []).append(
-                (datetime.fromisoformat(row['ts_utc']), row['value']))
-        for sid, series in by_sid.items():
-            series.sort()
-            if series and max(v for _, v in series) > 0.01:
+            key = keymap.get(row['variable'])
+            if key is None:
+                continue
+            by_sid.setdefault(row['spot'], {}).setdefault(
+                datetime.fromisoformat(row['ts_utc']), {})[key] = row['value']
+        for sid, points in by_sid.items():
+            series = sorted(points.items())
+            hs = [pt['v'] for _, pt in series if pt.get('v') is not None]
+            if hs and max(hs) > 0.01:
                 out[sid].append(
                     (source.split(':', 1)[1], WAVE_MODELS[source], series))
     return out
@@ -285,7 +297,23 @@ def _fetch_mop_forecast(sid, start_utc):
 
 
 def _series_json(series):
-    return [{'t': _fmt_local(ts), 'v': round(v, 2)} for ts, v in series]
+    """Points are (ts, float) for plain Hs series (observed, MOP) or
+    (ts, {'v','p','d'}) for model series; points without Hs are dropped
+    (the chart requires 'v'), period/direction ride along when present."""
+    out = []
+    for ts, v in series:
+        if isinstance(v, dict):
+            if v.get('v') is None:
+                continue
+            pt = {'t': _fmt_local(ts), 'v': round(v['v'], 2)}
+            if v.get('p') is not None:
+                pt['p'] = round(v['p'], 1)
+            if v.get('d') is not None:
+                pt['d'] = round(v['d'])
+            out.append(pt)
+        else:
+            out.append({'t': _fmt_local(ts), 'v': round(v, 2)})
+    return out
 
 
 # ---------------------------------------------------------------------------

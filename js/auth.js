@@ -16,7 +16,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_ctbhSSA00mkgOyWSAfvD8w_OIT7NHzB
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-window.surfUser = { session: null, profile: null, favorites: new Set() };
+window.surfUser = { session: null, profile: null, favorites: new Set(), alarms: [] };
 
 // DOM-ready gate so events/UI never fire before app.js has registered its
 // listeners (all app.js code runs at DOMContentLoaded).
@@ -62,15 +62,19 @@ async function loadUserData() {
         window.surfUser.favorites = new Set();
         return;
     }
-    const [profileRes, favRes] = await Promise.all([
+    const [profileRes, favRes, alarmRes] = await Promise.all([
         sb.from('profiles').select('*').eq('id', user.id).maybeSingle(),
         sb.from('favorites').select('kind, item_id').eq('user_id', user.id),
+        sb.from('alarms').select('*').eq('user_id', user.id)
+            .order('created_at'),
     ]);
     if (profileRes.error) console.error('profile load failed', profileRes.error);
     if (favRes.error) console.error('favorites load failed', favRes.error);
+    if (alarmRes.error) console.error('alarms load failed', alarmRes.error);
     window.surfUser.profile = profileRes.data || null;
     window.surfUser.favorites =
         new Set((favRes.data || []).map(r => favKey(r.kind, r.item_id)));
+    window.surfUser.alarms = alarmRes.data || [];
 }
 
 async function toggleFavorite(kind, id) {
@@ -181,7 +185,11 @@ function buildUI() {
         panel.style.display = 'block';
     });
     document.addEventListener('click', (e) => {
-        if (!panel.contains(e.target) && !btn.contains(e.target)) {
+        // composedPath, not contains: panel buttons re-render the panel's
+        // innerHTML on click, so by the time this bubbles up the clicked
+        // element is detached and contains() would wrongly close the panel.
+        const path = e.composedPath();
+        if (!path.includes(panel) && !path.includes(btn)) {
             panel.style.display = 'none';
         }
     });
@@ -220,6 +228,373 @@ function updateStar() {
     star.classList.toggle('active', isFav);
     const noun = target.kind === 'buoy' ? 'buoy' : 'spot';
     star.title = isFav ? `Remove ${noun} from favorites` : `Save ${noun} as favorite`;
+}
+
+// ---------------------------------------------------------------------------
+// Swell alarms (evaluated by backend/alerts.py on each scheduled build)
+// ---------------------------------------------------------------------------
+
+// Forecast models an alarm can watch (spots and buoys alike). full=true
+// models serve period + direction; Hs-only models (MOP, ECMWF WAM) grey
+// out when those conditions are set. MOP is the 1km nearshore model —
+// waves-only and a shorter horizon (~5-8 days), but the sharpest local Hs.
+const ALARM_MODELS = [
+    { id: 'gfswave025', label: 'GFS Wave 25km', full: true },
+    { id: 'mfwam', label: 'MFWAM 8km', full: true },
+    { id: 'gwam', label: 'DWD GWAM 25km', full: true },
+    { id: 'mop', label: 'CDIP MOP (nearshore)', full: false },
+    { id: 'ecmwf_wam9', label: 'ECMWF WAM 9km', full: false },
+    { id: 'ecmwf_wam25', label: 'ECMWF WAM 25km', full: false },
+];
+const ALARM_MODELS_BUOY = ALARM_MODELS;
+
+const M_PER_FT = 0.3048;
+const isImperial = () =>
+    (localStorage.getItem('surfForecastUnit') || 'imperial') === 'imperial';
+
+function alarmSummary(a) {
+    const parts = [];
+    if (a.min_height_m != null) {
+        parts.push(isImperial()
+            ? `waves ≥ ${(a.min_height_m / M_PER_FT).toFixed(1)} ft`
+            : `waves ≥ ${a.min_height_m} m`);
+    }
+    if (a.min_period_s != null) parts.push(`period ≥ ${a.min_period_s} s`);
+    if (a.dir_min != null) {
+        const [c, m] = _dirToCenterMargin(a.dir_min, a.dir_max);
+        parts.push(`swell ${c}°±${m}`);
+    }
+    if (a.max_wind_kts != null) parts.push(`wind ≤ ${a.max_wind_kts} kts`);
+    if (a.wind_dir_min != null) {
+        const [c, m] = _dirToCenterMargin(a.wind_dir_min, a.wind_dir_max);
+        parts.push(`wind ${c}°±${m}`);
+    }
+    if (a.lead_days != null) parts.push(`within ${a.lead_days}d`);
+    const models = (a.models || []).length
+        ? (a.require_all_models ? 'all of: ' : '') + a.models.map(id => {
+            const m = ALARM_MODELS_BUOY.find(m => m.id === id);
+            return m ? m.label : id;
+        }).join(', ')
+        : 'default model';
+    return `${parts.join(' · ')} — ${models}`;
+}
+
+async function toggleAlarm(id, enabled) {
+    const { error } = await sb.from('alarms').update({ enabled }).eq('id', id);
+    if (error) { showPanelError(`Couldn't update alert: ${error.message}`); return; }
+    const a = window.surfUser.alarms.find(a => a.id === id);
+    if (a) a.enabled = enabled;
+}
+
+async function deleteAlarm(id) {
+    const { error } = await sb.from('alarms').delete().eq('id', id);
+    if (error) { showPanelError(`Couldn't delete alert: ${error.message}`); return; }
+    window.surfUser.alarms = window.surfUser.alarms.filter(a => a.id !== id);
+    renderAccountPanel();
+}
+
+// The create form replaces the panel body; Cancel/Save return to the main view
+// Directions are entered as "from X° ± margin" (how surfers think about a
+// swell window) and stored as the dir_min/dir_max range the evaluator wants.
+function _dirToCenterMargin(min, max) {
+    if (min == null || max == null) return [null, null];
+    const span = (max - min + 360) % 360;
+    const m = span / 2;
+    return [Math.round((min + m) % 360), Math.round(m)];
+}
+
+function _compassHtml(id) {
+    // The forecast cards' ➤ glyph. A text glyph's anchor point is not its
+    // visual center, so _updateCompass measures the rendered ink (getBBox)
+    // once and recenters it on the rose before rotating — otherwise the
+    // arrow orbits slightly off-axis and drifts out of line with the wedge.
+    return `<svg id="${id}" class="dir-compass" viewBox="0 0 64 64">` +
+        '<circle cx="32" cy="32" r="26" class="dc-face"/>' +
+        '<text x="32" y="9" text-anchor="middle" class="dc-n">N</text>' +
+        '<path class="dc-arc" d=""/>' +
+        '<text x="32" y="32" class="dc-arrow" style="display:none">➤</text></svg>';
+}
+
+// Shade the coming-from wedge [c-m, c+m]; ➤ at the center shows the travel
+// direction (same +90 rotation the forecast cards apply to the glyph)
+function _updateCompass(svg, c, m) {
+    if (!svg) return;
+    const arc = svg.querySelector('.dc-arc');
+    const arrow = svg.querySelector('.dc-arrow');
+    if (c == null) {
+        arc.setAttribute('d', '');
+        arrow.style.display = 'none';
+        return;
+    }
+    arrow.style.display = '';
+    if (arrow._center == null) {
+        const b = arrow.getBBox(); // ink extents at rest position
+        arrow._center = [32 - (b.x + b.width / 2), 32 - (b.y + b.height / 2)];
+    }
+    const [dx, dy] = arrow._center;
+    // Right-to-left: center the glyph's ink on the rose, point it south
+    // (inward from N), slide it out to the rim, then orbit to the heading —
+    // the arrow rides the coming-from side with its tip aimed at the center.
+    arrow.setAttribute('transform',
+        `rotate(${c} 32 32) translate(0 -10) rotate(90 32 32) ` +
+        `translate(${dx.toFixed(2)} ${dy.toFixed(2)})`);
+    if (!m) {
+        arc.setAttribute('d', '');
+        return;
+    }
+    // Wedge on the DOWNSTREAM side (c+180 ± m): the arrow shows where the
+    // swell/wind comes from, the shading shows where it lands — beam and
+    // impact zone, per user preference.
+    const t = c + 180;
+    const r = 26, cx = 32, cy = 32;
+    const pt = a => {
+        const rad = a * Math.PI / 180;
+        return `${(cx + r * Math.sin(rad)).toFixed(1)},${(cy - r * Math.cos(rad)).toFixed(1)}`;
+    };
+    const large = m > 90 ? 1 : 0;
+    arc.setAttribute('d',
+        `M${cx},${cy} L${pt(t - m)} A${r},${r} 0 ${large} 1 ${pt(t + m)} Z`);
+}
+
+// existing = alarm row to edit (null = create for `target`)
+function renderAlarmForm(panel, target, existing = null) {
+    const label = favLabel(target.kind, target.id);
+    const models = target.kind === 'buoy' ? ALARM_MODELS_BUOY : ALARM_MODELS;
+    const imperial = isImperial();
+    const hUnit = imperial ? 'ft' : 'm';
+    const hMax = imperial ? 20 : 6;
+    // one compact row per condition: number input + inline slider at the
+    // right (+ a small decorative bar meter over the waves slider). All
+    // stay in sync; typing finer decimals than the spinner step is fine
+    // (the raw value is what's read on save). sliderMax caps the slider on
+    // the everyday range (its midpoint = a typical value) — bigger values
+    // are still typed/spun on the number input up to `max`.
+    const condRow = (id, name, ph, unit, min, max, step, bars, sliderMax) =>
+        `<div class="alarm-row"><span>${name}</span>` +
+        `<input type="number" id="${id}" placeholder="${ph}" min="0" max="${max}" ` +
+        `step="${step}" class="alarm-num"><span>${unit}</span>` +
+        '<div class="alarm-slide">' +
+        (bars ? `<div class="alarm-bars" id="${id}Bars">` +
+            Array.from({ length: 8 }, (_, i) =>
+                `<span style="height:${4 + i * 1.8}px"></span>`).join('') +
+            '</div>' : '') +
+        `<input type="range" id="${id}Range" class="alarm-range" ` +
+        `min="${min}" max="${sliderMax || max}" step="${step}" value="${min}">` +
+        '</div></div>';
+    // heading has no min so the spinner can cross 0 downward (wraps to 355);
+    // the margin row is indented under it — one bordered group + compass
+    const dirBlock = (idp, name) =>
+        '<div class="alarm-dir">' +
+        '<div class="alarm-dir-fields">' +
+        `<div class="alarm-row"><span>${name} from</span>` +
+        `<input type="number" id="${idp}C" placeholder="270" step="5" class="alarm-num"><span>°</span></div>` +
+        `<div class="alarm-row alarm-row-sub"><span>± margin</span>` +
+        `<input type="number" id="${idp}M" placeholder="30" min="0" max="179" step="5" class="alarm-num"><span>°</span></div>` +
+        '</div>' +
+        _compassHtml(idp + 'Compass') +
+        '</div>';
+
+    panel.innerHTML =
+        '<div class="account-section">' +
+        `<div class="account-title">${existing ? 'Edit' : 'New'} alert — ${label}</div>` +
+        '<p class="account-hint">Leave a field empty to ignore that condition. ' +
+        'You get one email per matching swell window.</p>' +
+        // slider midpoints: 6 ft (1.8 m) waves, 7 kts wind
+        condRow('alarmHeight', 'Waves ≥', '2', hUnit, 0, hMax, 0.5, true,
+            imperial ? 12 : 3.6) +
+        condRow('alarmPeriod', 'Period ≥', '10', 's', 0, 22, 1) +
+        dirBlock('alarmDir', 'Swell') +
+        (target.kind === 'spot'
+            ? condRow('alarmWind', 'Wind ≤', '10', 'kts', 0, 30, 1, false, 14) +
+              dirBlock('alarmWindDir', 'Wind')
+            : '') +
+        condRow('alarmLead', 'Within', '16', 'days', 1, 16, 1) +
+        '<div class="account-title">Models</div>' +
+        '<div class="alarm-models">' +
+        models.map((m, i) =>
+            `<label class="alarm-model"><input type="checkbox" data-model="${m.id}" ` +
+            `data-full="${m.full}"${i === 0 ? ' checked' : ''}>` +
+            `<span>${m.label}</span></label>`).join('') +
+        '</div>' +
+        '<label class="alarm-model"><input type="checkbox" id="alarmAllModels">' +
+        '<span>Require all selected models to agree</span></label>' +
+        '<div class="alarm-actions">' +
+        `<button id="alarmSaveBtn" class="account-action">${existing ? 'Save changes' : 'Save alert'}</button>` +
+        '<button id="alarmCancelBtn" class="account-action account-signout">Cancel</button>' +
+        '</div>' +
+        '<div id="alarmFormStatus" class="account-status account-error"></div>' +
+        '</div>';
+
+    const el = id => panel.querySelector(`#${id}`);
+    const val = id => {
+        const e = el(id);
+        return e && e.value !== '' ? parseFloat(e.value) : null;
+    };
+
+    // Prefill when editing
+    if (existing) {
+        if (existing.min_height_m != null) {
+            el('alarmHeight').value = isImperial()
+                ? Math.round(existing.min_height_m / M_PER_FT * 2) / 2
+                : existing.min_height_m;
+        }
+        if (existing.min_period_s != null) el('alarmPeriod').value = existing.min_period_s;
+        const [dc, dm] = _dirToCenterMargin(existing.dir_min, existing.dir_max);
+        if (dc != null) { el('alarmDirC').value = dc; el('alarmDirM').value = dm; }
+        if (target.kind === 'spot') {
+            if (existing.max_wind_kts != null) el('alarmWind').value = existing.max_wind_kts;
+            const [wc, wm] = _dirToCenterMargin(existing.wind_dir_min, existing.wind_dir_max);
+            if (wc != null) { el('alarmWindDirC').value = wc; el('alarmWindDirM').value = wm; }
+        }
+        if (existing.lead_days != null) el('alarmLead').value = existing.lead_days;
+        panel.querySelectorAll('.alarm-models input[data-model]').forEach(cb => {
+            cb.checked = (existing.models || []).includes(cb.dataset.model);
+        });
+        el('alarmAllModels').checked = !!existing.require_all_models;
+    }
+
+    // Number <-> slider <-> bar meter sync per condition row
+    const conds = ['alarmHeight', 'alarmPeriod', 'alarmLead',
+        ...(target.kind === 'spot' ? ['alarmWind'] : [])];
+    const syncCond = (id, from) => {
+        const numEl = el(id), rangeEl = el(id + 'Range'), bars = el(id + 'Bars');
+        if (from === 'range') numEl.value = rangeEl.value;
+        else rangeEl.value = numEl.value === '' ? rangeEl.min : numEl.value;
+        if (bars) {
+            const min = +rangeEl.min, max = +rangeEl.max;
+            const v = numEl.value === '' ? min : +numEl.value;
+            const n = bars.children.length;
+            const lit = Math.round((v - min) / (max - min) * n);
+            [...bars.children].forEach((b, i) => b.classList.toggle('lit', i < lit));
+        }
+    };
+    conds.forEach(id => {
+        el(id).addEventListener('input', () => syncCond(id, 'num'));
+        el(id + 'Range').addEventListener('input', () => {
+            syncCond(id, 'range');
+            el(id).dispatchEvent(new Event('input', { bubbles: false }));
+        });
+        syncCond(id, 'num');
+    });
+
+    // Live compass previews + drag-to-aim + heading wrap-around
+    const syncCompass = (idp) => _updateCompass(
+        el(idp + 'Compass'), val(idp + 'C'), val(idp + 'M'));
+    const compasses = ['alarmDir', ...(target.kind === 'spot' ? ['alarmWindDir'] : [])];
+    compasses.forEach(idp => {
+        const heading = el(idp + 'C');
+        // spinner below 0 or past 359 wraps around the rose
+        heading.addEventListener('input', () => {
+            if (heading.value !== '' && (+heading.value < 0 || +heading.value >= 360)) {
+                heading.value = ((+heading.value % 360) + 360) % 360;
+            }
+            syncCompass(idp);
+        });
+        el(idp + 'M').addEventListener('input', () => syncCompass(idp));
+        // drag (or click) the rose to aim the heading directly
+        const svg = el(idp + 'Compass');
+        const aim = (e) => {
+            const r = svg.getBoundingClientRect();
+            const dx = e.clientX - (r.left + r.width / 2);
+            const dy = e.clientY - (r.top + r.height / 2);
+            const deg = Math.round(((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360) / 5) * 5;
+            heading.value = deg % 360;
+            if (el(idp + 'M').value === '') el(idp + 'M').value = 30;
+            heading.dispatchEvent(new Event('input'));
+        };
+        svg.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            svg.setPointerCapture(e.pointerId);
+            aim(e);
+        });
+        svg.addEventListener('pointermove', (e) => {
+            if (e.buttons) aim(e);
+        });
+        syncCompass(idp);
+    });
+
+    // Hs-only models can't serve period/direction conditions: grey them out
+    // while either field has a value
+    const syncModels = () => {
+        const needsFull = el('alarmPeriod').value !== ''
+            || el('alarmDirC').value !== '' || el('alarmDirM').value !== '';
+        panel.querySelectorAll('.alarm-models input[data-model]').forEach(cb => {
+            if (cb.dataset.full === 'false') {
+                cb.disabled = needsFull;
+                if (needsFull) cb.checked = false;
+                cb.closest('.alarm-model').classList.toggle('disabled', needsFull);
+            }
+        });
+    };
+    ['alarmPeriod', 'alarmDirC', 'alarmDirM'].forEach(id =>
+        el(id).addEventListener('input', syncModels));
+    syncModels();
+
+    panel.querySelector('#alarmCancelBtn').addEventListener('click',
+        () => renderAccountPanel());
+    panel.querySelector('#alarmSaveBtn').addEventListener('click', async () => {
+        const status = panel.querySelector('#alarmFormStatus');
+        let height = val('alarmHeight');
+        if (height != null && isImperial()) {
+            height = Math.round(height * M_PER_FT * 100) / 100;
+        }
+        // center ± margin -> stored range (wraps 360)
+        const dirRange = (idp) => {
+            const c = val(idp + 'C'), m = val(idp + 'M');
+            if (c == null && m == null) return [null, null];
+            if (c == null || m == null) return 'incomplete';
+            return [(c - m + 720) % 360, (c + m) % 360];
+        };
+        const dir = dirRange('alarmDir');
+        const windDir = target.kind === 'spot' ? dirRange('alarmWindDir') : [null, null];
+        if (dir === 'incomplete' || windDir === 'incomplete') {
+            status.textContent = 'Direction needs both a heading and a margin.';
+            return;
+        }
+        const row = {
+            min_height_m: height,
+            min_period_s: val('alarmPeriod'),
+            dir_min: dir[0], dir_max: dir[1],
+            max_wind_kts: target.kind === 'spot' ? val('alarmWind') : null,
+            wind_dir_min: windDir[0], wind_dir_max: windDir[1],
+            lead_days: val('alarmLead') != null
+                ? Math.round(val('alarmLead')) : null,
+            models: [...panel.querySelectorAll('.alarm-models input:checked')]
+                .filter(cb => cb.dataset.model).map(cb => cb.dataset.model),
+            require_all_models: el('alarmAllModels').checked,
+        };
+        if (row.min_height_m == null && row.min_period_s == null
+            && row.dir_min == null && row.max_wind_kts == null
+            && row.wind_dir_min == null) {
+            status.textContent = 'Set at least one condition.'; return;
+        }
+        if (!row.models.length) {
+            status.textContent = 'Select at least one model.'; return;
+        }
+        status.textContent = '';
+        let saved, error;
+        if (existing) {
+            // Changed conditions invalidate the old dedup window
+            ({ data: saved, error } = await sb.from('alarms')
+                .update({ ...row, snooze_until: null })
+                .eq('id', existing.id).select());
+        } else {
+            ({ data: saved, error } = await sb.from('alarms').insert({
+                ...row,
+                user_id: window.surfUser.session.user.id,
+                kind: target.kind,
+                item_id: target.id,
+            }).select());
+        }
+        if (error) { status.textContent = `Couldn't save: ${error.message}`; return; }
+        if (existing) {
+            const i = window.surfUser.alarms.findIndex(a => a.id === existing.id);
+            if (i >= 0) window.surfUser.alarms[i] = saved[0];
+        } else {
+            window.surfUser.alarms.push(saved[0]);
+        }
+        renderAccountPanel();
+    });
 }
 
 function renderAccountPanel() {
@@ -294,6 +669,22 @@ function renderAccountPanel() {
         (canSetDefault
             ? `<button id="setDefaultBtn" class="account-action">Use ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'current spot')}</button>`
             : '') +
+        '<div class="account-title">Alerts</div>' +
+        (window.surfUser.alarms.length
+            ? window.surfUser.alarms.map(a =>
+                `<div class="account-alarm${a.enabled ? '' : ' off'}" data-id="${a.id}">` +
+                '<div class="account-alarm-head">' +
+                `<span class="fav-dot fav-dot--${a.kind}"></span>` +
+                `<span class="account-alarm-target">${favLabel(a.kind, a.item_id)}</span>` +
+                `<input type="checkbox" class="alarm-toggle" title="Enable alert"${a.enabled ? ' checked' : ''}>` +
+                '<button class="alarm-del" title="Delete alert">&times;</button>' +
+                '</div>' +
+                `<div class="account-alarm-conds">${alarmSummary(a)}</div>` +
+                '</div>').join('')
+            : '<p class="account-hint">No alerts yet.</p>') +
+        (target
+            ? `<button id="newAlarmBtn" class="account-action">New alert for ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'this spot')}</button>`
+            : '') +
         '<button id="signOutBtn" class="account-action account-signout">Sign out</button>' +
         '</div>';
 
@@ -313,6 +704,25 @@ function renderAccountPanel() {
     if (setDefaultBtn) setDefaultBtn.addEventListener('click', () => {
         const t = currentFavTarget();
         if (t) setDefault(t.kind, t.id);
+    });
+    panel.querySelectorAll('.account-alarm').forEach(el => {
+        el.querySelector('.alarm-toggle').addEventListener('change', (e) => {
+            el.classList.toggle('off', !e.target.checked);
+            toggleAlarm(el.dataset.id, e.target.checked);
+        });
+        el.querySelector('.alarm-del').addEventListener('click',
+            () => deleteAlarm(el.dataset.id));
+        // Clicking the row itself (not toggle/delete) opens it for editing
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.alarm-toggle, .alarm-del')) return;
+            const a = window.surfUser.alarms.find(x => x.id === el.dataset.id);
+            if (a) renderAlarmForm(panel, { kind: a.kind, id: a.item_id }, a);
+        });
+    });
+    const newAlarmBtn = panel.querySelector('#newAlarmBtn');
+    if (newAlarmBtn) newAlarmBtn.addEventListener('click', () => {
+        const t = currentFavTarget();
+        if (t) renderAlarmForm(panel, t);
     });
     panel.querySelector('#signOutBtn').addEventListener('click', async () => {
         panel.style.display = 'none';
