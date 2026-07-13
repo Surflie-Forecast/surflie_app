@@ -156,6 +156,7 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERTS_FROM: Surflie <alerts@send.surflie.app>
+          SITE_URL: https://surflie.app
         run: python backend/alerts.py
 
       # Every full build leaves its api/ behind for push-triggered redeploys
