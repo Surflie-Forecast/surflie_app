@@ -839,6 +839,29 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        // 2.5 = user's saved default view (from auth.js): an explicit choice,
+        // so it beats IP/Geo detection but not a #slug share link (3).
+        // detail = { kind: 'spot'|'buoy', id: slug or CDIP id }.
+        const applyUserDefault = ({ kind, id }) => {
+            if (currentConfidence >= 2.5) return;
+            if (kind === 'buoy') {
+                if (typeof openBuoyView !== 'function') return;
+                currentConfidence = 2.5;
+                openBuoyView(String(id));
+                return;
+            }
+            const spot = availableSpots.find(s => s.slug === id);
+            if (!spot) return;
+            currentConfidence = 2.5;
+            if (spot.name !== lastRenderedSpot) renderForecast(spot.name);
+        };
+        document.addEventListener('user-default-spot', (e) => applyUserDefault(e.detail));
+        // In case auth.js resolved the session before init() ran
+        const p = window.surfUser?.profile;
+        if (p?.default_item) {
+            applyUserDefault({ kind: p.default_kind || 'spot', id: p.default_item });
+        }
+
         // Fire and forget (don't await them)
         checkIP();
         checkGeo();
@@ -1197,6 +1220,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update title with "Name" and "Region" separate
             spotNameTitle.innerHTML = `${data.spotName}<span class="hero-region">${data.region}</span>`;
+
+            // Let auth.js sync the favorite star with the displayed spot
+            document.dispatchEvent(new CustomEvent('spot-rendered', {
+                detail: { name: data.spotName, slug: spotSlug || null }
+            }));
 
             // Update Hero Background
 

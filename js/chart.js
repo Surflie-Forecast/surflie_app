@@ -693,6 +693,10 @@ function clearBuoyView() {
         }
         titleEl._spotTitleHTML = titleEl._buoyTitleHTML = null;
     }
+    // Hero is a spot again — auth.js re-shows the favorite star (a spot
+    // switch re-dispatches 'spot-rendered' on its own; this covers toggling
+    // the buoy view off while staying on the same spot).
+    document.dispatchEvent(new CustomEvent('buoy-exited'));
 
     if (container) {
         const wasActive = !!container._buoyData;
@@ -821,6 +825,14 @@ async function openBuoyView(buoyId, viaToggle = false) {
                 `<span class="hero-region">${esc(buoyName)}</span>` +
                 (subText ? `<span class="buoy-hero-sub">${esc(subText)}</span>` : '');
             titleEl.innerHTML = titleEl._buoyTitleHTML;
+        }
+        // Tell auth.js a station owns the hero: the favorite star switches
+        // to this buoy (favorites store kind='buoy' + CDIP id).
+        {
+            const buoyName = (data.label || '').split('—').pop().trim();
+            document.dispatchEvent(new CustomEvent('buoy-rendered', {
+                detail: { id: String(data.id), name: buoyName }
+            }));
         }
         const heroLabel = document.getElementById('buoyHeroLabel');
         if (heroLabel) heroLabel.textContent = subText;
