@@ -36,8 +36,18 @@ WAVE_MODELS = {
     'openmeteo:ecmwf_wam9': 'ECMWF WAM 9km',
     'openmeteo:ecmwf_wam25': 'ECMWF WAM 25km',
     'openmeteo:gwam': 'DWD GWAM 25km',
-    # Overlay-only: Hs with no swell partition, so never display-picked.
+    # CDIP nearshore, after every global model: short horizons, so they act
+    # as last-resort display picks but mainly feed the comparison overlay.
+    # Transect (~100 m) outranks the 1-km grid where a transect is matched.
+    'cdip:mop-transect-fc': 'CDIP MOP transect',
     'cdip:mop': 'CDIP MOP 1km',
+}
+
+# Overlay-only reference series, never display-picked: the nowcast is
+# observed-driven (buoy spectra through the MOP transform) — a truth proxy
+# for the elapsed window, not a forecast.
+OVERLAY_ONLY = {
+    'cdip:mop-nowcast': 'CDIP observed',
 }
 
 
@@ -238,8 +248,11 @@ def build_spot(store, spot, out_dir):
     })
 
     # --- model comparison file (combined Hs, 3-hourly, per model) ---
+    # Both CDIP products stay in the overlay where available: the ~100 m
+    # transect forecast and the 1-km grid are the same model pulled at
+    # different resolutions, and seeing them disagree is itself signal.
     models_out = []
-    for src, label in WAVE_MODELS.items():
+    for src, label in {**WAVE_MODELS, **OVERLAY_ONLY}.items():
         series = (wave_h if src == wave_src
                   else _local_series(store, spot.slug, 'wave_height', tz, source=src))
         if not _usable(series):

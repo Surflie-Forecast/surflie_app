@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 from adapters import ADAPTERS, openmeteo_marine
 from builders import build_all
 from buoys import build_buoys
+from skill import score_spots
 from spots import load_spots, save_spots
 from store import ForecastStore
 
@@ -162,6 +163,15 @@ def main():
         build_buoys(API_DIR, spots, skipped_sources=skipped_sources)
     except Exception as e:
         print(f"  X buoys failed: {e}")
+
+    # Forecast-skill scoring: archive today's forecasts and fold matured
+    # points into per-lead-day bias/RMSE against the observed-driven MOP
+    # nowcast (backend/skill.py). Best-effort — never blocks publishing.
+    print("\nScoring forecast skill vs MOP nowcast...")
+    try:
+        score_spots(spots, API_DIR)
+    except Exception as e:
+        print(f"  X skill scoring failed: {e}")
 
     # Persist any newly resolved marine cells so future runs batch straight
     # through without re-running the per-spot dead-cell search. Runs even if

@@ -323,7 +323,32 @@ const MODEL_COLORS = {
     ecmwf_wam25: '#c084fc',
     gwam: '#10b981',
     mop: '#e34948', // notebook-reserved MOP red
+    // Transect (~100 m) forecast: same model family as the grid, so a
+    // darker shade of the MOP red — kin to the grid line, but separable.
+    'mop-transect-fc': '#9f1239',
+    // Observed-driven nowcast: the truth-proxy reference line.
+    'mop-nowcast': '#0f172a',
 };
+
+// The CDIP MOP products (1 km grid, ~100 m transect, observed nowcast) model
+// the water AT the spot, post-refraction; the rest are global/offshore wave
+// models. The Nearshore/Offshore toggle shows one family at a time.
+const NEARSHORE_IDS = new Set(['mop', 'mop-transect-fc', 'mop-nowcast']);
+const isNearshore = m => NEARSHORE_IDS.has(m.id);
+
+// Current family, remembered across redraws (resize, unit toggle). Nearshore
+// first — it's the reason the toggle exists. The default model's bars stay
+// regardless; the toggle only gates the overlay lines.
+let modelFilterKey = 'nearshore';
+
+function filteredModels(models) {
+    const test = modelFilterKey === 'offshore'
+        ? m => !isNearshore(m) : isNearshore;
+    // Never blank the plot: if the chosen family is empty at this spot, show
+    // the other one rather than an empty overlay.
+    const kept = models.filter(test);
+    return kept.length ? kept : models;
+}
 
 function setupModelCompare(spotName) {
     const btn = document.getElementById('modelCompareBtn');
@@ -386,6 +411,9 @@ function clearModelOverlay() {
         legend.classList.remove('visible');
         legend.innerHTML = '';
     }
+    const filter = document.getElementById('modelFilter');
+    if (filter) filter.style.display = 'none';
+    modelFilterKey = 'nearshore';   // next open starts on the nearshore family
 }
 
 async function toggleModelOverlay() {
@@ -458,8 +486,12 @@ function drawModelOverlay(data) {
         return centers[j] + frac * (centers[j + 1] - centers[j]);
     };
 
+    // Apply the nearshore/offshore filter before projecting: everything
+    // downstream (y-scale, lines, legend chips) works off this subset.
+    const shownModels = filteredModels(data.models);
+
     // First pass: project every model's points onto the chart's time axis
-    const projected = data.models.map(model => ({
+    const projected = shownModels.map(model => ({
         model,
         pts: model.series.reduce((acc, pt) => {
             const t = new Date(pt.t.replace(' ', 'T'));
@@ -520,7 +552,10 @@ function drawModelOverlay(data) {
         if (pts.length < 2) return;
 
         const color = model.default ? BAR_COLOR : (MODEL_COLORS[model.id] || '#64748b');
-        const baseWidth = model.default ? 2.5 : 1.5;
+        // The observed-driven nowcast is the reference line — draw it a
+        // touch heavier than the forecast models.
+        const baseWidth = model.default ? 2.5
+            : (model.id === 'mop-nowcast' ? 2.2 : 1.5);
 
         // The final 24 h of a model that ends inside the chart window are
         // drawn dashed: its forecast is running out. Models clipped by the
@@ -609,8 +644,12 @@ function drawModelOverlay(data) {
     renderModelYAxis(svg, scaleMax, yFor);
     container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
 
+    // The Nearshore/Offshore toggle (static markup beside the Models button):
+    // shown only when the spot actually has both families to switch between.
+    syncModelFilter(data);
+
     if (legend) {
-        legend.innerHTML = data.models.map(m =>
+        legend.innerHTML = shownModels.map(m =>
             `<span class="legend-chip" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`
         ).join('');
         legend.classList.add('visible');
@@ -621,6 +660,31 @@ function drawModelOverlay(data) {
             chip.addEventListener('mouseleave', () => setHot(id, false));
         });
     }
+}
+
+// Reflect modelFilterKey onto the standalone toggle and (once) wire its
+// clicks. Hidden unless the spot has both a nearshore and an offshore family.
+function syncModelFilter(data) {
+    const filter = document.getElementById('modelFilter');
+    if (!filter) return;
+
+    const hasBoth = data.models.some(isNearshore)
+        && data.models.some(m => !isNearshore(m));
+    filter.style.display = hasBoth ? '' : 'none';
+
+    filter.querySelectorAll('.model-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.filter === modelFilterKey);
+        if (!btn._bound) {
+            btn._bound = true;
+            btn.addEventListener('click', () => {
+                modelFilterKey = btn.dataset.filter;
+                const container = document.getElementById('waveChartContainer');
+                if (container && container._modelData) {
+                    drawModelOverlay(container._modelData);
+                }
+            });
+        }
+    });
 }
 
 // --- Buoy Comparison View ---

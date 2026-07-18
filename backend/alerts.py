@@ -100,11 +100,12 @@ def _spot_hours(slug):
     wind = per_source.get(WIND_SOURCE, {})
     out = {}
     for source, hours in per_source.items():
-        # wave sources: openmeteo:{model} + cdip:mop (nearshore Hs, sparser
-        # timestamps and a shorter horizon — matching hours just come
-        # 6-hourly instead of hourly)
+        # wave sources: openmeteo:{model} + the CDIP nearshore forecasts
+        # (sparser timestamps and shorter horizons — matching hours just
+        # come 3/6-hourly instead of hourly). The observed-driven nowcast
+        # is NOT a forecast, so it never feeds alerts.
         is_wave = ((source.startswith('openmeteo:') and source != WIND_SOURCE)
-                   or source == 'cdip:mop')
+                   or source in ('cdip:mop', 'cdip:mop-transect-fc'))
         if not is_wave:
             continue
         model_id = source.split(':', 1)[1]

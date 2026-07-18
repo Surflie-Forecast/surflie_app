@@ -37,6 +37,7 @@ gee_key.json
 data/*
 !data/locations.csv
 !data/buoys.csv
+!data/mop_transects.csv
 _site/
 
 # Temporary files

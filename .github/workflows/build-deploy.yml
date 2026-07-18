@@ -117,6 +117,17 @@ jobs:
           key: mop-cache-${{ github.run_id }}
           restore-keys: mop-cache-
 
+      # Forecast-skill state (backend/skill.py): archived forecast runs and
+      # the accumulated bias/RMSE buckets vs the MOP nowcast. Pure
+      # accumulator — losing it only resets the statistics.
+      - name: Restore skill-scoring state
+        if: steps.mode.outputs.build == 'true'
+        uses: actions/cache@v4
+        with:
+          path: data/skill
+          key: skill-state-${{ github.run_id }}
+          restore-keys: skill-state-
+
       # Tide predictions are deterministic, so the adapter keeps a rolling
       # per-spot cache (data/tide_cache/) covering the display window: one
       # seeding fetch, then a daily tail top-up, zero calls in between.

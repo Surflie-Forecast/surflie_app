@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Surflie | Forecast</title>
     <link rel="icon" type="image/png" href="images/favicon.png?v=4">
-    <link rel="stylesheet" href="css/styles.css?v=50">
+    <link rel="stylesheet" href="css/styles.css?v=53">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -87,6 +87,10 @@
                  the corner slot; Models sits to its left. -->
             <div class="chart-gap-container">
                 <div id="modelLegend" class="model-legend"></div>
+                <span id="modelFilter" class="model-filter" role="group" aria-label="Filter models" style="display: none;">
+                    <button class="model-filter-btn" data-filter="nearshore">Nearshore</button>
+                    <button class="model-filter-btn" data-filter="offshore">Offshore</button>
+                </span>
                 <button id="modelCompareBtn" class="model-compare-btn" style="display: none;"
                     title="Overlay all wave models (combined Hs)">Models</button>
                 <button id="buoyCompareBtn" class="model-compare-btn buoy-compare-btn" style="display: none;"
@@ -133,7 +137,7 @@
     <script src="js/auth.js?v=25"></script>
     <script src="js/rating.js?v=2"></script>
     <script src="js/hourly.js?v=2"></script>
-    <script src="js/chart.js?v=28"></script>
+    <script src="js/chart.js?v=30"></script>
 
     <script src="js/app.js?v=19"></script>
 </body>

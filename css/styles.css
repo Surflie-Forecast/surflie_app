@@ -1371,6 +1371,63 @@ input:checked+.slider:before {
   display: inline-block;
 }
 
+/* Nearshore/Offshore segmented toggle — a pill of two connected segments,
+   sitting in the boundary strip just left of the (active) Models button.
+   Only shown while the model overlay is on, so it can share top: 6px. */
+.model-filter {
+  position: absolute;
+  top: 6px;
+  /* Clears the Models button (right: 124px, width ~68px) with an 8px gap:
+     124 + 68 + 8 = 200. The models-mode legend rule then clears this
+     toggle's ~152px width with the same gap it keeps from the button. */
+  right: 200px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  z-index: 6;
+  transition: right 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.model-filter-btn {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0 10px;
+  height: 100%;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.model-filter-btn + .model-filter-btn {
+  border-left: 1px solid rgba(0, 0, 0, 0.15);
+}
+
+.model-filter-btn:hover {
+  color: var(--text-primary);
+}
+
+/* Nearshore reads in the site's sky blue; Offshore in a deeper ocean blue,
+   so the pressed side alone tells you which family is showing. */
+.model-filter-btn[data-filter="nearshore"].active {
+  background: #38bdf8;
+  color: #fff;
+}
+
+.model-filter-btn[data-filter="offshore"].active {
+  background: #0077be;   /* --accent-blue, a darker blue */
+  color: #fff;
+}
+
 .model-overlay-svg {
   position: absolute;
   left: 0;
@@ -1535,6 +1592,19 @@ input:checked+.slider:before {
     top: 6px;
   }
 
+  /* Not enough width to sit the toggle beside the buttons AND the legend:
+     drop the toggle to its own line under the buttons; the legend reclaims
+     the room the desktop rule reserved for it. */
+  .model-filter {
+    top: 34px;
+    right: 12px;
+  }
+
+  body.models-mode .model-legend {
+    right: 202px;
+    max-width: calc(100% - 214px);
+  }
+
   /* Legend wraps to several rows on narrow screens: drop the highlight
      box further (higher-specificity twin keeps this winning when a card
      is unfolded at the same time) */
@@ -1567,10 +1637,17 @@ body.buoys-mode .buoy-compare-btn {
   right: 12px;
 }
 
-body.models-mode .model-legend,
 body.buoys-mode .model-legend {
   right: 202px;
   max-width: calc(100% - 214px);
+}
+
+/* Models mode: the Nearshore/Offshore toggle sits between the legend and the
+   Models button, so the legend starts further left to clear it with a 12px
+   gap: filter right 200px + its ~152px width + 12 = 364. */
+body.models-mode .model-legend {
+  right: 364px;
+  max-width: calc(100% - 376px);
 }
 
 /* Station picked off the map or the search (not the spot's closest): the
@@ -1596,6 +1673,11 @@ body.map-open.buoys-mode .model-compare-btn {
 
 body.map-open.models-mode .model-legend,
 body.map-open.buoys-mode .model-legend {
+  top: 48px;
+}
+
+/* Filter follows the strip down when the map is open. */
+body.map-open.models-mode .model-filter {
   top: 48px;
 }
 
