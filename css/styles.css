@@ -1371,6 +1371,14 @@ input:checked+.slider:before {
   display: inline-block;
 }
 
+/* Observed-driven nowcast: shown as points on the plot, so its legend
+   swatch is a dot rather than a line, matching the buoy view's language. */
+.model-legend .legend-chip--dot i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
 /* Nearshore/Offshore segmented toggle — a pill of two connected segments,
    sitting in the boundary strip just left of the (active) Models button.
    Only shown while the model overlay is on, so it can share top: 6px. */

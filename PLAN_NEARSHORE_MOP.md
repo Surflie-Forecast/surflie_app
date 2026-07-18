@@ -1,6 +1,7 @@
 # Plan: richer nearshore sources — MOP transect nowcast + forecast
 
-Written 2026-07-18, companion to ../surf_nearshore (see its PLAN.md/RECON.md).
+Written 2026-07-18, companion to ../surflie_salix (the surf_nearshore
+project; see its PLAN.md/RECON.md).
 
 ## Where we are
 

@@ -451,6 +451,62 @@ async function toggleModelOverlay() {
     }
 }
 
+// Render one overlay series as points rather than a line — used for the
+// observed-driven MOP nowcast, echoing the buoy view's "truth as dots".
+// Registers a dots-based ref so setHot can highlight/dim it like the lines.
+function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot) {
+    const dots = pts.map(p => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', p.x.toFixed(1));
+        c.setAttribute('cy', p.y.toFixed(1));
+        c.setAttribute('r', '1.9');
+        c.setAttribute('fill', color);
+        c.setAttribute('opacity', '0.85');
+        c.style.pointerEvents = 'all';
+        c.style.cursor = 'pointer';
+        svg.appendChild(c);
+        return c;
+    });
+    if (!dots.length) return;
+    refs[model.id] = { dots };
+
+    const showPoint = (clientX) => {
+        if (!tooltip) return;
+        const rect = svg.getBoundingClientRect();
+        const mx = clientX - rect.left;
+        let best = pts[0];
+        for (const p of pts) {
+            if (Math.abs(p.x - mx) < Math.abs(best.x - mx)) best = p;
+        }
+        const val = formatHeight(best.v, currentUnit);
+        const unit = getHeightUnit(currentUnit);
+        const timeStr = best.t.toLocaleString('en-US', {
+            weekday: 'short', hour: 'numeric', minute: '2-digit',
+        });
+        tooltip.innerHTML =
+            `<span style="font-size: 0.9rem; font-weight: 700;">` +
+            `<i style="display:inline-block;width:8px;height:8px;border-radius:50%;` +
+            `vertical-align:middle;background:${color}"></i> ` +
+            `${val}${unit} &bull; ${timeStr}</span>`;
+        const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
+        tooltip.style.left = `${cx}px`;
+        tooltip.style.top = `${rect.top + best.y}px`;
+        tooltip.style.transform = 'translate(-50%, -140%)';
+        tooltip.classList.add('visible');
+        setHot(model.id, true);
+    };
+    dots.forEach(c => {
+        c.addEventListener('mousemove', e => showPoint(e.clientX));
+        c.addEventListener('touchstart', e => {
+            if (e.touches.length) showPoint(e.touches[0].clientX);
+        }, { passive: true });
+        c.addEventListener('mouseleave', () => {
+            if (tooltip) tooltip.classList.remove('visible');
+            setHot(model.id, false);
+        });
+    });
+}
+
 function drawModelOverlay(data) {
     const container = document.getElementById('waveChartContainer');
     const legend = document.getElementById('modelLegend');
@@ -533,29 +589,43 @@ function drawModelOverlay(data) {
         pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
 
     // Two-way hover link between lines and legend chips: the hot model's
-    // line thickens and its chip lights up; the other lines dim.
+    // line thickens and its chip lights up; the others dim. Dot series (the
+    // observed-driven nowcast) enlarge their dots instead of thickening.
     const refs = {};
     const setHot = (id, on) => {
         Object.entries(refs).forEach(([oid, ref]) => {
             const hot = on && oid === id;
-            ref.paths.forEach(p => {
+            const dim = on && !hot;
+            (ref.paths || []).forEach(p => {
                 p.setAttribute('stroke-width', ref.baseWidth + (hot ? 1.5 : 0));
-                p.setAttribute('opacity',
-                    on && !hot ? '0.25' : (ref.isDefault ? '1' : '0.85'));
+                p.setAttribute('opacity', dim ? '0.25' : (ref.isDefault ? '1' : '0.85'));
+            });
+            (ref.dots || []).forEach(c => {
+                c.setAttribute('r', hot ? '2.8' : '1.9');
+                c.setAttribute('opacity', dim ? '0.25' : '0.85');
             });
             if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
     };
 
+    // The observed-driven nowcast is drawn as points, not a line — the same
+    // "ground truth as dots" language the buoy comparison view uses. It's
+    // never the default (bars), so this only affects the overlay reference.
     projected.forEach(({ model, pts }) => {
         pts.forEach(p => { p.y = yFor(p.v); });
-        if (pts.length < 2) return;
+        if (pts.length < 1) return;
 
         const color = model.default ? BAR_COLOR : (MODEL_COLORS[model.id] || '#64748b');
+
+        if (model.id === 'mop-nowcast') {
+            drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot);
+            return;
+        }
+        if (pts.length < 2) return;
+
         // The observed-driven nowcast is the reference line — draw it a
         // touch heavier than the forecast models.
-        const baseWidth = model.default ? 2.5
-            : (model.id === 'mop-nowcast' ? 2.2 : 1.5);
+        const baseWidth = model.default ? 2.5 : 1.5;
 
         // The final 24 h of a model that ends inside the chart window are
         // drawn dashed: its forecast is running out. Models clipped by the
@@ -649,9 +719,10 @@ function drawModelOverlay(data) {
     syncModelFilter(data);
 
     if (legend) {
-        legend.innerHTML = shownModels.map(m =>
-            `<span class="legend-chip" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`
-        ).join('');
+        legend.innerHTML = shownModels.map(m => {
+            const dot = m.id === 'mop-nowcast' ? ' legend-chip--dot' : '';
+            return `<span class="legend-chip${dot}" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`;
+        }).join('');
         legend.classList.add('visible');
         legend.querySelectorAll('.legend-chip').forEach(chip => {
             const id = chip.dataset.modelId;
