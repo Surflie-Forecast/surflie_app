@@ -117,6 +117,17 @@ jobs:
           key: mop-cache-${{ github.run_id }}
           restore-keys: mop-cache-
 
+      # Tide predictions are deterministic, so the adapter keeps a rolling
+      # per-spot cache (data/tide_cache/) covering the display window: one
+      # seeding fetch, then a daily tail top-up, zero calls in between.
+      - name: Restore tide cache
+        if: steps.mode.outputs.build == 'true'
+        uses: actions/cache@v4
+        with:
+          path: data/tide_cache
+          key: tide-cache-${{ github.run_id }}
+          restore-keys: tide-cache-
+
       # --scheduled state: the previous run's store dump feeds carry-forward
       # of wave models that had no new run upstream, and model_state.json
       # holds the per-model availability stamps that decide the skip.
