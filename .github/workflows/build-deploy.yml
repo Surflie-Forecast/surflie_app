@@ -165,6 +165,8 @@ jobs:
 
       - name: Run data pipeline
         if: steps.mode.outputs.build == 'true'
+        env:
+          SALIX_TOKEN: ${{ secrets.SALIX_TOKEN }}
         run: python backend/pipeline.py --scheduled
 
       # Swell alarms: evaluate user alerts against this run's fresh forecast

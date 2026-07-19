@@ -36,9 +36,11 @@ WAVE_MODELS = {
     'openmeteo:ecmwf_wam9': 'ECMWF WAM 9km',
     'openmeteo:ecmwf_wam25': 'ECMWF WAM 25km',
     'openmeteo:gwam': 'DWD GWAM 25km',
-    # CDIP nearshore, after every global model: short horizons, so they act
-    # as last-resort display picks but mainly feed the comparison overlay.
-    # Transect (~100 m) outranks the 1-km grid where a transect is matched.
+    # Nearshore products, after every global model: they act as last-resort
+    # display picks but mainly feed the comparison overlay (our salix
+    # forecast is what skill scoring evaluates before any promotion).
+    # Transect-scale (~100 m) outranks the 1-km grid where matched.
+    'surflie:nearshore': 'Surflie nearshore',
     'cdip:mop-transect-fc': 'CDIP MOP transect',
     'cdip:mop': 'CDIP MOP 1km',
 }

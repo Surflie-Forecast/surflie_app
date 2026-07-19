@@ -328,12 +328,16 @@ const MODEL_COLORS = {
     'mop-transect-fc': '#9f1239',
     // Observed-driven nowcast: the truth-proxy reference line.
     'mop-nowcast': '#0f172a',
+    // Our own MOP-style forecast (surflie_salix): a blue apart from the
+    // MOP-red family so the two transect-scale lines stay separable.
+    nearshore: '#0ea5e9',
 };
 
 // The CDIP MOP products (1 km grid, ~100 m transect, observed nowcast) model
 // the water AT the spot, post-refraction; the rest are global/offshore wave
 // models. The Nearshore/Offshore toggle shows one family at a time.
-const NEARSHORE_IDS = new Set(['mop', 'mop-transect-fc', 'mop-nowcast']);
+const NEARSHORE_IDS = new Set(
+    ['mop', 'mop-transect-fc', 'mop-nowcast', 'nearshore']);
 const isNearshore = m => NEARSHORE_IDS.has(m.id);
 
 // Current family, remembered across redraws (resize, unit toggle). Nearshore
