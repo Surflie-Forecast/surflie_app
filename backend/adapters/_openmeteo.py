@@ -123,9 +123,16 @@ def _parse_hourly(obj, slug, varmap, source, start_utc, end_utc):
     return rows
 
 
+# Coordinates per multi-location request: past ~200 the comma-joined
+# lat/lon lists push the URL beyond practical limits, so batches are split
+# into chunks and the responses merged.
+BATCH_CHUNK = 100
+
+
 def fetch_hourly_rows_batch(url, coords, varmap, source, start_utc, end_utc,
                             extra_params):
-    """Fetch hourly variables for many coordinates in ONE request.
+    """Fetch hourly variables for many coordinates in as few requests as
+    possible (one per BATCH_CHUNK coordinates).
 
     coords is a list of (slug, lat, lon). Open-Meteo accepts comma-joined
     latitude/longitude and returns a JSON array, one object per coordinate in
@@ -135,29 +142,32 @@ def fetch_hourly_rows_batch(url, coords, varmap, source, start_utc, end_utc,
     maps slug -> (resp_lat, resp_lon), the grid coordinate each location
     reported it actually used, so callers can cache the resolved cell.
     """
-    params = {
-        'latitude': ','.join(str(lat) for _, lat, _ in coords),
-        'longitude': ','.join(str(lon) for _, _, lon in coords),
-        'hourly': ','.join(varmap),
-        'start_date': start_utc.date().isoformat(),
-        'end_date': end_utc.date().isoformat(),
-        'timezone': 'GMT',
-    }
-    params.update(extra_params)
-
-    data = get_json(url, params)
-    if isinstance(data, dict):
-        data = [data]
-
     rows = []
     snapped = {}
-    for i, (slug, _, _) in enumerate(coords):
-        if i >= len(data):
-            break
-        obj = data[i]
-        if not obj or not obj.get('hourly'):
-            continue
-        rows.extend(_parse_hourly(obj, slug, varmap, source, start_utc, end_utc))
-        if obj.get('latitude') is not None and obj.get('longitude') is not None:
-            snapped[slug] = (obj['latitude'], obj['longitude'])
+    for chunk_start in range(0, len(coords), BATCH_CHUNK):
+        chunk = coords[chunk_start:chunk_start + BATCH_CHUNK]
+        params = {
+            'latitude': ','.join(str(lat) for _, lat, _ in chunk),
+            'longitude': ','.join(str(lon) for _, _, lon in chunk),
+            'hourly': ','.join(varmap),
+            'start_date': start_utc.date().isoformat(),
+            'end_date': end_utc.date().isoformat(),
+            'timezone': 'GMT',
+        }
+        params.update(extra_params)
+
+        data = get_json(url, params)
+        if isinstance(data, dict):
+            data = [data]
+
+        for i, (slug, _, _) in enumerate(chunk):
+            if i >= len(data):
+                break
+            obj = data[i]
+            if not obj or not obj.get('hourly'):
+                continue
+            rows.extend(_parse_hourly(obj, slug, varmap, source,
+                                      start_utc, end_utc))
+            if obj.get('latitude') is not None and obj.get('longitude') is not None:
+                snapped[slug] = (obj['latitude'], obj['longitude'])
     return rows, snapped

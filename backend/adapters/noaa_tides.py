@@ -1,21 +1,21 @@
-"""Tide predictions from NOAA CO-OPS, cached, with an Open-Meteo fallback.
+"""Tide predictions from NOAA CO-OPS, cached PER STATION, with an
+Open-Meteo fallback.
 
 Tide predictions are deterministic harmonics — they never change between
-runs — so each spot keeps a rolling cache (data/tide_cache/<slug>.json,
-gitignored; CI persists it via actions/cache) covering exactly the app's
-display window. One seeding fetch fills the whole window; after that a run
-only tops up the tail day(s) the window has grown into, and days that
-scrolled out of the window are pruned on load. A run whose window is fully
-covered makes zero API calls.
+runs — and many spots share the same nearest station (277 CA spots resolve
+to a couple dozen stations), so both the fetch and the rolling cache are
+keyed by STATION (data/tide_cache/station_<id>.json, gitignored; CI
+persists it via actions/cache), covering exactly the app's display window.
+Each unique station is fetched at most once per run and its rows fan out
+to every spot assigned to it; a run whose window is fully covered makes
+zero API calls. Spot->station assignments persist in
+data/tide_cache/stations_map.json so a spot never silently changes datum;
+a station failing reassigns its spots to their next-nearest station.
 
-From the nearest usable tide-prediction station we fetch two products:
+From each station we fetch two products:
 
   - 6-minute resolution predictions -> variable "tide_height"
   - high/low peaks                  -> variables "tide_high" / "tide_low"
-
-The whole cache always comes from a single station (mixing stations mixes
-datum offsets): a top-up first re-uses the cached station, and only on its
-failure reseeds the full window from the nearest stations.
 
 If NOAA can't serve the missing span (the CO-OPS predictions product has
 been unreliable since its Jul 2026 cloud migration), a non-empty cache is
@@ -33,6 +33,7 @@ import json
 import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -139,27 +140,77 @@ def _fetch_station_points(station_id, start_utc, end_utc):
     return points
 
 
-# --- rolling per-spot cache ----------------------------------------------
+# --- rolling per-station cache ---------------------------------------------
 
-def _cache_path(spot):
-    return os.path.join(CACHE_DIR, f'{spot.slug}.json')
+def _cache_path(station_id):
+    return os.path.join(CACHE_DIR, f'station_{station_id}.json')
 
 
-def _load_cache(spot):
+def _load_cache(station_id):
     try:
-        with open(_cache_path(spot)) as f:
+        with open(_cache_path(station_id)) as f:
             cache = json.load(f)
         if cache.get('station') and isinstance(cache.get('points'), list):
             return cache
     except Exception:
         pass
-    return {'station': None, 'station_name': '', 'covered_through': '', 'points': []}
+    return {'station': station_id, 'station_name': '', 'covered_through': '',
+            'points': []}
 
 
-def _save_cache(spot, cache):
+def _save_cache(cache):
     os.makedirs(CACHE_DIR, exist_ok=True)
-    with open(_cache_path(spot), 'w') as f:
+    with open(_cache_path(cache['station']), 'w') as f:
         json.dump(cache, f)
+
+
+MAP_FILE = os.path.join(CACHE_DIR, 'stations_map.json')
+
+
+def _load_assignments():
+    try:
+        with open(MAP_FILE) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_assignments(amap):
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(MAP_FILE, 'w') as f:
+        json.dump(amap, f, sort_keys=True)
+
+
+def _migrate_slug_caches():
+    """One-time: fold pre-2026-07-19 per-spot caches (<slug>.json) into
+    station caches + assignments — newest cache per station wins, the old
+    files are removed so they don't live in the actions cache forever."""
+    try:
+        names = os.listdir(CACHE_DIR)
+    except OSError:
+        return
+    amap = _load_assignments()
+    changed = False
+    for name in names:
+        if not name.endswith('.json') or name.startswith('station_') \
+                or name == os.path.basename(MAP_FILE):
+            continue
+        path = os.path.join(CACHE_DIR, name)
+        try:
+            with open(path) as f:
+                old = json.load(f)
+            station = old.get('station')
+            if station and isinstance(old.get('points'), list):
+                cur = _load_cache(station)
+                if old.get('covered_through', '') >= cur.get('covered_through', ''):
+                    _save_cache(old)
+                amap.setdefault(name[:-5], station)
+                changed = True
+            os.remove(path)
+        except Exception:
+            continue
+    if changed:
+        _save_assignments(amap)
 
 
 def _merge_points(cache, new_points):
@@ -216,8 +267,13 @@ def _fallback_rows(spot, start_utc, end_utc):
 
 # --- entry point ----------------------------------------------------------
 
-def fetch(spot, start_utc, end_utc):
-    cache = _load_cache(spot)
+def _station_window(station_id, start_utc, end_utc):
+    """The station's cache covering the window, topped up if needed.
+
+    Returns the cache dict (possibly partial — better a day short at the
+    tail than blank cards) or None when the station has nothing at all.
+    """
+    cache = _load_cache(station_id)
 
     # Days that scrolled out of the display window are gone for good.
     cutoff = start_utc.isoformat()
@@ -225,64 +281,89 @@ def fetch(spot, start_utc, end_utc):
 
     end_date = end_utc.date().isoformat()
     if cache['points'] and cache['covered_through'] >= end_date:
-        _save_cache(spot, cache)  # persist the prune
+        _save_cache(cache)  # persist the prune
         print(f"    tide cache covers window (station {cache['station_name']} "
-              f"{cache['station']}); no fetch")
-        return _cache_rows(spot, cache)
+              f"{station_id}); no fetch")
+        return cache
 
-    # Top up from the cached station so the whole series shares one datum.
-    if cache['points'] and cache['station']:
-        try:
+    # Top up (or seed) — the missing span only, so the whole series keeps
+    # one station's datum.
+    try:
+        if cache['points'] and cache['covered_through']:
             covered = datetime.fromisoformat(cache['covered_through']).replace(
                 tzinfo=timezone.utc)
             missing_start = max(start_utc, covered)
-            points = _fetch_station_points(cache['station'], missing_start, end_utc)
-        except Exception:
-            points = []
-        if points:
-            _merge_points(cache, points)
-            cache['covered_through'] = end_date
-            _save_cache(spot, cache)
-            print(f"    tide cache topped up through {end_date} "
-                  f"(station {cache['station_name']} {cache['station']})")
-            return _cache_rows(spot, cache)
-
-    # Seed (or reseed after a station failure): the full window, nearest
-    # usable station wins.
-    last_err = None
-    for station in _nearest_stations(spot.latitude, spot.longitude):
-        try:
-            points = _fetch_station_points(station['id'], start_utc, end_utc)
-        except Exception as e:
-            last_err = e
-            continue
-        if not points:
-            continue
-        cache = {
-            'station': station['id'],
-            'station_name': station['name'],
-            'covered_through': end_date,
-            'points': [],
-        }
+        else:
+            missing_start = start_utc
+        points = _fetch_station_points(station_id, missing_start, end_utc)
+    except Exception as e:
+        print(f"    ! station {station_id} fetch failed ({e})")
+        points = []
+    if points:
         _merge_points(cache, points)
-        _save_cache(spot, cache)
-        print(f"    tide cache seeded through {end_date} "
-              f"(station {station['name']} {station['id']})")
-        return _cache_rows(spot, cache)
+        cache['covered_through'] = end_date
+        _save_cache(cache)
+        print(f"    tide cache through {end_date} (station "
+              f"{cache['station_name'] or station_id})")
+        return cache
 
-    # NOAA couldn't serve the missing span. A partial cache beats mixing
-    # datums with the fallback; only an empty cache falls through.
     if cache['points']:
-        print(f"    ! NOAA top-up failed near {spot.name} "
-              f"({last_err or 'no predictions returned'}); serving cache "
+        print(f"    ! station {station_id} top-up failed; serving cache "
               f"through {cache['covered_through']}")
-        return _cache_rows(spot, cache)
+        return cache
+    return None
 
-    print(f"    ! no NOAA station usable near {spot.name} "
-          f"({last_err or 'no predictions returned'}); "
-          f"falling back to Open-Meteo sea level (MSL datum, uncached)")
-    rows = _fallback_rows(spot, start_utc, end_utc)
-    if rows:
-        return rows
-    raise RuntimeError(
-        f"No tide source usable near {spot.name}: {last_err or 'no predictions returned'}")
+
+def fetch_batch(spots, start_utc, end_utc):
+    """Each unique station fetched once (threaded), rows fanned out to its
+    spots. Spots whose assigned station fails move to their next-nearest
+    (up to 3 tries), then to the per-spot Open-Meteo sea-level fallback."""
+    _migrate_slug_caches()
+    amap = _load_assignments()
+
+    rows = []
+    pending = list(spots)
+    tried = {spot.slug: set() for spot in spots}
+    for _ in range(3):
+        groups = {}
+        for spot in pending:
+            sid = amap.get(spot.slug)
+            if sid is None or sid in tried[spot.slug]:
+                sid = next(
+                    (s['id'] for s in
+                     _nearest_stations(spot.latitude, spot.longitude)
+                     if s['id'] not in tried[spot.slug]), None)
+            if sid is None:
+                continue  # all candidates tried; falls through to fallback
+            tried[spot.slug].add(sid)
+            groups.setdefault(sid, []).append(spot)
+        if not groups:
+            break
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            results = dict(zip(groups, pool.map(
+                lambda sid: _station_window(sid, start_utc, end_utc),
+                groups)))
+
+        pending = []
+        for sid, sp_list in groups.items():
+            cache = results[sid]
+            if cache is not None and cache['points']:
+                for spot in sp_list:
+                    amap[spot.slug] = sid
+                    rows.extend(_cache_rows(spot, cache))
+            else:
+                pending.extend(sp_list)
+        if not pending:
+            break
+
+    _save_assignments(amap)
+
+    for spot in pending:
+        print(f"    ! no NOAA station usable near {spot.name}; falling back "
+              f"to Open-Meteo sea level (MSL datum, uncached)")
+        try:
+            rows.extend(_fallback_rows(spot, start_utc, end_utc))
+        except Exception as e:
+            print(f"    ! sea-level fallback failed for {spot.slug} ({e})")
+    return rows

@@ -48,8 +48,10 @@ BASE = 'https://nomads.ncep.noaa.gov/pub/data/nccf/com/nwps/prod'
 # several boxes (the domains overlap at WFO borders) takes the site whose
 # grid center it sits closest to. Add coastal WFOs here as spots expand.
 SITES = {
+    'eka': ('wr', (38.40, 42.20, -126.27, -123.35)),  # Eureka/North Coast
     'mtr': ('wr', (35.00, 39.40, -125.80, -120.74)),  # SF Bay/Monterey
     'lox': ('wr', (32.60, 36.10, -123.36, -117.30)),  # LA/Oxnard
+    'sgx': ('wr', (32.08, 33.82, -119.00, -116.50)),  # San Diego
 }
 
 # GRIB shortName -> cache point key; tr.rows turns h/p/d into
@@ -184,7 +186,11 @@ def fetch_batch(spots, start_utc, end_utc):
         else:
             try:
                 cycle, url = _latest_cycle(site)
-                if state.get(site) == cycle:
+                # A spot without a cache (just added) forces a fetch even on
+                # an unchanged cycle — its data has never been sampled.
+                uncached = [s for s in sp_list
+                            if not os.path.exists(_cache_file(s))]
+                if state.get(site) == cycle and not uncached:
                     print(f"  {NAME}: {site} cycle {cycle} unchanged; "
                           f"serving caches")
                 else:

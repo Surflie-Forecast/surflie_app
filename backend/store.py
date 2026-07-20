@@ -23,6 +23,10 @@ FIELDS = ['spot', 'ts_utc', 'variable', 'value', 'source']
 class ForecastStore:
     def __init__(self):
         self._rows = []
+        # (spot, variable) -> rows, in insertion order. series() scans only
+        # its own bucket: a full-store scan per query turned the builders
+        # quadratic once the store hit millions of rows (277 spots).
+        self._by_key = {}
 
     def extend(self, rows):
         for r in rows:
@@ -30,6 +34,8 @@ class ForecastStore:
             if missing:
                 raise ValueError(f"Row missing fields {missing}: {r}")
         self._rows.extend(rows)
+        for r in rows:
+            self._by_key.setdefault((r['spot'], r['variable']), []).append(r)
 
     def series(self, spot_slug, variable, source=None):
         """Return {utc datetime: value} for one spot/variable.
@@ -38,9 +44,8 @@ class ForecastStore:
         variables that several models emit (e.g. wave_height).
         """
         out = {}
-        for r in self._rows:
-            if r['spot'] == spot_slug and r['variable'] == variable \
-                    and (source is None or r['source'] == source):
+        for r in self._by_key.get((spot_slug, variable), ()):
+            if source is None or r['source'] == source:
                 out[datetime.fromisoformat(r['ts_utc'])] = r['value']
         return out
 

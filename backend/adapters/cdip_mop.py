@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 
 import requests
 
+from . import _batch
+
 NAME = 'cdip-mop'
 CRITICAL = False
 SOURCE = 'cdip:mop'
@@ -122,6 +124,25 @@ def _rows(spot, points):
     ]
 
 
+# Shape and axes are per-file constants — read them once per run, not per
+# spot (3 THREDDS round-trips each at ~8-9 s from CI runners).
+_meta = None
+
+
+def _grid_meta():
+    global _meta
+    if _meta is None:
+        _meta = (_shape(), _axis('metaLatitude'), _axis('metaLongitude'))
+    return _meta
+
+
+def fetch_batch(spots, start_utc, end_utc):
+    """Threaded per-spot subgrid reads; grid meta prewarmed once."""
+    return _batch.pooled_fetch_batch(
+        fetch, NAME, spots, start_utc, end_utc,
+        prewarm=lambda spot: _grid_meta())
+
+
 def fetch(spot, start_utc, end_utc):
     """Live MOP points merged with the cached window so the first day stays
     full. Live values win for shared timestamps; cached-only timestamps (the
@@ -164,9 +185,7 @@ def _parse_grid(body, var, n_time, nr, nc):
 
 def _fetch_live(spot, start_utc, end_utc):
     """{ts_utc: {'h','p','d'}} at the nearest water cell, one .ascii read."""
-    n_time, n_lat, n_lon = _shape()
-    lat0, dlat = _axis('metaLatitude')
-    lon0, dlon = _axis('metaLongitude')
+    (n_time, n_lat, n_lon), (lat0, dlat), (lon0, dlon) = _grid_meta()
 
     li = round((spot.latitude - lat0) / dlat)
     lj = round((spot.longitude - lon0) / dlon)

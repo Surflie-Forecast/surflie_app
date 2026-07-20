@@ -18,6 +18,7 @@ Non-critical, never raises.
 from datetime import datetime, timedelta, timezone
 
 from mop_transects import transect_for
+from . import _batch
 from . import _cdip_transect as tr
 
 NAME = 'cdip-mop-nowcast'
@@ -41,3 +42,9 @@ def fetch(spot, start_utc, end_utc):
         print(f"    {NAME}: fetch failed ({e})")
         return []
     return tr.rows(spot, SOURCE, points)
+
+
+def fetch_batch(spots, start_utc, end_utc):
+    """Threaded per-spot reads; transect map prewarmed serially."""
+    return _batch.pooled_fetch_batch(fetch, NAME, spots, start_utc, end_utc,
+                                     prewarm=transect_for)

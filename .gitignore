@@ -31,9 +31,11 @@ setup_env.sh
 *.key
 gee_key.json
 
-# Generated data. api/ IS committed: pushing it after a local pipeline run
-# publishes that snapshot without a CI rebuild (see build-deploy.yml). The
-# intermediate store dump and caches stay local.
+# Generated data. api/ is NOT committed (untracked 2026-07-19): Pages
+# deploys it as a build artifact, and versioning ~75 MB of 4x-daily churn
+# would balloon the git history. Pushes deploy the last scheduled build's
+# cached api/ (see build-deploy.yml). The store dump and caches stay local.
+api/
 data/*
 !data/locations.csv
 !data/buoys.csv

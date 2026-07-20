@@ -16,6 +16,7 @@ wrong coastline face) yield no rows, and any live failure serves the cache.
 import os
 
 from mop_transects import transect_for
+from . import _batch
 from . import _cdip_transect as tr
 
 NAME = 'cdip-mop-transect'
@@ -46,3 +47,9 @@ def fetch(spot, start_utc, end_utc):
     if merged:
         tr.save_cache(_cache_file(spot), merged)
     return tr.rows(spot, SOURCE, merged)
+
+
+def fetch_batch(spots, start_utc, end_utc):
+    """Threaded per-spot reads; transect map prewarmed serially."""
+    return _batch.pooled_fetch_batch(fetch, NAME, spots, start_utc, end_utc,
+                                     prewarm=transect_for)
