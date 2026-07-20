@@ -69,15 +69,22 @@ def _carry_forward_rows(sources):
     return rows
 
 
-def _new_spots(spots):
-    """Slugs with no rows in the previous dump (carry-forward can't serve
-    them). A missing/unreadable dump counts every spot as new — fail open."""
+def _stale_wave_models(spots, skipped):
+    """Subset of `skipped` [(model, source)] whose previous-dump rows don't
+    cover every current spot — carrying those models forward would leave the
+    uncovered (just-added) spots without wave data. Coverage is judged PER
+    SOURCE: a spot can be present in the dump via tides/weather while still
+    lacking a given wave model's rows. Missing/unreadable dump counts every
+    model as stale — fail open."""
+    slugs = {spot.slug for spot in spots}
+    coverage = {}
     try:
         with open(STORE_DUMP, newline='') as f:
-            seen = {r['spot'] for r in csv.DictReader(f)}
+            for r in csv.DictReader(f):
+                coverage.setdefault(r['source'], set()).add(r['spot'])
     except Exception:
-        return {spot.slug for spot in spots}
-    return {spot.slug for spot in spots} - seen
+        return list(skipped)
+    return [(m, s) for m, s in skipped if not slugs <= coverage.get(s, set())]
 
 
 def main():
@@ -94,12 +101,15 @@ def main():
     if scheduled:
         due_models, skipped, model_avail = openmeteo_marine.plan_models(
             MODEL_STATE_FILE)
-        # The skip is per MODEL but carry-forward serves per SPOT: a spot
-        # absent from the previous dump (just added) would carry nothing and
-        # build empty. Any new spot forces a full fetch of every model.
-        if skipped and _new_spots(spots):
-            print("New spots since the last dump; fetching all wave models")
-            due_models, skipped = due_models + skipped, []
+        # The skip is per MODEL but carry-forward serves per SPOT: a model
+        # whose dump rows don't cover every current spot must fetch anyway,
+        # or the uncovered (just-added) spots build empty.
+        stale = _stale_wave_models(spots, skipped) if skipped else []
+        if stale:
+            print("Skipped models not covering all spots; fetching anyway: "
+                  + ', '.join(model for model, _ in stale))
+            due_models += stale
+            skipped = [ms for ms in skipped if ms not in stale]
         skipped_sources = {source for _, source in skipped}
         if skipped:
             print("Wave models unchanged upstream (carried forward): "
