@@ -69,6 +69,17 @@ def _carry_forward_rows(sources):
     return rows
 
 
+def _new_spots(spots):
+    """Slugs with no rows in the previous dump (carry-forward can't serve
+    them). A missing/unreadable dump counts every spot as new — fail open."""
+    try:
+        with open(STORE_DUMP, newline='') as f:
+            seen = {r['spot'] for r in csv.DictReader(f)}
+    except Exception:
+        return {spot.slug for spot in spots}
+    return {spot.slug for spot in spots} - seen
+
+
 def main():
     scheduled = '--scheduled' in sys.argv
     started = datetime.now(timezone.utc)
@@ -83,6 +94,12 @@ def main():
     if scheduled:
         due_models, skipped, model_avail = openmeteo_marine.plan_models(
             MODEL_STATE_FILE)
+        # The skip is per MODEL but carry-forward serves per SPOT: a spot
+        # absent from the previous dump (just added) would carry nothing and
+        # build empty. Any new spot forces a full fetch of every model.
+        if skipped and _new_spots(spots):
+            print("New spots since the last dump; fetching all wave models")
+            due_models, skipped = due_models + skipped, []
         skipped_sources = {source for _, source in skipped}
         if skipped:
             print("Wave models unchanged upstream (carried forward): "
