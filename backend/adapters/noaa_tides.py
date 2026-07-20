@@ -72,9 +72,14 @@ def _nearest_stations(lat, lon, limit=3):
     if _stations_cache is None:
         resp = requests.get(STATIONS_URL, headers=HEADERS, timeout=60)
         resp.raise_for_status()
+        # The tidepredictions list mixes harbor/reference stations with
+        # subordinate ones (type 'S') that 403 on the datagetter predictions
+        # product. Excluding subordinates keeps every candidate a station
+        # that can actually answer — the ~18 doomed fetches per run (each a
+        # 403) were most of the tide stage's wall time at 276 spots.
         _stations_cache = [
             s for s in resp.json().get('stations', [])
-            if 'lat' in s and 'lng' in s
+            if 'lat' in s and 'lng' in s and s.get('type') != 'S'
         ]
     ranked = sorted(
         _stations_cache,
@@ -99,10 +104,15 @@ def _fetch_predictions(station_id, start_utc, end_utc, interval=None,
     # The predictions endpoint intermittently returns "No Predictions data
     # was found" for stations that do have data (observed Jul 2026); the
     # same request succeeds on retry, so treat an empty body as transient.
+    # A 4xx (e.g. 403 for subordinate stations that don't serve this
+    # product) is permanent — raise immediately instead of retrying with
+    # backoff. Empty bodies stay transient (retried).
     for attempt in range(attempts):
         if attempt:
             time.sleep(backoff * attempt)
         resp = requests.get(PREDICTIONS_URL, params=params, headers=HEADERS, timeout=60)
+        if 400 <= resp.status_code < 500:
+            resp.raise_for_status()
         resp.raise_for_status()
         predictions = resp.json().get('predictions')
         if predictions:
