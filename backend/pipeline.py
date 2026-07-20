@@ -70,22 +70,49 @@ def _carry_forward_rows(sources):
     return rows
 
 
+# Variables a source must have in the dump to be safely carried forward.
+# The base set is what every wave model provides; the partition set was
+# added later (2026-07-19) — a pre-partition dump would carry a source
+# forward with only its primary swell, silently truncating the forecast
+# cards' swell breakdown. Keyed by source so partition-less models (ECMWF
+# WAM has no swell partition; GWAM only one swell) aren't wrongly flagged.
+_BASE_WAVE_VARS = {'wave_height', 'swell_height', 'swell_period',
+                   'swell_direction'}
+_PARTITION_VARS = {'swell2_height', 'swell2_period', 'swell2_direction',
+                   'swell3_height', 'swell3_period', 'swell3_direction',
+                   'windwave_height', 'windwave_period', 'windwave_direction'}
+_EXPECTED_VARS = {
+    'openmeteo:gfswave025': _BASE_WAVE_VARS | _PARTITION_VARS,
+    'openmeteo:mfwam': _BASE_WAVE_VARS | _PARTITION_VARS,
+    # ECMWF WAM / GWAM publish no (or minimal) partition — base only.
+}
+
+
 def _stale_wave_models(spots, skipped):
-    """Subset of `skipped` [(model, source)] whose previous-dump rows don't
-    cover every current spot — carrying those models forward would leave the
-    uncovered (just-added) spots without wave data. Coverage is judged PER
-    SOURCE: a spot can be present in the dump via tides/weather while still
-    lacking a given wave model's rows. Missing/unreadable dump counts every
-    model as stale — fail open."""
+    """Subset of `skipped` [(model, source)] that can't be safely carried
+    forward from the previous dump — because its rows don't cover every
+    current spot (a just-added spot would build empty) OR are missing an
+    expected variable (a pre-schema-change dump would truncate, e.g. drop
+    the secondary/tertiary swell partitions). Judged PER SOURCE. A
+    missing/unreadable dump counts every model as stale — fail open."""
     slugs = {spot.slug for spot in spots}
     coverage = {}
+    variables = {}
     try:
         with open(STORE_DUMP, newline='') as f:
             for r in csv.DictReader(f):
                 coverage.setdefault(r['source'], set()).add(r['spot'])
+                variables.setdefault(r['source'], set()).add(r['variable'])
     except Exception:
         return list(skipped)
-    return [(m, s) for m, s in skipped if not slugs <= coverage.get(s, set())]
+
+    stale = []
+    for m, s in skipped:
+        if not slugs <= coverage.get(s, set()):
+            stale.append((m, s))
+        elif not _EXPECTED_VARS.get(s, set()) <= variables.get(s, set()):
+            stale.append((m, s))
+    return stale
 
 
 def main():
@@ -102,13 +129,14 @@ def main():
     if scheduled:
         due_models, skipped, model_avail = openmeteo_marine.plan_models(
             MODEL_STATE_FILE)
-        # The skip is per MODEL but carry-forward serves per SPOT: a model
-        # whose dump rows don't cover every current spot must fetch anyway,
-        # or the uncovered (just-added) spots build empty.
+        # Carry-forward is only safe when the dump fully covers a model:
+        # every current spot AND every expected variable. A just-added spot
+        # or a pre-schema-change dump (e.g. before the swell partitions)
+        # forces a real fetch instead of carrying truncated data forward.
         stale = _stale_wave_models(spots, skipped) if skipped else []
         if stale:
-            print("Skipped models not covering all spots; fetching anyway: "
-                  + ', '.join(model for model, _ in stale))
+            print("Skipped models with incomplete dump coverage; fetching "
+                  "anyway: " + ', '.join(model for model, _ in stale))
             due_models += stale
             skipped = [ms for ms in skipped if ms not in stale]
         skipped_sources = {source for _, source in skipped}
