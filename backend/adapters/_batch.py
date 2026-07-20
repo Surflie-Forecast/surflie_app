@@ -12,7 +12,11 @@ for non-critical sources.
 """
 from concurrent.futures import ThreadPoolExecutor
 
-WORKERS = 8
+# CDIP THREDDS answers GitHub-runner IPs at ~8-9 s/request, so the batch is
+# latency-bound, not CPU-bound — more concurrent requests shrink wall-time
+# almost linearly until CDIP starts throttling. 16 is a conservative step up
+# from 8; the profiling run's per-adapter timing says whether to go higher.
+WORKERS = 16
 
 
 def pooled_fetch_batch(fetch, name, spots, start_utc, end_utc,

@@ -20,6 +20,7 @@ import csv
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -135,9 +136,12 @@ def main():
         if adapter is openmeteo_marine and due_models is not None:
             kwargs['models'] = due_models
         try:
+            t0 = time.monotonic()
             rows = adapter.fetch_batch(spots, batch_start, batch_end, **kwargs)
+            dt = time.monotonic() - t0
             store.extend(rows)
-            print(f"\n{adapter.NAME}: {len(rows)} rows (batched, {len(spots)} spots)")
+            print(f"\n{adapter.NAME}: {len(rows)} rows (batched, {len(spots)} "
+                  f"spots) in {dt:.1f}s")
             # An empty due-list legitimately yields no rows; not a failure.
             if not rows and adapter.CRITICAL and kwargs.get('models') != []:
                 critical_failures.append(('(all)', adapter.NAME, 'no rows'))
