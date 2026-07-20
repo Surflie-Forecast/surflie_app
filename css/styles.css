@@ -1167,6 +1167,59 @@ input:checked+.slider:before {
   border-bottom: none;
 }
 
+/* Hourly rows with a swell-train breakdown expand on click */
+.hourly-row.has-swells {
+  cursor: pointer;
+}
+
+.hourly-row.swells-open {
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.hourly-swell-breakdown {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  background: rgba(56, 189, 248, 0.06);
+  padding: 0.15rem 0 0.35rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+/* Title sits in the time-column strip, level with the first train row */
+.swell-breakdown-title {
+  width: 4.4rem;
+  flex: none;
+  text-align: center;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding-top: 0.32rem;
+}
+
+/* Surfline-style train rows: height, period, arrow, compass + degrees in
+   aligned columns beside the title. */
+.swell-train-row {
+  display: grid;
+  grid-template-columns: 2.8rem 1.9rem 1.1rem auto;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  padding: 0.18rem 0;
+}
+
+.swell-train-row .swell-train-h {
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.swell-train-row .swell-arrow-small {
+  justify-self: center;
+}
+
+.swell-train-row .swell-train-dir {
+  white-space: nowrap;
+}
+
 .hourly-rating-bar {
   height: 60%;
   min-height: 1.2rem;
@@ -2034,6 +2087,68 @@ body.buoys-mode .chart-container {
 
 .chart-container::-webkit-scrollbar {
   display: none;
+}
+
+/* Hover crosshair: thin vertical line following the cursor across the wave
+   chart, with the hour it points at pinned above in the top label strip.
+   Both scroll with the content (absolute inside the scroll container). */
+.chart-crosshair {
+  position: absolute;
+  /* starts right below the hour label and runs nearly to the bottom */
+  top: 40px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 0.15s ease;
+}
+
+/* Models view: the day-highlight box starts lower (32px, under the legend
+   row) and the date row drops to the bottom strip — shift the label/line
+   down to hug the box top and stop the line above the bottom dates. */
+#waveChartContainer.models-active .chart-crosshair {
+  top: 52px;
+  bottom: 30px;
+}
+
+#waveChartContainer.models-active .chart-crosshair-label {
+  top: 36px;
+}
+
+/* Buoys view collapses the bar wrappers (zero width), so the crosshair's
+   time axis is gone — hide it there. */
+#waveChartContainer.buoys-active .chart-crosshair,
+#waveChartContainer.buoys-active .chart-crosshair-label {
+  display: none;
+}
+
+.chart-crosshair.visible {
+  opacity: 0.45;
+}
+
+.chart-crosshair-label {
+  position: absolute;
+  /* Just below the top border of the day-highlight box (top: 20px), above
+     the date row (40-54px from the container top) */
+  top: 24px;
+  transform: translateX(-50%);
+  /* Day-label typography, one point smaller (dates are 0.75rem = 12px) */
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  /* bare text over bars of any shade — halo instead of a background box */
+  text-shadow: 0 0 3px var(--bg-dark), 0 0 6px var(--bg-dark);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 7;
+  transition: opacity 0.15s ease;
+}
+
+.chart-crosshair-label.visible {
+  opacity: 1;
 }
 
 /* Background shading container - Absolute behind bars */

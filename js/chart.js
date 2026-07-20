@@ -131,6 +131,7 @@ function renderChart(hourlyData) {
 
         // CRITICAL FOR HIGHLIGHT: Tag wrapper with date so app.js can find start/end
         wrapper.dataset.date = dateIso;
+        wrapper.dataset.dt = hour.datetime; // full timestamp for the hover crosshair
         if (isNewDay || index === 0) wrapper.classList.add('day-start');
 
         const bar = document.createElement('div');
@@ -146,6 +147,7 @@ function renderChart(hourlyData) {
         bar.dataset.time = timeStr;
         bar.dataset.valM = valMeters;
         bar.dataset.period = period;
+        if (hour.swell.direction != null) bar.dataset.dir = hour.swell.direction;
 
         // Add Interactions for Global Tooltip
         bar.addEventListener('mouseenter', (e) => {
@@ -155,7 +157,13 @@ function renderChart(hourlyData) {
             const currentVal = formatHeight(parseFloat(bar.dataset.valM), currentUnit);
             const currentU = getHeightUnit(currentUnit);
 
-            tooltip.innerHTML = `<span style="font-size: 0.9rem; font-weight: 700;">${timeStr} &bull; ${currentVal}${currentU} ${period}s</span>`;
+            // Forecast only (the crosshair already reads out the time):
+            // height, period, and direction as a rotated arrow (card style).
+            const dir = bar.dataset.dir;
+            const arrow = dir != null && dir !== ''
+                ? ` &nbsp;&nbsp;<span style="display:inline-block;transform:rotate(${parseInt(dir) + 90}deg)">&#10148;</span>`
+                : '';
+            tooltip.innerHTML = `<span style="font-size: 0.9rem; font-weight: 700;">${currentVal}${currentU} &nbsp;${period}s${arrow}</span>`;
 
             // Position
             const centerX = rect.left + (rect.width / 2);
@@ -227,6 +235,52 @@ function renderChart(hourlyData) {
             wrapper.appendChild(timeLabel);
         }
     });
+
+    // --- Hover crosshair: vertical line at the cursor, hour label above ---
+    // Bars are 3-hourly; the label interpolates within a bar's slot so the
+    // readout is hourly even though the bars are coarser.
+    const crosshair = document.createElement('div');
+    crosshair.className = 'chart-crosshair';
+    const crosshairLabel = document.createElement('div');
+    crosshairLabel.className = 'chart-crosshair-label';
+    chartContainer.appendChild(crosshair);
+    chartContainer.appendChild(crosshairLabel);
+
+    // Listeners live on the container and survive re-renders — drop the old
+    // pair (they'd reference removed elements) before attaching.
+    if (chartContainer._crosshairMove) {
+        chartContainer.removeEventListener('mousemove', chartContainer._crosshairMove);
+        chartContainer.removeEventListener('mouseleave', chartContainer._crosshairHide);
+    }
+    chartContainer._crosshairMove = (e) => {
+        const wrappers = chartContainer.querySelectorAll('.chart-bar-wrapper');
+        if (!wrappers.length) return;
+        const rect = chartContainer.getBoundingClientRect();
+        const x = e.clientX - rect.left + chartContainer.scrollLeft;
+        const x0 = wrappers[0].offsetLeft;
+        const stride = wrappers.length > 1
+            ? wrappers[1].offsetLeft - x0 : wrappers[0].offsetWidth;
+        const idx = Math.min(wrappers.length - 1,
+            Math.max(0, Math.floor((x - x0) / stride)));
+        const frac = Math.min(0.999, Math.max(0, (x - x0 - idx * stride) / stride));
+        const dt = new Date(wrappers[idx].dataset.dt);
+        const stepH = wrappers.length > 1
+            ? Math.round((new Date(wrappers[1].dataset.dt) - new Date(wrappers[0].dataset.dt)) / 3.6e6)
+            : 3;
+        dt.setHours(dt.getHours() + Math.floor(frac * stepH));
+        crosshair.style.left = `${x}px`;
+        crosshairLabel.style.left = `${x}px`;
+        crosshairLabel.textContent = dt.toLocaleTimeString(
+            'en-US', { hour: 'numeric', hour12: true });
+        crosshair.classList.add('visible');
+        crosshairLabel.classList.add('visible');
+    };
+    chartContainer._crosshairHide = () => {
+        crosshair.classList.remove('visible');
+        crosshairLabel.classList.remove('visible');
+    };
+    chartContainer.addEventListener('mousemove', chartContainer._crosshairMove);
+    chartContainer.addEventListener('mouseleave', chartContainer._crosshairHide);
 
     // Ensure we start at the beginning (left)
     chartContainer.scrollLeft = 0;
@@ -331,13 +385,16 @@ const MODEL_COLORS = {
     // Our own MOP-style forecast (surflie_salix): a blue apart from the
     // MOP-red family so the two transect-scale lines stay separable.
     nearshore: '#0ea5e9',
+    // NOAA NWPS per-WFO SWAN nest: green, clear of both the MOP reds and
+    // the salix blue.
+    cg1: '#15803d',
 };
 
 // The CDIP MOP products (1 km grid, ~100 m transect, observed nowcast) model
 // the water AT the spot, post-refraction; the rest are global/offshore wave
 // models. The Nearshore/Offshore toggle shows one family at a time.
 const NEARSHORE_IDS = new Set(
-    ['mop', 'mop-transect-fc', 'mop-nowcast', 'nearshore']);
+    ['mop', 'mop-transect-fc', 'mop-nowcast', 'nearshore', 'cg1']);
 const isNearshore = m => NEARSHORE_IDS.has(m.id);
 
 // Current family, remembered across redraws (resize, unit toggle). Nearshore
@@ -455,10 +512,21 @@ async function toggleModelOverlay() {
     }
 }
 
+// Period + direction-arrow tail for an overlay tooltip, matching the bars'
+// readout; empty for the parts a source doesn't publish.
+function overlayPdSuffix(pt) {
+    let s = '';
+    if (pt.p != null) s += `&nbsp; ${Math.round(pt.p)}s`;
+    if (pt.d != null) s += ` &nbsp;&nbsp;<span style="display:inline-block;` +
+        `transform:rotate(${Math.round(pt.d) + 90}deg)">&#10148;</span>`;
+    return s;
+}
+
 // Render one overlay series as points rather than a line — used for the
 // observed-driven MOP nowcast, echoing the buoy view's "truth as dots".
 // Registers a dots-based ref so setHot can highlight/dim it like the lines.
-function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot) {
+function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot,
+                         togglePin) {
     const dots = pts.map(p => {
         const c = document.createElementNS(ns, 'circle');
         c.setAttribute('cx', p.x.toFixed(1));
@@ -484,14 +552,11 @@ function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot) {
         }
         const val = formatHeight(best.v, currentUnit);
         const unit = getHeightUnit(currentUnit);
-        const timeStr = best.t.toLocaleString('en-US', {
-            weekday: 'short', hour: 'numeric', minute: '2-digit',
-        });
         tooltip.innerHTML =
             `<span style="font-size: 0.9rem; font-weight: 700;">` +
             `<i style="display:inline-block;width:8px;height:8px;border-radius:50%;` +
             `vertical-align:middle;background:${color}"></i> ` +
-            `${val}${unit} &bull; ${timeStr}</span>`;
+            `${val}${unit}${overlayPdSuffix(best)}</span>`;
         const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
         tooltip.style.left = `${cx}px`;
         tooltip.style.top = `${rect.top + best.y}px`;
@@ -507,6 +572,10 @@ function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot) {
         c.addEventListener('mouseleave', () => {
             if (tooltip) tooltip.classList.remove('visible');
             setHot(model.id, false);
+        });
+        if (togglePin) c.addEventListener('click', e => {
+            e.stopPropagation();
+            togglePin(model.id);
         });
     });
 }
@@ -556,7 +625,7 @@ function drawModelOverlay(data) {
         pts: model.series.reduce((acc, pt) => {
             const t = new Date(pt.t.replace(' ', 'T'));
             const x = xFor(t.getTime());
-            if (x !== null) acc.push({ x, v: pt.v, t });
+            if (x !== null) acc.push({ x, v: pt.v, p: pt.p, d: pt.d, t });
             return acc;
         }, []),
     }));
@@ -596,7 +665,12 @@ function drawModelOverlay(data) {
     // line thickens and its chip lights up; the others dim. Dot series (the
     // observed-driven nowcast) enlarge their dots instead of thickening.
     const refs = {};
+    // Click-to-pin: clicking a line/chip locks the highlight on that model
+    // and mutes the other lines' hit areas, so hovering along the chart
+    // reads only the pinned model. Click again (or the background) to unpin.
+    let pinned = null;
     const setHot = (id, on) => {
+        if (pinned) { id = pinned; on = true; }
         Object.entries(refs).forEach(([oid, ref]) => {
             const hot = on && oid === id;
             const dim = on && !hot;
@@ -611,6 +685,18 @@ function drawModelOverlay(data) {
             if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
     };
+    const togglePin = (id) => {
+        pinned = pinned === id ? null : id;
+        Object.entries(refs).forEach(([oid, ref]) => {
+            const mute = pinned && oid !== pinned;
+            if (ref.hit) ref.hit.style.pointerEvents = mute ? 'none' : 'stroke';
+            (ref.dots || []).forEach(c => {
+                c.style.pointerEvents = mute ? 'none' : 'all';
+            });
+        });
+        setHot(pinned, !!pinned);
+    };
+    svg.addEventListener('click', () => { if (pinned) togglePin(pinned); });
 
     // The observed-driven nowcast is drawn as points, not a line — the same
     // "ground truth as dots" language the buoy comparison view uses. It's
@@ -622,7 +708,8 @@ function drawModelOverlay(data) {
         const color = model.default ? BAR_COLOR : (MODEL_COLORS[model.id] || '#64748b');
 
         if (model.id === 'mop-nowcast') {
-            drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot);
+            drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot,
+                            togglePin);
             return;
         }
         if (pts.length < 2) return;
@@ -680,14 +767,11 @@ function drawModelOverlay(data) {
             }
             const val = formatHeight(best.v, currentUnit);
             const unit = getHeightUnit(currentUnit);
-            const timeStr = best.t.toLocaleString('en-US', {
-                weekday: 'short', hour: 'numeric', minute: '2-digit',
-            });
             tooltip.innerHTML =
                 `<span style="font-size: 0.9rem; font-weight: 700;">` +
                 `<i style="display:inline-block;width:10px;height:3px;border-radius:2px;` +
                 `vertical-align:middle;background:${color}"></i> ` +
-                `${val}${unit} &bull; ${timeStr}</span>`;
+                `${val}${unit}${overlayPdSuffix(best)}</span>`;
 
             const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
             tooltip.style.left = `${cx}px`;
@@ -705,7 +789,12 @@ function drawModelOverlay(data) {
             if (tooltip) tooltip.classList.remove('visible');
             setHot(model.id, false);
         });
+        hit.addEventListener('click', e => {
+            e.stopPropagation();
+            togglePin(model.id);
+        });
         svg.appendChild(hit);
+        refs[model.id].hit = hit;
     });
 
     // Fade the lines in as the bars fade out (CSS transition on opacity)
@@ -733,6 +822,8 @@ function drawModelOverlay(data) {
             if (refs[id]) refs[id].chip = chip;
             chip.addEventListener('mouseenter', () => setHot(id, true));
             chip.addEventListener('mouseleave', () => setHot(id, false));
+            chip.addEventListener('click', () => togglePin(id));
+            chip.style.cursor = 'pointer';
         });
     }
 }

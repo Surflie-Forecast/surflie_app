@@ -83,6 +83,9 @@ GRID_VARS = {
     'waveHs': ('h', 'wave_height'),
     'waveTp': ('p', 'swell_period'),
     'waveDp': ('d', 'swell_direction'),
+    # Energy-mean period for the comparison overlay (the grid file has no
+    # waveDm, so mean direction is transect/offshore-only).
+    'waveTa': ('a', 'wave_period'),
 }
 
 

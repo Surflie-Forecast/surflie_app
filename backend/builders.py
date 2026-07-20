@@ -43,6 +43,7 @@ WAVE_MODELS = {
     'surflie:nearshore': 'Surflie nearshore',
     'cdip:mop-transect-fc': 'CDIP MOP transect',
     'cdip:mop': 'CDIP MOP 1km',
+    'nwps:cg1': 'NOAA NWPS',
 }
 
 # Overlay-only reference series, never display-picked: the nowcast is
@@ -96,12 +97,20 @@ def _day_label(date_obj, today):
     return date_obj.strftime('%A')
 
 
-def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile):
+def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile,
+                  trains=(), disp_p=None, disp_d=None):
     """3-hourly entries per local date where waves and wind both exist.
 
-    height is combined Hs; period/direction are the primary swell partition.
-    Each entry carries a direction-aware 0-100 `score` and its bucketed label.
+    Displayed height is combined Hs and displayed period/direction the
+    combined mean pair (disp_p/disp_d, falling back to the primary swell
+    where a source has no mean); the SCORE still judges the primary swell
+    partition (swell_p/swell_d). trains is the display model's swell-train
+    breakdown ((h, p, d) series per train, primary first, wind sea
+    excluded); hours where at least one train is complete gain a `swells`
+    list for the card's expandable row.
     """
+    disp_p = disp_p or swell_p
+    disp_d = disp_d or swell_d
     by_date = defaultdict(list)
     for dt, height in wave_h.items():
         if dt.hour % HOURLY_STEP_H or dt.minute:
@@ -112,12 +121,12 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile):
             height, swell_p[dt], swell_d[dt], wind_s[dt], wind_d[dt],
             profile=profile))
         rating, color = bucket_for_score(score)
-        by_date[dt.date()].append({
+        entry = {
             'datetime': _fmt_dt(dt),
             'swell': {
                 'height': round(height, 2),
-                'period': round(swell_p[dt], 1),
-                'direction': round(swell_d[dt]),
+                'period': round(disp_p.get(dt, swell_p[dt]), 1),
+                'direction': round(disp_d.get(dt, swell_d[dt])),
             },
             'wind': {
                 'speed': round(wind_s[dt], 2),
@@ -126,7 +135,16 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile):
             'score': score,
             'rating': rating,
             'color': color,
-        })
+        }
+        swells = [
+            {'height': round(th[dt], 2), 'period': round(tp[dt], 1),
+             'direction': round(td[dt])}
+            for th, tp, td in trains
+            if dt in th and dt in tp and dt in td
+        ]
+        if swells:
+            entry['swells'] = swells
+        by_date[dt.date()].append(entry)
     return by_date
 
 
@@ -173,6 +191,16 @@ def build_spot(store, spot, out_dir):
     wave_h = _local_series(store, spot.slug, 'wave_height', tz, source=wave_src)
     swell_p = _local_series(store, spot.slug, 'swell_period', tz, source=wave_src)
     swell_d = _local_series(store, spot.slug, 'swell_direction', tz, source=wave_src)
+    # Displayed period/direction: the combined MEAN pair, matching the
+    # combined height — the summary describes the whole sea; individual
+    # trains live in the per-hour `swells` breakdown. Sources without a
+    # mean fall back to the dominant train. The RATING keeps judging the
+    # primary swell (swell_p/swell_d): mean period would double-penalize
+    # choppy days, since wind is already a scoring factor.
+    disp_p = (_local_series(store, spot.slug, 'wave_period', tz, source=wave_src)
+              or swell_p)
+    disp_d = (_local_series(store, spot.slug, 'wave_direction', tz, source=wave_src)
+              or swell_d)
     wind_s = _local_series(store, spot.slug, 'wind_speed', tz)
     wind_d = _local_series(store, spot.slug, 'wind_direction', tz)
     tide_raw = _local_series(store, spot.slug, 'tide_height', tz)
@@ -188,6 +216,17 @@ def build_spot(store, spot, out_dir):
         print(f"  ! no wave data for {spot.name}; skipping")
         return False
 
+    # Swell-train breakdown from the display model (primary/secondary/
+    # tertiary partitions; wind sea deliberately excluded). Depth follows the
+    # model: GFS Wave 3 trains, MFWAM 2, others fewer/none.
+    trains = []
+    for pre in ('swell_', 'swell2_', 'swell3_'):
+        th = _local_series(store, spot.slug, pre + 'height', tz, source=wave_src)
+        tp = _local_series(store, spot.slug, pre + 'period', tz, source=wave_src)
+        td = _local_series(store, spot.slug, pre + 'direction', tz, source=wave_src)
+        if th and tp and td:
+            trains.append((th, tp, td))
+
     # --- hourly files ---
     # Only full days: a trailing day the default model covers partially is
     # dropped rather than shown with missing hours.
@@ -195,7 +234,9 @@ def build_spot(store, spot, out_dir):
     hourly_by_date = {
         d: entries
         for d, entries in _build_hourly(wave_h, swell_p, swell_d,
-                                        wind_s, wind_d, profile).items()
+                                        wind_s, wind_d, profile,
+                                        trains=trains, disp_p=disp_p,
+                                        disp_d=disp_d).items()
         if len(entries) >= full_day}
     for date_obj, entries in hourly_by_date.items():
         entries.sort(key=lambda e: e['datetime'])
@@ -206,7 +247,7 @@ def build_spot(store, spot, out_dir):
     # --- daily forecast ---
     today = datetime.now(tz).date()
     by_date = defaultdict(lambda: defaultdict(list))
-    for series, key in ((wave_h, 'height'), (swell_p, 'period'), (swell_d, 'sdir'),
+    for series, key in ((wave_h, 'height'), (disp_p, 'period'), (disp_d, 'sdir'),
                         (wind_s, 'speed'), (wind_d, 'wdir')):
         for dt, v in series.items():
             by_date[dt.date()][key].append(v)
@@ -261,8 +302,26 @@ def build_spot(store, spot, out_dir):
             continue
         # Full native resolution (hourly for the global models, 6-hourly for
         # MOP): the overlay lines interpolate between the 3-hourly bars.
-        points = [{'t': _fmt_dt(dt), 'v': round(v, 2)}
-                  for dt, v in series.items() if not dt.minute]
+        # Period/direction ride along where the source has them, so the
+        # overlay tooltip can echo the bars' height/period/arrow readout.
+        # The comparison view prefers the MEAN combined-sea pair — like the
+        # heights, one definition across lines (Open-Meteo wave_period/
+        # wave_direction, MOP waveTa/waveDm) — falling back to the peak/
+        # partition pair for sources without a mean (salix, NWPS).
+        src_p = (_local_series(store, spot.slug, 'wave_period', tz, source=src)
+                 or _local_series(store, spot.slug, 'swell_period', tz, source=src))
+        src_d = (_local_series(store, spot.slug, 'wave_direction', tz, source=src)
+                 or _local_series(store, spot.slug, 'swell_direction', tz, source=src))
+        points = []
+        for dt, v in series.items():
+            if dt.minute:
+                continue
+            pt = {'t': _fmt_dt(dt), 'v': round(v, 2)}
+            if dt in src_p:
+                pt['p'] = round(src_p[dt], 1)
+            if dt in src_d:
+                pt['d'] = round(src_d[dt])
+            points.append(pt)
         if points:
             models_out.append({
                 'id': src.split(':', 1)[1],

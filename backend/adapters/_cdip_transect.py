@@ -24,11 +24,15 @@ FILL_CUTOFF = -100.0   # values below this are the -999.99 fill
 SLICE_PAD = 4          # extra steps each side in case the axis is irregular
 
 # THREDDS variable -> (point key, store variable). Same mapping as the grid
-# adapter: Tp/Dp land in the swell partition variables.
+# adapter: Tp/Dp land in the swell partition variables. Ta/Dm (energy-mean
+# period / mean direction) feed the model-comparison overlay, which prefers
+# the mean flavor for cross-source comparability.
 VARS = {
     'waveHs': ('h', 'wave_height'),
     'waveTp': ('p', 'swell_period'),
     'waveDp': ('d', 'swell_direction'),
+    'waveTa': ('a', 'wave_period'),
+    'waveDm': ('m', 'wave_direction'),
 }
 
 

@@ -1,3 +1,10 @@
+// 16-point compass name for a coming-from direction in degrees.
+function compassName(deg) {
+    const names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                   'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return names[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+}
+
 // Toggle hourly details for a forecast card
 async function toggleHourlyDetails(card, dateISO, spotName) {
     const detailsDiv = card.querySelector('.hourly-details');
@@ -32,7 +39,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
         let html = '<div class="hourly-container">';
         html += '<div class="hourly-header"><span>Time</span><span></span><span>Swell</span><span>Wind</span></div>';
 
-        hourlyData.forEach(hour => {
+        hourlyData.forEach((hour, hourIdx) => {
             const timeObj = new Date(hour.datetime);
             const timeHour = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[0];
             const timePeriod = timeObj.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }).split(' ')[1];
@@ -53,8 +60,13 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
                     hour.swell.direction, hour.wind.direction).color;
             }
 
+            // Swell-train breakdown (primary/secondary/tertiary, no wind
+            // sea): rows with data expand on click.
+            const swells = Array.isArray(hour.swells) ? hour.swells : [];
+            const expandable = swells.length > 0;
+
             html += `
-                <div class="hourly-row">
+                <div class="hourly-row${expandable ? ' has-swells' : ''}" data-hour-idx="${hourIdx}">
                     <div class="hourly-time">
                         <span class="time-hour">${timeHour}</span>
                         <span class="time-period">${timePeriod}</span>
@@ -77,6 +89,26 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
                     </div>
                 </div>
             `;
+
+            if (expandable) {
+                // Surfline-style rows: height, period, arrow, compass + degrees,
+                // with a "Swells" title beside the first row.
+                html += `<div class="hourly-swell-breakdown" style="display:none;">`;
+                html += `<span class="swell-breakdown-title">Swells</span>`;
+                html += `<div class="swell-train-rows">`;
+                swells.forEach(s => {
+                    const h = formatHeight(s.height, currentUnit);
+                    const d = Math.round(s.direction);
+                    html += `
+                        <div class="swell-train-row">
+                            <span class="swell-train-h" data-val-m="${s.height}">${h}${getHeightUnit(currentUnit)}</span>
+                            <span class="swell-train-p">${Math.round(s.period)}s</span>
+                            <span class="swell-arrow-small" style="transform: rotate(${d + 90}deg)">➤</span>
+                            <span class="swell-train-dir">${compassName(d)} ${d}°</span>
+                        </div>`;
+                });
+                html += '</div></div>';
+            }
         });
 
         html += '</div>';
@@ -88,6 +120,19 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
                  </div>`;
 
         detailsDiv.innerHTML = html;
+
+        // Wire the expandable rows. stopPropagation: a row click must not
+        // bubble to the card's own click handler and fold the whole day.
+        detailsDiv.querySelectorAll('.hourly-row.has-swells').forEach(row => {
+            row.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const breakdown = row.nextElementSibling;
+                if (!breakdown) return;
+                const open = breakdown.style.display !== 'none';
+                breakdown.style.display = open ? 'none' : 'flex';
+                row.classList.toggle('swells-open', !open);
+            });
+        });
 
         // Render the tide chart for this day
         renderDailyTideChart(spotName, dateISO, `tide-chart-${dateISO}`);

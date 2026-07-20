@@ -50,12 +50,31 @@ MODELS = [
 ]
 
 # wave_height (combined Hs — what a buoy measures) is the displayed "wave";
-# the swell partition qualifies it and drives the rating.
+# the primary swell partition qualifies it and drives the rating.
 VARMAP = {
     'wave_height': 'wave_height',              # m, combined Hs
-    'swell_wave_height': 'swell_height',       # m
+    # Mean combined-sea period/direction: the only flavor ECMWF WAM
+    # publishes, fetched for every model so the overlay tooltip can fall
+    # back to it where the swell partition is absent. Never feeds the
+    # rating (that stays on swell_period/swell_direction).
+    'wave_period': 'wave_period',              # s, energy-mean
+    'wave_direction': 'wave_direction',        # deg, mean coming-from
+    'swell_wave_height': 'swell_height',       # m, primary swell train
     'swell_wave_period': 'swell_period',       # s
     'swell_wave_direction': 'swell_direction', # deg, coming-from
+    # Full swell-train breakdown, stored for the forecast-card
+    # disaggregation (no consumer yet). Depth varies by model — GFS Wave
+    # carries three trains + wind sea, MFWAM two, GWAM one, ECMWF none —
+    # and absent variables simply yield no rows.
+    'secondary_swell_wave_height': 'swell2_height',
+    'secondary_swell_wave_period': 'swell2_period',
+    'secondary_swell_wave_direction': 'swell2_direction',
+    'tertiary_swell_wave_height': 'swell3_height',
+    'tertiary_swell_wave_period': 'swell3_period',
+    'tertiary_swell_wave_direction': 'swell3_direction',
+    'wind_wave_height': 'windwave_height',
+    'wind_wave_period': 'windwave_period',
+    'wind_wave_direction': 'windwave_direction',
 }
 
 # Seaward search for a live cell: (dlat, dlon) unit directions, W/SW first,
