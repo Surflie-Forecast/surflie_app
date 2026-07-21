@@ -178,6 +178,21 @@ def main():
             if adapter.CRITICAL:
                 critical_failures.append(('(all)', adapter.NAME, e))
 
+    # A model that was DUE but produced nothing (transient timeout, upstream
+    # 5xx) must not simply vanish: _pick_wave_source would silently fall
+    # through to a lesser model — e.g. GFS Wave timing out dropped every spot
+    # onto partition-less GWAM, losing the swell breakdown site-wide. Serving
+    # its previous rows keeps the display model stable across a blip.
+    if due_models:
+        got = store.sources()
+        missing = {source for _, source in due_models if source not in got}
+        if missing:
+            recovered = _carry_forward_rows(missing)
+            if recovered:
+                store.extend(recovered)
+                print(f"\n! due models with no rows ({', '.join(sorted(missing))}"
+                      f"); carried {len(recovered)} previous rows forward")
+
     if skipped_sources:
         carried = _carry_forward_rows(skipped_sources)
         store.extend(carried)

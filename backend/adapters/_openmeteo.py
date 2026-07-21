@@ -24,11 +24,11 @@ def _clamp_end_date_from_error(body):
     return m.group(1) if m else None
 
 
-def get_json(url, params, retries=3, backoff_s=5):
+def get_json(url, params, retries=3, backoff_s=5, timeout=60):
     last_err = None
     for attempt in range(retries):
         try:
-            r = requests.get(url, params=params, timeout=60)
+            r = requests.get(url, params=params, timeout=timeout)
             if r.status_code == 400 and 'end_date' in params:
                 capped = _clamp_end_date_from_error(_safe_json(r))
                 if capped and capped < str(params['end_date']):
@@ -144,6 +144,11 @@ def fetch_hourly_rows_batch(url, coords, varmap, source, start_utc, end_utc,
     """
     rows = []
     snapped = {}
+    # A 100-coordinate chunk with the full marine variable set over a 16-day
+    # window is a large response; 60 s was tight enough that GFS Wave — the
+    # partition-bearing display model — timed out on CI and the whole site
+    # silently degraded to a partition-less model. Scale with chunk size.
+    timeout = max(60, 2 * len(coords[:BATCH_CHUNK]))
     for chunk_start in range(0, len(coords), BATCH_CHUNK):
         chunk = coords[chunk_start:chunk_start + BATCH_CHUNK]
         params = {
@@ -156,7 +161,7 @@ def fetch_hourly_rows_batch(url, coords, varmap, source, start_utc, end_utc,
         }
         params.update(extra_params)
 
-        data = get_json(url, params)
+        data = get_json(url, params, timeout=timeout)
         if isinstance(data, dict):
             data = [data]
 
