@@ -2,6 +2,11 @@
 // default spot, stored in Supabase. The browser talks to Supabase directly
 // with the publishable key; row-level security keeps users to their own rows.
 //
+// Access is invite-gated (migration 008): signing in is open, but writes are
+// refused by RLS until the account redeems a code. profiles.activated drives
+// the panel — unactivated sessions get the code prompt instead of the
+// favorites/alerts/sessions UI.
+//
 // Exposes window.surfUser = { session, profile, favorites:Set<slug> } and
 // emits:
 //   'auth-changed'       — after login/logout and initial session restore
@@ -34,6 +39,9 @@ let currentBuoy = { id: null, name: null };
 let buoyMode = false;
 
 const favKey = (kind, id) => `${kind}:${id}`;
+
+const NEEDS_CODE_MSG =
+    'Enter your invite code in the account panel to save favorites, alerts and sessions.';
 
 // What the star acts on right now: the buoy in buoy view, else the spot
 function currentFavTarget() {
@@ -84,6 +92,7 @@ async function loadUserData() {
 async function toggleFavorite(kind, id) {
     const user = window.surfUser.session?.user;
     if (!user || !kind || !id) return;
+    if (!isActivated()) { showPanelError(NEEDS_CODE_MSG); return; }
     const favs = window.surfUser.favorites;
     const key = favKey(kind, id);
     if (favs.has(key)) {
@@ -112,6 +121,9 @@ async function toggleFavorite(kind, id) {
 async function setDefault(kind, id) {
     const user = window.surfUser.session?.user;
     if (!user || !kind || !id) return;
+    // profiles itself stays writable pre-activation, but a default implies a
+    // favorites row, and that insert is gated.
+    if (!isActivated()) { showPanelError(NEEDS_CODE_MSG); return; }
     const { error } = await sb.from('profiles')
         .update({ default_kind: kind, default_item: id }).eq('id', user.id);
     if (error) {
@@ -134,6 +146,38 @@ async function setDefault(kind, id) {
         updateStar();
     }
     renderAccountPanel();
+}
+
+// ---------------------------------------------------------------------------
+// Invite gate (migration 008): an account can authenticate but writes nothing
+// until it redeems a code. Enforcement is in RLS, so this UI is only about
+// telling the user why — never the gate itself.
+// ---------------------------------------------------------------------------
+
+// Signed-out users aren't "unactivated" — they just aren't in yet.
+const isActivated = () =>
+    !window.surfUser.session || window.surfUser.profile?.activated === true;
+
+// The user's own unused codes, loaded lazily: only activated users have any,
+// and only the account panel shows them.
+let myInviteCodes = null;
+
+async function loadInviteCodes() {
+    if (!window.surfUser.session || !isActivated()) { myInviteCodes = null; return; }
+    // Select-only by design: this runs more than once per login (supabase
+    // fires several auth events), so it must never mint. Codes are created
+    // once, at redemption.
+    const { data, error } = await sb.rpc('get_invite_codes');
+    if (error) { console.error('invite codes load failed', error); return; }
+    myInviteCodes = (data || []).map(r => (typeof r === 'string' ? r : r.code));
+}
+
+async function redeemInviteCode(code) {
+    const { error } = await sb.rpc('redeem_invite_code', { p_code: code });
+    if (error) return error.message;
+    if (window.surfUser.profile) window.surfUser.profile.activated = true;
+    await loadInviteCodes();
+    return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -904,6 +948,45 @@ function renderAccountPanel() {
         return;
     }
 
+    // Signed in but no code redeemed yet: nothing below would work (RLS
+    // refuses every write), so the panel is just the code prompt.
+    if (!isActivated()) {
+        panel.innerHTML =
+            '<div class="account-section">' +
+            unitsRow(session.user.email) +
+            '<div class="account-group">' +
+            '<div class="account-title">Invite code</div>' +
+            '<p class="account-hint">Surflie is invite-only for now. Enter your code to save favorites, set alerts and log sessions.</p>' +
+            '<form id="inviteForm" class="magic-link-form">' +
+            '<input type="text" id="inviteCode" placeholder="ABCD2345" autocapitalize="characters" autocomplete="off" required>' +
+            '<button type="submit">Redeem</button>' +
+            '</form>' +
+            '<div id="inviteStatus" class="account-status"></div>' +
+            '</div>' +
+            '<button id="signOutBtn" class="account-action account-signout">Sign out</button>' +
+            '</div>';
+        panel.querySelector('#panelUnitToggle').addEventListener('change', (e) => {
+            applyUnits(e.target.checked ? 'imperial' : 'metric');
+        });
+        panel.querySelector('#inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const status = panel.querySelector('#inviteStatus');
+            status.textContent = 'Checking…';
+            const err = await redeemInviteCode(panel.querySelector('#inviteCode').value);
+            if (err) { status.textContent = err; return; }
+            // Activated: reload the data the gate was blocking, then redraw
+            // into the full panel.
+            await loadUserData();
+            updateStar();
+            renderAccountPanel();
+        });
+        panel.querySelector('#signOutBtn').addEventListener('click', async () => {
+            panel.style.display = 'none';
+            await sb.auth.signOut();
+        });
+        return;
+    }
+
     // Logged in. Favorites: spots first, then buoys, with the app's map
     // symbology (blue dot = spot, ink dot = buoy).
     const favs = [...window.surfUser.favorites]
@@ -990,9 +1073,31 @@ function renderAccountPanel() {
                 `<button id="rateSessionBtn" class="account-action">Rate a session</button>` +
                 '</div>';
         })() : '') +
+        // Invites: only shown while the user still has unused codes to pass on
+        (myInviteCodes && myInviteCodes.length
+            ? '<div class="account-group">' +
+              '<div class="account-title">Invites</div>' +
+              '<p class="account-hint">Share a code to bring someone in. Each one works once.</p>' +
+              myInviteCodes.map(c =>
+                  `<div class="account-invite" data-code="${c}">` +
+                  `<code class="account-invite-code">${c}</code>` +
+                  '<button class="account-invite-copy" title="Copy code">copy</button>' +
+                  '</div>').join('') +
+              '</div>'
+            : '') +
         '<button id="signOutBtn" class="account-action account-signout">Sign out</button>' +
         '</div>';
 
+    panel.querySelectorAll('.account-invite').forEach(el => {
+        el.querySelector('.account-invite-copy').addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            try {
+                await navigator.clipboard.writeText(el.dataset.code);
+                btn.textContent = 'copied';
+                setTimeout(() => { btn.textContent = 'copy'; }, 1500);
+            } catch { btn.textContent = 'copy failed'; }
+        });
+    });
     panel.querySelectorAll('.account-fav').forEach((el, i) => {
         el.querySelector('.account-fav-name').textContent = favs[i].label;
         el.addEventListener('click', () => {
@@ -1062,6 +1167,7 @@ function renderAccountPanel() {
 async function onSession(session) {
     window.surfUser.session = session;
     await loadUserData();
+    await loadInviteCodes();
     await domReady;
     // the saved unit preference wins over this device's localStorage
     if (window.surfUser.profile?.units) applyUnits(window.surfUser.profile.units);

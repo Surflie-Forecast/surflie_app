@@ -2875,6 +2875,36 @@ body.buoys-mode .chart-container {
   min-height: 1em;
 }
 
+.account-invite {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+}
+
+.account-invite-code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+}
+
+.account-invite-copy {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-main);
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.account-invite-copy:hover {
+  color: var(--text-primary);
+}
+
 .account-favs {
   display: flex;
   flex-direction: column;
