@@ -2875,6 +2875,42 @@ body.buoys-mode .chart-container {
   min-height: 1em;
 }
 
+/* Google requires its own mark on a white (or black) button — this one can't
+   inherit the accent-blue .account-action fill. */
+.account-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: #fff;
+  color: #1f1f1f;
+  border: 1px solid var(--glass-border);
+}
+
+.account-google .google-mark {
+  flex: none;
+}
+
+.account-or {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.15rem 0;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.account-or::before,
+.account-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--glass-border);
+}
+
 .account-invite {
   display: flex;
   align-items: center;

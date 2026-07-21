@@ -43,6 +43,17 @@ const favKey = (kind, id) => `${kind}:${id}`;
 const NEEDS_CODE_MSG =
     'Enter your invite code in the account panel to save favorites, alerts and sessions.';
 
+// Google's 4-colour mark, inlined — the sign-in button must not depend on a
+// remote asset. Google's branding guidelines require the official mark on
+// "Continue with Google".
+const googleMarkSvg =
+    '<svg class="google-mark" viewBox="0 0 18 18" width="16" height="16" aria-hidden="true">' +
+    '<path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>' +
+    '<path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>' +
+    '<path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>' +
+    '<path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>' +
+    '</svg>';
+
 // What the star acts on right now: the buoy in buoy view, else the spot
 function currentFavTarget() {
     if (buoyMode) {
@@ -919,6 +930,9 @@ function renderAccountPanel() {
             '<div class="account-section">' +
             unitsRow('Units') +
             '<div class="account-title">Sign in</div>' +
+            '<button id="googleSignIn" class="account-action account-google">' +
+            googleMarkSvg + 'Continue with Google</button>' +
+            '<div class="account-or"><span>or</span></div>' +
             '<p class="account-hint">Get a one-time login link by email. No password needed.</p>' +
             '<form id="magicLinkForm" class="magic-link-form">' +
             '<input type="email" id="magicLinkEmail" placeholder="you@email.com" required>' +
@@ -928,6 +942,18 @@ function renderAccountPanel() {
             '</div>';
         panel.querySelector('#panelUnitToggle').addEventListener('change', (e) => {
             applyUnits(e.target.checked ? 'imperial' : 'metric');
+        });
+        panel.querySelector('#googleSignIn').addEventListener('click', async () => {
+            const status = panel.querySelector('#magicLinkStatus');
+            status.textContent = 'Redirecting to Google…';
+            // Same target the magic link uses, so one allow-list entry covers
+            // both. Supabase handles the code exchange server-side and comes
+            // back here; onAuthStateChange picks the session up from there.
+            const { error } = await sb.auth.signInWithOAuth({
+                provider: 'google',
+                options: { redirectTo: window.location.origin + window.location.pathname },
+            });
+            if (error) status.textContent = `Error: ${error.message}`;
         });
         panel.querySelector('#magicLinkForm').addEventListener('submit', async (e) => {
             e.preventDefault();
