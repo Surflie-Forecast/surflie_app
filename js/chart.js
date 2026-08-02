@@ -920,6 +920,7 @@ function clearBuoyView() {
     if (titleEl && titleEl._spotTitleHTML != null) {
         if (titleEl.innerHTML === titleEl._buoyTitleHTML) {
             titleEl.innerHTML = titleEl._spotTitleHTML;
+            if (window.fitHeroTitle) window.fitHeroTitle();
         }
         titleEl._spotTitleHTML = titleEl._buoyTitleHTML = null;
     }
@@ -1055,6 +1056,8 @@ async function openBuoyView(buoyId, viaToggle = false) {
                 `<span class="hero-region">${esc(buoyName)}</span>` +
                 (subText ? `<span class="buoy-hero-sub">${esc(subText)}</span>` : '');
             titleEl.innerHTML = titleEl._buoyTitleHTML;
+            // Same one-line fit the spot title gets on mobile
+            if (window.fitHeroTitle) window.fitHeroTitle();
         }
         // Tell auth.js a station owns the hero: the favorite star switches
         // to this buoy (favorites store kind='buoy' + CDIP id).

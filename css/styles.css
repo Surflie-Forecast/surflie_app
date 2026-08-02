@@ -313,8 +313,10 @@ input:checked+.slider:before {
   background: var(--accent-blue);
   border: none;
   border-radius: 50%;
-  width: 60px;
+  /* Equal width/height + no flex shrink keeps these perfect circles */
+  width: 50px;
   height: 50px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -877,7 +879,8 @@ input:checked+.slider:before {
     max-width: 500px;
     flex: 1;
     margin-left: 2rem;
-    margin-right: 0;
+    /* Clear the absolutely-positioned favorite star (38px wide at right: 14px) */
+    margin-right: 44px;
   }
 }
 
@@ -984,7 +987,7 @@ input:checked+.slider:before {
     flex-direction: column;
     grid-template-columns: 1fr;
     /* Reset grid if it was grid */
-    align-items: center;
+    align-items: stretch;
     gap: 0.75rem;
     /* Increased space */
     /* Reduced gap strictly */
@@ -994,13 +997,27 @@ input:checked+.slider:before {
   .hero h1 {
     grid-column: auto;
     /* Reset grid placement */
-    width: 100%;
-    text-align: center;
+    /* Shrink-wrap the text rather than filling the row, so the box ends where
+       the name does; max-width keeps long names off the favourite star. */
+    width: auto;
+    align-self: flex-start;
+    /* Lane on the right for the star plus the spot dot between them; keep in
+       step with HERO_TITLE_STAR_LANE in app.js */
+    max-width: calc(100% - 76px);
+    text-align: left;
+    /* Starting size; fitHeroTitle() steps it down when the name is too long
+       to fit on one line (the name only — .hero-region keeps its rem size). */
     font-size: 1.8rem;
+    white-space: nowrap;
     margin-bottom: 0rem;
     /* No margin */
     line-height: 1.1;
     /* Tighter line height */
+  }
+
+  /* The region sits under the name, so it wraps on its own terms */
+  .hero h1 .hero-region {
+    white-space: normal;
   }
 
   .hero .search-container {
@@ -2537,6 +2554,7 @@ body.buoys-mode .chart-container {
   border-radius: 50%;
   width: 50px;
   height: 50px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2688,8 +2706,9 @@ body.buoys-mode .chart-container {
     /* Reset if needed */
   }
 
-  .hero.compact #mapBtn {
-    /* Maybe smaller on compact? */
+  /* Both buttons shrink together on compact so they stay matching circles */
+  .hero.compact #mapBtn,
+  .hero.compact #searchBtn {
     width: 44px;
     height: 44px;
   }

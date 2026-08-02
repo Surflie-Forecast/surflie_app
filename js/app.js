@@ -144,6 +144,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateDateDisplay();
     window.addEventListener('resize', updateDateDisplay);
+    // Re-fit the one-line spot name when the available width changes
+    window.addEventListener('resize', fitHeroTitle);
 
     const searchInput = document.getElementById('spotSearch');
     const searchBtn = document.getElementById('searchBtn');
@@ -256,7 +258,14 @@ document.addEventListener('DOMContentLoaded', () => {
             m.setRadius(7);
             m.bringToFront();
         }
-        heroMap.setView([b.latitude, b.longitude], HERO_BUOY_ZOOM, { animate: false });
+        // The buoy caption adds a sub-line, so the hero (and the map with it)
+        // changes height here. Re-measure before framing, exactly as the spot
+        // path does, then anchor the marker the same way a spot's dot is.
+        setTimeout(() => {
+            if (heroBuoyFocusedId !== buoyId) return; // superseded meanwhile
+            heroMap.invalidateSize({ animate: false });
+            setHeroView(b.latitude, b.longitude, HERO_BUOY_ZOOM);
+        }, 100);
     };
     window.blurHeroBuoy = () => {
         if (heroBuoyFocusedId == null) return;
@@ -328,6 +337,144 @@ document.addEventListener('DOMContentLoaded', () => {
         addHeroBuoyMarkers(); // covers the map arriving after the buoys
     }
 
+    // Mobile keeps the spot name on one line: start at the CSS size and step
+    // down only if it would overflow the space left of the favourite star.
+    // The region subtitle is sized in rem, so it's unaffected.
+    const HERO_TITLE_MAX_REM = 1.8;
+    const HERO_TITLE_MIN_REM = 1.0;
+    // Right-hand lane the name must not enter: the star, plus room for the
+    // spot dot to sit between the two. Keep in step with the h1's max-width
+    // in the mobile block of styles.css.
+    const HERO_TITLE_STAR_LANE = 76;
+
+    function fitHeroTitle() {
+        const el = document.getElementById('spotName');
+        if (!el) return;
+
+        // Desktop wraps as before — this is the mobile stacked layout only.
+        if (window.innerWidth > 768) {
+            el.style.fontSize = '';
+            return;
+        }
+
+        const name = el.childNodes[0];
+        if (!name || name.nodeType !== Node.TEXT_NODE) return;
+
+        // The h1 shrink-wraps, so its own box is the text width, not the limit.
+        // Derive the ceiling from the row it sits in: getComputedStyle returns
+        // the max-width calc() unresolved, so compute the same value here.
+        const parent = el.parentElement;
+        if (!parent) return;
+        const ps = getComputedStyle(parent);
+        const rowWidth = parent.getBoundingClientRect().width
+            - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight);
+        const available = rowWidth - HERO_TITLE_STAR_LANE;
+        if (!(available > 0)) return;
+
+        const measure = () => {
+            const range = document.createRange();
+            range.setStart(name, 0);
+            range.setEnd(name, name.textContent.length);
+            const w = range.getBoundingClientRect().width;
+            range.detach();
+            return w;
+        };
+
+        el.style.fontSize = `${HERO_TITLE_MAX_REM}rem`;
+        // 0.05rem steps: fine enough to be invisible, few enough to stay cheap.
+        for (let rem = HERO_TITLE_MAX_REM; rem >= HERO_TITLE_MIN_REM; rem -= 0.05) {
+            el.style.fontSize = `${rem}rem`;
+            if (measure() <= available) return;
+        }
+        el.style.fontSize = `${HERO_TITLE_MIN_REM}rem`;
+    }
+    // chart.js swaps in the buoy title and needs the same fit
+    window.fitHeroTitle = fitHeroTitle;
+
+    // Tight box around the spot name itself. Measures the leading text node
+    // only: .hero-region is a block child inside the same h1, so selecting the
+    // whole element would return a rect covering the subtitle line too.
+    // Falls back to the element box if the range can't be measured.
+    function titleTextRect(el) {
+        try {
+            const name = el.childNodes[0];
+            const range = document.createRange();
+            if (name && name.nodeType === Node.TEXT_NODE) {
+                range.setStart(name, 0);
+                range.setEnd(name, name.textContent.length);
+            } else {
+                range.selectNodeContents(el);
+            }
+            const r = range.getBoundingClientRect();
+            range.detach();
+            if (r.width && r.height) return r;
+        } catch (e) { /* fall through to the element box */ }
+        return el.getBoundingClientRect();
+    }
+
+    // Where the spot dot should land in the hero: the free space between the
+    // title and the search box. Which axis that gap runs along depends on the
+    // layout, so measure rather than assume — compact and desktop-expanded put
+    // the two side by side, but under 769px they stack and the gap is vertical.
+    // Returns null when there's nothing to offset by.
+    function heroSpotAnchorOffset() {
+        const hero = document.querySelector('.hero');
+        if (!hero) return null;
+
+        const title = document.getElementById('spotName');
+        const search = hero.querySelector('.search-container');
+        const mapEl = document.getElementById('heroStaticMap');
+        if (!title || !search || !mapEl) return null;
+
+        // The rendered text, not the element box: mobile pads the h1 on the
+        // right to keep clear of the star, and that padding would drag the
+        // midpoint off the words.
+        const t = titleTextRect(title);
+        const m = mapEl.getBoundingClientRect();
+        if (!m.width || !m.height) return null;
+
+        // The title's partner across the gap: on the stacked mobile layout the
+        // title is left-justified and the favourite star holds the top-right,
+        // so aim between those two. Everywhere else it's the search box. The
+        // star only exists for a signed-in user with a favouritable target.
+        const star = document.getElementById('favStarBtn');
+        const starVisible = star && star.offsetParent !== null;
+        const stackedMobile = search.getBoundingClientRect().left - t.right <= 0;
+        const partner = (stackedMobile && starVisible) ? star : search;
+
+        const p = partner.getBoundingClientRect();
+
+        // Side by side when a real horizontal gap separates them; otherwise
+        // they're stacked and the gap to aim at is the vertical one.
+        const sideBySide = p.left - t.right > 0;
+
+        const targetX = sideBySide
+            ? (t.right + p.left) / 2
+            : (Math.max(t.left, p.left) + Math.min(t.right, p.right)) / 2;
+        const targetY = sideBySide
+            ? (t.top + t.height / 2 + p.top + p.height / 2) / 2
+            : (t.bottom + p.top) / 2;
+
+        // setView centres the point, so shift by target-minus-centre.
+        return L.point(
+            targetX - m.left - m.width / 2,
+            targetY - m.top - m.height / 2
+        );
+    }
+
+    // setView, but landing the point on the hero's anchor instead of centre.
+    function setHeroView(lat, lon, zoom) {
+        const offset = heroSpotAnchorOffset();
+        if (!offset) {
+            heroMap.setView([lat, lon], zoom, { animate: false });
+            return;
+        }
+        // Project at the target zoom, push the centre the opposite way so the
+        // spot ends up under the anchor, then unproject back to a lat/lon.
+        const point = heroMap.project([lat, lon], zoom).subtract(offset);
+        heroMap.setView(heroMap.unproject(point, zoom), zoom, { animate: false });
+    }
+
     // Update Hero Map Position
     function updateHeroMap(lat, lon) {
         if (!heroMap) initHeroMap();
@@ -343,7 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Spot centered like the buoy view, blue dot marking it (the
             // map symbology's surf-spot hue vs the buoys' ink/red)
             const zoomLevel = 11; // regional coastline context
-            heroMap.setView([lat, lon], zoomLevel, { animate: false });
+            setHeroView(lat, lon, zoomLevel);
             if (!heroSpotMarker) {
                 heroSpotMarker = L.circleMarker([lat, lon], {
                     radius: 7,
@@ -358,6 +505,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             heroSpotMarker.bringToFront();
         }, 100);
+    }
+
+    // The hero changes height when it compacts/expands. Leaflet doesn't
+    // notice, so the spot drifts off-centre — re-measure once the CSS
+    // transition has settled and re-centre on whatever the map is showing.
+    function refreshHeroMapFraming() {
+        if (!heroMap) return;
+        setTimeout(() => {
+            heroMap.invalidateSize({ animate: false });
+            // A focused buoy owns the framing, but it re-anchors just like a
+            // spot does; otherwise fall back to the latest spot view.
+            const view = heroBuoyFocusedId != null
+                ? focusedHeroBuoyView()
+                : lastHeroView;
+            if (view) setHeroView(view.lat, view.lon, heroMap.getZoom());
+        }, 450); // just past the 0.4s hero transition
+    }
+
+    // Coordinates of the buoy currently owning the hero backdrop, if any.
+    function focusedHeroBuoyView() {
+        const b = availableBuoys.find(x => x.id === heroBuoyFocusedId);
+        return b ? { lat: b.latitude, lon: b.longitude } : null;
     }
 
     // Function to populate markers
@@ -601,7 +770,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Force hero to expand (be normal size) so map has space
         const hero = document.querySelector('.hero');
-        if (hero) hero.classList.remove('compact');
+        if (hero) {
+            hero.classList.remove('compact');
+            refreshHeroMapFraming();
+        }
 
         // Initialize map if needed (lazy load). Spot cards are hover-only
         // now, so nothing to auto-open — the header names the current site.
@@ -642,6 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (hero && anyCardExpanded) {
             hero.classList.add('compact');
+            refreshHeroMapFraming();
         }
     }
 
@@ -1220,6 +1393,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update title with "Name" and "Region" separate
             spotNameTitle.innerHTML = `${data.spotName}<span class="hero-region">${data.region}</span>`;
+            fitHeroTitle();
 
             // Let auth.js sync the favorite star with the displayed spot
             document.dispatchEvent(new CustomEvent('spot-rendered', {
@@ -1428,6 +1602,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         // Expand hero back to normal
                         if (heroSection) {
                             heroSection.classList.remove('compact');
+                            refreshHeroMapFraming();
                         }
                     } else {
                         // Open all
@@ -1448,6 +1623,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         if (heroSection && !isMapOpen) {
                             heroSection.classList.add('compact');
+                            refreshHeroMapFraming();
                         }
                     }
                 });
@@ -1472,6 +1648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         Make sure the backend is running on port 8080.
                     </div>`;
             spotNameTitle.textContent = spotName; // revert title
+            fitHeroTitle();
         }
     }
 });

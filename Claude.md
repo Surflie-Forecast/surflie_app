@@ -1,0 +1,1 @@
+Never commit and push anything before asking, even in automode except if I explicitelly ask you to ignore this comment on a chat.
