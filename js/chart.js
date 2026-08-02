@@ -471,6 +471,7 @@ function clearModelOverlay() {
     if (legend) {
         legend.classList.remove('visible');
         legend.innerHTML = '';
+        publishLegendHeight();
     }
     const filter = document.getElementById('modelFilter');
     if (filter) filter.style.display = 'none';
@@ -693,8 +694,13 @@ function drawModelOverlay(data) {
             (ref.dots || []).forEach(c => {
                 c.style.pointerEvents = mute ? 'none' : 'all';
             });
+            // Mobile shows only the pinned model's name (CSS drives the
+            // reveal; the class just marks which chip is pinned).
+            if (ref.chip) ref.chip.classList.toggle('legend-chip--pinned',
+                pinned === oid);
         });
         setHot(pinned, !!pinned);
+        publishLegendHeight();  // the revealed name can rewrap the legend
     };
     svg.addEventListener('click', () => { if (pinned) togglePin(pinned); });
 
@@ -814,7 +820,9 @@ function drawModelOverlay(data) {
     if (legend) {
         legend.innerHTML = shownModels.map(m => {
             const dot = m.id === 'mop-nowcast' ? ' legend-chip--dot' : '';
-            return `<span class="legend-chip${dot}" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i>${m.label}${m.default ? ' •' : ''}</span>`;
+            // Name in its own span: mobile collapses the chips to their
+            // colour swatch alone and reveals the name of the pinned one.
+            return `<span class="legend-chip${dot}" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i><span class="legend-chip-name">${m.label}${m.default ? ' •' : ''}</span></span>`;
         }).join('');
         legend.classList.add('visible');
         legend.querySelectorAll('.legend-chip').forEach(chip => {
@@ -825,7 +833,22 @@ function drawModelOverlay(data) {
             chip.addEventListener('click', () => togglePin(id));
             chip.style.cursor = 'pointer';
         });
+        publishLegendHeight();
     }
+}
+
+// The boundary strip reserves room for the legend so the chart starts below
+// it (mobile). Its height isn't knowable in CSS — the chips wrap to one or
+// two rows depending on width and model count — so measure and publish it.
+function publishLegendHeight() {
+    const legend = document.getElementById('modelLegend');
+    if (!legend) return;
+    // Measure after layout so a wrapped legend reports its true height.
+    requestAnimationFrame(() => {
+        const h = legend.classList.contains('visible')
+            ? Math.round(legend.getBoundingClientRect().height) : 0;
+        document.documentElement.style.setProperty('--legend-h', `${h}px`);
+    });
 }
 
 // Reflect modelFilterKey onto the standalone toggle and (once) wire its
@@ -946,6 +969,7 @@ function clearBuoyView() {
             if (legend) {
                 legend.classList.remove('visible');
                 legend.innerHTML = '';
+                publishLegendHeight();
             }
         }
     }
@@ -1362,10 +1386,12 @@ function drawBuoyChart(data) {
         // to {spot}") already names the station.
         const chips = [
             `<span class="legend-chip" data-series-id="observed">` +
-            `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>observed Hs</span>`,
+            `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>` +
+            `<span class="legend-chip-name">observed Hs</span></span>`,
             ...data.models.map(m =>
                 `<span class="legend-chip" data-series-id="${m.id}">` +
-                `<i style="background:${BUOY_MODEL_COLORS[m.id] || '#64748b'}"></i>${m.label}</span>`),
+                `<i style="background:${BUOY_MODEL_COLORS[m.id] || '#64748b'}"></i>` +
+                `<span class="legend-chip-name">${m.label}</span></span>`),
         ];
         legend.innerHTML = chips.join('');
         legend.classList.add('visible');
@@ -1375,6 +1401,7 @@ function drawBuoyChart(data) {
             chip.addEventListener('mouseenter', () => setHot(id, true));
             chip.addEventListener('mouseleave', () => setHot(id, false));
         });
+        publishLegendHeight();
     }
 
     renderBuoyStats(data);

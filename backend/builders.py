@@ -40,7 +40,7 @@ WAVE_MODELS = {
     # display picks but mainly feed the comparison overlay (our salix
     # forecast is what skill scoring evaluates before any promotion).
     # Transect-scale (~100 m) outranks the 1-km grid where matched.
-    'surflie:nearshore': 'Surflie nearshore',
+    'surflie:nearshore': 'Salix',
     'cdip:mop-transect-fc': 'CDIP MOP transect',
     'cdip:mop': 'CDIP MOP 1km',
     'nwps:cg1': 'NOAA NWPS',

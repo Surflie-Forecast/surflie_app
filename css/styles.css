@@ -1670,17 +1670,72 @@ input:checked+.slider:before {
     top: 6px;
   }
 
-  /* Not enough width to sit the toggle beside the buttons AND the legend:
-     drop the toggle to its own line under the buttons; the legend reclaims
-     the room the desktop rule reserved for it. */
+  /* Toggle shares the buttons' line, immediately left of Models: Models sits
+     at right 124px with a ~68px width, plus an 8px gap = 200px. */
   .model-filter {
-    top: 34px;
-    right: 12px;
+    top: 6px;
+    right: 200px;
   }
 
-  body.models-mode .model-legend {
-    right: 202px;
-    max-width: calc(100% - 214px);
+  /* Buoys mode carries as many chips as models mode (observed + every
+     model), so it gets the same full-width row under the strip rather than
+     the narrow slot beside the buttons. */
+  body.buoys-mode .model-legend#modelLegend {
+    top: 34px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  /* Models mode: the toggle now occupies the space left of the buttons, so
+     the legend drops to its own line under the whole strip and lays out
+     across the full width. Needs to out-specify the desktop models-mode rule
+     further down the file, hence the doubled body selector. */
+  body.models-mode .model-legend#modelLegend {
+    top: 34px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+    justify-content: flex-start;
+  }
+
+  /* The strip's contents are absolutely positioned, so the zero-height
+     container lets the chart slide underneath them. In a compare view give
+     it real height — the legend row height is measured into --legend-h by
+     chart.js, since a wrapped legend is taller than a single row. */
+  body.models-mode .chart-gap-container,
+  body.buoys-mode .chart-gap-container {
+    height: calc(34px + var(--legend-h, 22px) + 2px);
+  }
+
+  /* The 30px top padding is headroom for the bar chart's day labels; in a
+     compare view the legend already separates the plot from the strip, so
+     trim it and let the lines sit up close under the legend. */
+  body.models-mode .chart-container,
+  body.buoys-mode .chart-container {
+    padding-top: 8px !important;
+  }
+
+  /* Too little width for a full row of named chips: collapse them to their
+     colour swatch alone. Tapping one pins that model (as on desktop) and
+     that chip alone spells out its name. */
+  body.models-mode .model-legend .legend-chip .legend-chip-name {
+    display: none;
+  }
+
+  body.models-mode .model-legend .legend-chip {
+    gap: 0;
+    padding: 0 6px;
+  }
+
+  body.models-mode .model-legend .legend-chip.legend-chip--pinned .legend-chip-name {
+    display: inline;
+  }
+
+  body.models-mode .model-legend .legend-chip.legend-chip--pinned {
+    gap: 4px;
+    padding: 0 8px;
   }
 
   /* Legend wraps to several rows on narrow screens: drop the highlight
@@ -1689,6 +1744,15 @@ input:checked+.slider:before {
   #waveChartContainer.models-active .chart-highlight-overlay,
   .hero.compact~.chart-section #waveChartContainer.models-active .chart-highlight-overlay {
     top: 74px;
+  }
+}
+
+/* Under ~380px the three controls no longer fit side by side at full size,
+   so the toggle trims its padding rather than running off the left edge. */
+@media (max-width: 380px) {
+  .model-filter-btn {
+    padding: 0 6px;
+    font-size: 0.62rem;
   }
 }
 
