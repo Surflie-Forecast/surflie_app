@@ -402,6 +402,102 @@ const isNearshore = m => NEARSHORE_IDS.has(m.id);
 // regardless; the toggle only gates the overlay lines.
 let modelFilterKey = 'nearshore';
 
+// Mobile breakpoint, matching the max-width: 768px block in styles.css. On
+// mobile the legend chips are the only way to pin a model: the plot's lines
+// are too thin to tap accurately, and a stray tap there would fight the
+// day-selection underneath.
+const isMobileView = () => window.innerWidth <= 768;
+
+// Highlighted series get a wash under the line: the series colour at the top
+// fading to nothing at the baseline. One <linearGradient> per series, and an
+// area path that is only shown while that series is hot/pinned.
+let areaGradientSeq = 0;
+function addSeriesArea(svg, ns, pts, color, baselineY, fadeFromX) {
+    if (!pts || pts.length < 2) return null;
+
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS(ns, 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+    const uid = ++areaGradientSeq;
+    const gradId = `series-area-${uid}`;
+    const grad = document.createElementNS(ns, 'linearGradient');
+    grad.setAttribute('id', gradId);
+    // Vertical in the element's own box, so it tracks the area's height.
+    grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
+    grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
+    [['0%', 0.35], ['100%', 0]].forEach(([offset, op]) => {
+        const stop = document.createElementNS(ns, 'stop');
+        stop.setAttribute('offset', offset);
+        stop.setAttribute('stop-color', color);
+        stop.setAttribute('stop-opacity', String(op));
+        grad.appendChild(stop);
+    });
+    defs.appendChild(grad);
+
+    const x0 = pts[0].x;
+    const x1 = pts[pts.length - 1].x;
+
+    // Where the line turns dashed the forecast is running out, so the wash
+    // fades out horizontally across that tail too — full strength up to the
+    // dash, gone by the end. userSpaceOnUse so the stops are plot x values.
+    let maskId = null;
+    if (fadeFromX != null && x1 > fadeFromX && x1 > x0) {
+        maskId = `series-fade-${uid}`;
+        const mgrad = document.createElementNS(ns, 'linearGradient');
+        mgrad.setAttribute('id', `${maskId}-g`);
+        mgrad.setAttribute('gradientUnits', 'userSpaceOnUse');
+        mgrad.setAttribute('x1', String(fadeFromX)); mgrad.setAttribute('y1', '0');
+        mgrad.setAttribute('x2', String(x1)); mgrad.setAttribute('y2', '0');
+        [['0%', 1], ['100%', 0]].forEach(([offset, op]) => {
+            const s = document.createElementNS(ns, 'stop');
+            s.setAttribute('offset', offset);
+            s.setAttribute('stop-color', '#fff');
+            s.setAttribute('stop-opacity', String(op));
+            mgrad.appendChild(s);
+        });
+        defs.appendChild(mgrad);
+
+        const mask = document.createElementNS(ns, 'mask');
+        mask.setAttribute('id', maskId);
+        mask.setAttribute('maskUnits', 'userSpaceOnUse');
+        // Opaque white before the dash keeps that stretch at full strength.
+        const solid = document.createElementNS(ns, 'rect');
+        solid.setAttribute('x', String(x0));
+        solid.setAttribute('y', '0');
+        solid.setAttribute('width', String(Math.max(0, fadeFromX - x0)));
+        solid.setAttribute('height', String(baselineY));
+        solid.setAttribute('fill', '#fff');
+        mask.appendChild(solid);
+        const fade = document.createElementNS(ns, 'rect');
+        fade.setAttribute('x', String(fadeFromX));
+        fade.setAttribute('y', '0');
+        fade.setAttribute('width', String(x1 - fadeFromX));
+        fade.setAttribute('height', String(baselineY));
+        fade.setAttribute('fill', `url(#${maskId}-g)`);
+        mask.appendChild(fade);
+        defs.appendChild(mask);
+    }
+
+    const d = pts.map((p, i) => (i ? 'L ' : 'M ') +
+        p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ') +
+        ` L ${x1.toFixed(1)} ${baselineY.toFixed(1)}` +
+        ` L ${x0.toFixed(1)} ${baselineY.toFixed(1)} Z`;
+
+    const area = document.createElementNS(ns, 'path');
+    area.setAttribute('d', d);
+    area.setAttribute('fill', `url(#${gradId})`);
+    area.setAttribute('stroke', 'none');
+    if (maskId) area.setAttribute('mask', `url(#${maskId})`);
+    area.style.pointerEvents = 'none';
+    area.style.opacity = '0';
+    area.style.transition = 'opacity 0.2s';
+    // Behind the lines: insert right after <defs> so every stroke draws over.
+    svg.insertBefore(area, defs.nextSibling);
+    return area;
+}
+
 function filteredModels(models) {
     const test = modelFilterKey === 'offshore'
         ? m => !isNearshore(m) : isNearshore;
@@ -455,9 +551,12 @@ function clearModelOverlay() {
         if (svg) {
             // Fade out in step with the bars fading back in
             svg.style.opacity = '0';
-            setTimeout(() => svg.remove(), 400);
+            // Re-measure the day box only once the svg is really gone, or it
+            // would still be counted in the plot's extent.
+            setTimeout(() => { svg.remove(); refreshDayHighlight(); }, 400);
         }
         renderBarYAxis(container); // back to the bars' scale
+        refreshDayHighlight();
     }
     if (btn) btn.classList.remove('active');
     // Model view off: the Buoys button leaves the strip and goes back to
@@ -535,7 +634,9 @@ function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot,
         c.setAttribute('r', '1.9');
         c.setAttribute('fill', color);
         c.setAttribute('opacity', '0.85');
-        c.style.pointerEvents = 'all';
+        // Inert on mobile, like the overlay lines — the legend chips are the
+        // only handle on the series there.
+        c.style.pointerEvents = isMobileView() ? 'none' : 'all';
         c.style.cursor = 'pointer';
         svg.appendChild(c);
         return c;
@@ -575,6 +676,7 @@ function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot,
             setHot(model.id, false);
         });
         if (togglePin) c.addEventListener('click', e => {
+            if (isMobileView()) return;   // legend chips own pinning on mobile
             e.stopPropagation();
             togglePin(model.id);
         });
@@ -683,13 +785,17 @@ function drawModelOverlay(data) {
                 c.setAttribute('r', hot ? '2.8' : '1.9');
                 c.setAttribute('opacity', dim ? '0.25' : '0.85');
             });
+            // Wash under the highlighted series only
+            if (ref.area) ref.area.style.opacity = hot ? '1' : '0';
             if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
     };
     const togglePin = (id) => {
         pinned = pinned === id ? null : id;
         Object.entries(refs).forEach(([oid, ref]) => {
-            const mute = pinned && oid !== pinned;
+            // Mobile keeps every line inert whatever the pin state — restoring
+            // 'stroke'/'all' here would hand the plot back its tap handling.
+            const mute = isMobileView() || (pinned && oid !== pinned);
             if (ref.hit) ref.hit.style.pointerEvents = mute ? 'none' : 'stroke';
             (ref.dots || []).forEach(c => {
                 c.style.pointerEvents = mute ? 'none' : 'all';
@@ -702,7 +808,12 @@ function drawModelOverlay(data) {
         setHot(pinned, !!pinned);
         publishLegendHeight();  // the revealed name can rewrap the legend
     };
-    svg.addEventListener('click', () => { if (pinned) togglePin(pinned); });
+    // Background click unpins — desktop only, so on mobile a tap in the plot
+    // can't clear a pin the legend set (and day selection keeps the tap).
+    svg.addEventListener('click', () => {
+        if (isMobileView()) return;
+        if (pinned) togglePin(pinned);
+    });
 
     // The observed-driven nowcast is drawn as points, not a line — the same
     // "ground truth as dots" language the buoy comparison view uses. It's
@@ -752,7 +863,10 @@ function drawModelOverlay(data) {
             paths.push(path);
         });
         if (paths.length === 0) return;
-        refs[model.id] = { paths, baseWidth, isDefault: model.default };
+        // Fade the wash out across the dashed tail, if this line has one.
+        const dashStartX = dashPts.length >= 2 ? dashPts[0].x : null;
+        const area = addSeriesArea(svg, ns, pts, color, yBottom, dashStartX);
+        refs[model.id] = { paths, baseWidth, isDefault: model.default, area };
 
         // Invisible wide twin of the line as the hover hit area
         const hit = document.createElementNS(ns, 'path');
@@ -760,7 +874,10 @@ function drawModelOverlay(data) {
         hit.setAttribute('fill', 'none');
         hit.setAttribute('stroke', 'transparent');
         hit.setAttribute('stroke-width', 12);
-        hit.style.pointerEvents = 'stroke';
+        // Mobile drives the overlay entirely from the legend chips: the lines
+        // take no taps at all, so nothing hovers, highlights, or steals the
+        // tap from the day selection underneath.
+        hit.style.pointerEvents = isMobileView() ? 'none' : 'stroke';
         hit.style.cursor = 'pointer';
 
         const showPoint = (clientX) => {
@@ -796,6 +913,7 @@ function drawModelOverlay(data) {
             setHot(model.id, false);
         });
         hit.addEventListener('click', e => {
+            if (isMobileView()) return;   // legend chips own pinning on mobile
             e.stopPropagation();
             togglePin(model.id);
         });
@@ -818,23 +936,55 @@ function drawModelOverlay(data) {
     syncModelFilter(data);
 
     if (legend) {
-        legend.innerHTML = shownModels.map(m => {
+        // Leading count: mobile hides the chip names, so without this the row
+        // is just anonymous swatches. CSS shows it on mobile only.
+        legend.innerHTML = legendCountChip(shownModels.length) +
+            shownModels.map(m => {
             const dot = m.id === 'mop-nowcast' ? ' legend-chip--dot' : '';
             // Name in its own span: mobile collapses the chips to their
             // colour swatch alone and reveals the name of the pinned one.
             return `<span class="legend-chip${dot}" data-model-id="${m.id}"><i style="background:${m.default ? '#38bdf8' : (MODEL_COLORS[m.id] || '#64748b')}"></i><span class="legend-chip-name">${m.label}${m.default ? ' •' : ''}</span></span>`;
         }).join('');
         legend.classList.add('visible');
-        legend.querySelectorAll('.legend-chip').forEach(chip => {
+        legend.querySelectorAll('.legend-chip[data-model-id]').forEach(chip => {
             const id = chip.dataset.modelId;
             if (refs[id]) refs[id].chip = chip;
-            chip.addEventListener('mouseenter', () => setHot(id, true));
-            chip.addEventListener('mouseleave', () => setHot(id, false));
+            // Hover highlighting is desktop-only: a tap on mobile synthesises
+            // mouseenter with no matching mouseleave, which would re-light a
+            // chip the same tap had just unpinned.
+            chip.addEventListener('mouseenter', () => {
+                if (!isMobileView()) setHot(id, true);
+            });
+            chip.addEventListener('mouseleave', () => {
+                if (!isMobileView()) setHot(id, false);
+            });
             chip.addEventListener('click', () => togglePin(id));
             chip.style.cursor = 'pointer';
         });
         publishLegendHeight();
     }
+    // The overlay lines change the plot's vertical extent, and the day box is
+    // measured from it — re-run once this frame's layout has settled.
+    refreshDayHighlight();
+}
+
+// Leading "N sources" label for the legend. Mobile collapses the chips to
+// bare colour swatches, so this says what the row is a list of; CSS keeps it
+// hidden on desktop, where every chip already carries its name.
+function legendCountChip(n) {
+    if (!n) return '';
+    return `<span class="legend-count">${n} source${n === 1 ? '' : 's'}:</span>`;
+}
+
+// Re-measure the day-selection box against the plot's current geometry.
+// Runs twice: once for this frame's layout, then again past the 0.4s
+// bars/overlay cross-fade, when the marks have settled at final size.
+function refreshDayHighlight() {
+    const run = () => {
+        if (window.updateChartHighlight) window.updateChartHighlight();
+    };
+    requestAnimationFrame(run);
+    setTimeout(run, 450);
 }
 
 // The boundary strip reserves room for the legend so the chart starts below
@@ -956,10 +1106,23 @@ function clearBuoyView() {
         const wasActive = !!container._buoyData;
         container._buoyData = null;
         container.classList.remove('buoys-active');
+        // Drop this view's crosshair; the bars view rebuilds its own.
+        if (container._buoyCrossMove) {
+            container.removeEventListener('mousemove', container._buoyCrossMove);
+            container.removeEventListener('mouseleave', container._buoyCrossHide);
+            container._buoyCrossMove = container._buoyCrossHide = null;
+            // Hand the shared crosshair back to the bar chart's handler.
+            if (container._crosshairMove) {
+                container.addEventListener('mousemove', container._crosshairMove);
+                container.addEventListener('mouseleave', container._crosshairHide);
+            }
+            container.querySelectorAll('.chart-crosshair, .chart-crosshair-label')
+                .forEach(el => el.classList.remove('visible'));
+        }
         const svg = container.querySelector('.buoy-overlay-svg');
         if (svg) {
             svg.style.opacity = '0';
-            setTimeout(() => svg.remove(), 400);
+            setTimeout(() => { svg.remove(); refreshDayHighlight(); }, 400);
         }
         const spacer = container.querySelector('.buoy-scroll-spacer');
         if (spacer) spacer.remove();
@@ -972,6 +1135,7 @@ function clearBuoyView() {
                 publishLegendHeight();
             }
         }
+        refreshDayHighlight();
     }
     if (btn) {
         btn.classList.remove('active');
@@ -1129,7 +1293,8 @@ function drawBuoyChart(data) {
     const obs = (data.observed || []).map(p => ({ t: parseT(p.t), v: p.v }));
     const modelPts = (data.models || []).map(model => ({
         model,
-        pts: model.series.map(p => ({ t: parseT(p.t), v: p.v })),
+        // Keep period/direction: the tooltip reports them like the spot view.
+        pts: model.series.map(p => ({ t: parseT(p.t), v: p.v, p: p.p, d: p.d })),
     }));
     const allT = [
         ...obs.map(p => p.t),
@@ -1176,7 +1341,9 @@ function drawBuoyChart(data) {
 
     const projected = modelPts.map(({ model, pts }) => ({
         model,
-        pts: pts.map(p => ({ x: xFor(p.t), v: p.v, t: new Date(p.t) })),
+        pts: pts.map(p => ({
+            x: xFor(p.t), v: p.v, t: new Date(p.t), p: p.p, d: p.d,
+        })),
     }));
 
     let vMax = 0;
@@ -1237,9 +1404,13 @@ function drawBuoyChart(data) {
     const toPathD = pts =>
         pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
 
-    // Two-way hover link between series and legend chips
+    // Two-way hover link between series and legend chips, plus click-to-pin —
+    // the same interaction the models overlay uses, so both views behave
+    // identically at every screen size.
     const refs = {};
+    let pinned = null;
     const setHot = (id, on) => {
+        if (pinned) { id = pinned; on = true; }
         Object.entries(refs).forEach(([oid, ref]) => {
             const hot = on && oid === id;
             (ref.paths || []).forEach(p => {
@@ -1250,9 +1421,32 @@ function drawBuoyChart(data) {
                 c.setAttribute('opacity', on && !hot ? '0.2' : '0.75');
                 c.setAttribute('r', hot ? 3.2 : 2.5);
             });
+            // Wash under the highlighted series only
+            if (ref.area) ref.area.style.opacity = hot ? '1' : '0';
             if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
     };
+    const togglePin = (id) => {
+        pinned = pinned === id ? null : id;
+        Object.entries(refs).forEach(([oid, ref]) => {
+            // Mobile keeps the plot inert whatever the pin state: the legend
+            // chips are the only handle on a series there.
+            const mute = isMobileView() || (pinned && oid !== pinned);
+            if (ref.hit) ref.hit.style.pointerEvents = mute ? 'none' : 'stroke';
+            (ref.dots || []).forEach(c => {
+                c.style.pointerEvents = mute ? 'none' : 'all';
+            });
+            if (ref.chip) ref.chip.classList.toggle('legend-chip--pinned',
+                pinned === oid);
+        });
+        setHot(pinned, !!pinned);
+        publishLegendHeight();  // the revealed name can rewrap the legend
+    };
+    // Background click unpins — desktop only, as in the models overlay.
+    svg.addEventListener('click', () => {
+        if (isMobileView()) return;
+        if (pinned) togglePin(pinned);
+    });
 
     const showTooltip = (clientX, pts, color, id) => {
         if (!tooltip || pts.length === 0) return;
@@ -1264,14 +1458,12 @@ function drawBuoyChart(data) {
         }
         const val = formatHeight(best.v, currentUnit);
         const unit = getHeightUnit(currentUnit);
-        const timeStr = best.t.toLocaleString('en-US', {
-            weekday: 'short', hour: 'numeric', minute: '2-digit',
-        });
+        // No time here: the crosshair label above the cursor already gives it.
         tooltip.innerHTML =
             `<span style="font-size: 0.9rem; font-weight: 700;">` +
             `<i style="display:inline-block;width:10px;height:3px;border-radius:2px;` +
             `vertical-align:middle;background:${color}"></i> ` +
-            `${val}${unit} &bull; ${timeStr}</span>`;
+            `${val}${unit}${overlayPdSuffix(best)}</span>`;
         const cx = Math.min(Math.max(rect.left + best.x, 10), window.innerWidth - 10);
         tooltip.style.left = `${cx}px`;
         tooltip.style.top = `${rect.top + best.y}px`;
@@ -1283,6 +1475,58 @@ function drawBuoyChart(data) {
         if (tooltip) tooltip.classList.remove('visible');
         setHot(id, false);
     };
+
+    // Hour crosshair, as in the spot view. The bar-based version can't serve
+    // here (this view collapses the bar wrappers to zero width), so drive it
+    // off this chart's own time scale: invert xFor to read the hovered time.
+    {
+        // Reuse the pair the bar chart already put in this container — making
+        // our own would leave two stacked crosshairs after a view toggle.
+        let cross = container.querySelector('.chart-crosshair');
+        let label = container.querySelector('.chart-crosshair-label');
+        if (!cross) {
+            cross = document.createElement('div');
+            cross.className = 'chart-crosshair';
+            container.appendChild(cross);
+        }
+        if (!label) {
+            label = document.createElement('div');
+            label.className = 'chart-crosshair-label';
+            container.appendChild(label);
+        }
+
+        if (container._buoyCrossMove) {
+            container.removeEventListener('mousemove', container._buoyCrossMove);
+            container.removeEventListener('mouseleave', container._buoyCrossHide);
+        }
+        // The bar chart's handler reads the (now collapsed) wrappers and drives
+        // the same elements — stand it down while this view owns them. The next
+        // bar render re-attaches it.
+        if (container._crosshairMove) {
+            container.removeEventListener('mousemove', container._crosshairMove);
+            container.removeEventListener('mouseleave', container._crosshairHide);
+        }
+        container._buoyCrossMove = (e) => {
+            const rect = container.getBoundingClientRect();
+            const x = e.clientX - rect.left + container.scrollLeft;
+            // xFor is linear in t, so invert it across the plotted span.
+            const frac = (x - PADX) / Math.max(1, W - 2 * PADX);
+            if (frac < 0 || frac > 1) { container._buoyCrossHide(); return; }
+            const t = new Date(tMin + frac * (tMax - tMin));
+            cross.style.left = `${x}px`;
+            label.style.left = `${x}px`;
+            label.textContent = t.toLocaleTimeString(
+                'en-US', { hour: 'numeric', hour12: true });
+            cross.classList.add('visible');
+            label.classList.add('visible');
+        };
+        container._buoyCrossHide = () => {
+            cross.classList.remove('visible');
+            label.classList.remove('visible');
+        };
+        container.addEventListener('mousemove', container._buoyCrossMove);
+        container.addEventListener('mouseleave', container._buoyCrossHide);
+    }
 
     // Forecast lines: MOP keeps its reserved red and reads heavier — it is
     // the site-exact forecast the others are being judged against
@@ -1318,7 +1562,10 @@ function drawBuoyChart(data) {
             paths.push(path);
         });
         if (paths.length === 0) return;
-        refs[model.id] = { paths, baseWidth, baseOpacity };
+        // Fade the wash out across the dashed tail (every buoy line has one).
+        const dashStartX = dashPts.length >= 2 ? dashPts[0].x : null;
+        const area = addSeriesArea(svg, ns, pts, color, yBottom, dashStartX);
+        refs[model.id] = { paths, baseWidth, baseOpacity, area };
 
         // Invisible wide twin of the whole line as the hover hit area
         const hit = document.createElementNS(ns, 'path');
@@ -1326,14 +1573,21 @@ function drawBuoyChart(data) {
         hit.setAttribute('fill', 'none');
         hit.setAttribute('stroke', 'transparent');
         hit.setAttribute('stroke-width', 12);
-        hit.style.pointerEvents = 'stroke';
+        // Inert on mobile — nothing hovers, highlights, or steals the tap.
+        hit.style.pointerEvents = isMobileView() ? 'none' : 'stroke';
         hit.style.cursor = 'pointer';
         hit.addEventListener('mousemove', e => showTooltip(e.clientX, pts, color, model.id));
         hit.addEventListener('touchstart', e => {
             if (e.touches.length) showTooltip(e.touches[0].clientX, pts, color, model.id);
         }, { passive: true });
         hit.addEventListener('mouseleave', () => hideTooltip(model.id));
+        hit.addEventListener('click', e => {
+            if (isMobileView()) return;   // legend chips own pinning on mobile
+            e.stopPropagation();
+            togglePin(model.id);
+        });
         svg.appendChild(hit);
+        refs[model.id].hit = hit;
     });
 
     // Observed Hs on top: ink dots, the ground truth
@@ -1345,13 +1599,18 @@ function drawBuoyChart(data) {
         c.setAttribute('r', 2.5);
         c.setAttribute('fill', BUOY_INK);
         c.setAttribute('opacity', '0.75');
-        c.style.pointerEvents = 'all';
+        c.style.pointerEvents = isMobileView() ? 'none' : 'all';
         c.style.cursor = 'pointer';
         c.addEventListener('mousemove', e => showTooltip(e.clientX, obsPts, BUOY_INK, 'observed'));
         c.addEventListener('touchstart', e => {
             if (e.touches.length) showTooltip(e.touches[0].clientX, obsPts, BUOY_INK, 'observed');
         }, { passive: true });
         c.addEventListener('mouseleave', () => hideTooltip('observed'));
+        c.addEventListener('click', e => {
+            if (isMobileView()) return;
+            e.stopPropagation();
+            togglePin('observed');
+        });
         svg.appendChild(c);
         return c;
     });
@@ -1385,7 +1644,8 @@ function drawBuoyChart(data) {
         // No title chip: the hero caption ("CDIP {id}, the closest buoy
         // to {spot}") already names the station.
         const chips = [
-            `<span class="legend-chip" data-series-id="observed">` +
+            // Dot series, so the swatch is a dot — matches how it's plotted.
+            `<span class="legend-chip legend-chip--dot" data-series-id="observed">` +
             `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>` +
             `<span class="legend-chip-name">observed Hs</span></span>`,
             ...data.models.map(m =>
@@ -1393,16 +1653,25 @@ function drawBuoyChart(data) {
                 `<i style="background:${BUOY_MODEL_COLORS[m.id] || '#64748b'}"></i>` +
                 `<span class="legend-chip-name">${m.label}</span></span>`),
         ];
-        legend.innerHTML = chips.join('');
+        legend.innerHTML = legendCountChip(chips.length) + chips.join('');
         legend.classList.add('visible');
         legend.querySelectorAll('.legend-chip[data-series-id]').forEach(chip => {
             const id = chip.dataset.seriesId;
             if (refs[id]) refs[id].chip = chip;
-            chip.addEventListener('mouseenter', () => setHot(id, true));
-            chip.addEventListener('mouseleave', () => setHot(id, false));
+            // Hover is desktop-only: a tap synthesises mouseenter with no
+            // matching mouseleave, which would re-light a just-unpinned chip.
+            chip.addEventListener('mouseenter', () => {
+                if (!isMobileView()) setHot(id, true);
+            });
+            chip.addEventListener('mouseleave', () => {
+                if (!isMobileView()) setHot(id, false);
+            });
+            chip.addEventListener('click', () => togglePin(id));
+            chip.style.cursor = 'pointer';
         });
         publishLegendHeight();
     }
+    refreshDayHighlight();
 
     renderBuoyStats(data);
 }

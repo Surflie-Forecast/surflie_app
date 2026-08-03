@@ -1218,6 +1218,10 @@ document.addEventListener('DOMContentLoaded', () => {
         updateChartHighlight();
     }
 
+    // chart.js calls this after switching modes: the plot's vertical extent
+    // changes (bars vs overlay lines), and the box is measured from it.
+    window.updateChartHighlight = () => updateChartHighlight();
+
     function updateChartHighlight() {
         const cards = forecastContainer.querySelectorAll('.forecast-card');
         const containerRect = forecastContainer.getBoundingClientRect();
@@ -1321,6 +1325,53 @@ document.addEventListener('DOMContentLoaded', () => {
             overlay.style.display = 'block';
             overlay.style.left = `${left}px`;
             overlay.style.width = `${width}px`;
+
+            // Vertical span. The stylesheet's insets are right everywhere
+            // except a compare view on mobile, where the taller control strip
+            // pushed the plot down and left the fixed inset far too short.
+            // The bars view keeps the CSS value: anchoring to the wrappers
+            // there would clip the day label sitting at their top edge.
+            const svg = container.querySelector(
+                '.model-overlay-svg, .buoy-overlay-svg');
+            if (window.innerWidth <= 768 && svg) {
+                const cRect = container.getBoundingClientRect();
+                const toLocal = (y) => y - cRect.top + container.scrollTop;
+
+                // Span the whole plot band, not just the selected day's own
+                // line segment: start from the svg's full drawn extent so the
+                // frame is the same height wherever it slides.
+                let topPx = Infinity;
+                let bottomPx = -Infinity;
+                // The drawn marks, not the svg element: lines and dots can
+                // spill past its box and the frame should reach them.
+                svg.querySelectorAll('path, circle').forEach(el => {
+                    if (el.getAttribute('stroke') === 'transparent') return;
+                    const q = el.getBoundingClientRect();
+                    if (!q.height) return;
+                    topPx = Math.min(topPx, toLocal(q.top));
+                    bottomPx = Math.max(bottomPx, toLocal(q.bottom));
+                });
+                // Keep the bars' own column in the span too, so the frame
+                // still reaches the axis baseline under the lines.
+                const sRect = startEl.getBoundingClientRect();
+                topPx = Math.min(topPx, toLocal(sRect.top));
+                bottomPx = Math.max(bottomPx, toLocal(sRect.bottom));
+
+                if (isFinite(topPx) && isFinite(bottomPx)) {
+                    // Clamp the top only: the container is overflow-y visible,
+                    // so marks below it are still on screen, but above it sits
+                    // the strip's controls — don't ride up into those.
+                    topPx = Math.max(topPx, container.scrollTop);
+                    overlay.style.top = `${Math.max(0, topPx)}px`;
+                    overlay.style.bottom = 'auto';
+                    overlay.style.height = `${Math.max(0, bottomPx - topPx)}px`;
+                }
+            } else {
+                // Hand the vertical placement back to the stylesheet.
+                overlay.style.top = '';
+                overlay.style.bottom = '';
+                overlay.style.height = '';
+            }
 
             // Auto-scroll logic
             const containerCenter = container.clientWidth / 2;

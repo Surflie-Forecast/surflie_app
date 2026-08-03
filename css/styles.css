@@ -1033,9 +1033,39 @@ input:checked+.slider:before {
     /* Remove top margin */
   }
 
-  .search-container input {
+  /* Kill the double-tap-to-zoom gesture (Safari ignores user-scalable=no).
+     'manipulation' keeps scrolling and normal taps, dropping only the
+     double-tap zoom — so nothing rescales under the chart overlays. */
+  body {
+    touch-action: manipulation;
+  }
+
+  /* touch-action inherits, so hand the full gesture set back to Leaflet —
+     the expanded map still needs pinch-zoom and double-tap of its own. */
+  #surfMap,
+  #surfMap * {
+    touch-action: auto;
+  }
+
+  /* 16px exactly: iOS Safari zooms the page in on focus for any field
+     smaller than that, and it ignores user-scalable=no. Keep every focusable
+     text field here at 1rem. */
+  .search-container input,
+  .magic-link-form input {
+    font-size: 1rem;
+  }
+
+  /* ...but the placeholder needs the old 0.85rem to fit on one line. Styling
+     the placeholder alone keeps the input's own font at the 16px Safari
+     checks, so there's still no focus zoom. */
+  .search-container input::placeholder {
     font-size: 0.85rem;
-    padding: 0.5rem 1rem;
+  }
+
+  .search-container input {
+    /* 0.85rem sides rather than 1rem: at 360px the placeholder needs those
+       last few pixels to sit on one line. */
+    padding: 0.5rem 0.85rem;
     /* Reduced height */
   }
 
@@ -1110,9 +1140,12 @@ input:checked+.slider:before {
     padding: 0rem 0 0.5rem 0;
   }
 
-  /* Reduce chart padding-top on mobile */
+  /* Headroom for the day labels, which sit at the top of each bar column.
+     The Models/Buoys strip ends at 28px, and the highlight box starts below
+     that — so the labels need to begin lower still or the box's top border
+     would cut through them. */
   .chart-container {
-    padding-top: 30px !important;
+    padding-top: 44px !important;
   }
 
   /* Make map twice as high as hero on mobile */
@@ -1441,6 +1474,21 @@ input:checked+.slider:before {
   display: inline-block;
 }
 
+/* "N sources" label leading the legend. Only needed on mobile, where the
+   chips collapse to bare swatches and nothing else says what they are. */
+.model-legend .legend-count {
+  display: none;
+  align-items: center;
+  height: 22px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  opacity: 0.75;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* Observed-driven nowcast: shown as points on the plot, so its legend
    swatch is a dot rather than a line, matching the buoy view's language. */
 .model-legend .legend-chip--dot i {
@@ -1566,15 +1614,24 @@ input:checked+.slider:before {
   left: 0;
 }
 
-/* No page margin to borrow on small screens: fall back to inner gutters */
+/* Small screens: stretch the section out through the app container's own
+   0.8rem side padding (hence the negative margins plus the matching width)
+   and put the axis gutters in that reclaimed strip, so the labels sit nearer
+   the screen edges. The gutters absorb the extra width, leaving the plot
+   itself exactly where it sits without them. */
 @media (max-width: 768px) {
   #waveChartSection.models-gutters {
-    padding: 0 30px;
+    margin-left: -0.8rem;
+    margin-right: -0.8rem;
+    width: calc(100% + 1.6rem);
+    /* Gutter trimmed ~7px from the 42.8px that left the plot untouched, so
+       the plot grows halfway toward the labels without reaching them. */
+    padding: 0 36px;
     overflow: hidden;
   }
 
   .chart-y-axis {
-    width: 30px;
+    width: 36px;
   }
 
   .chart-y-axis--left {
@@ -1587,12 +1644,26 @@ input:checked+.slider:before {
     right: 0;
   }
 
+  /* Sit toward the outer end of the gutter — closer to the screen edge than
+     the plot, without crowding it. */
   .chart-y-axis--left .y-tick {
-    right: 2px;
+    right: auto;
+    left: 8px;
   }
 
   .chart-y-axis--right .y-tick {
-    left: 2px;
+    left: auto;
+    right: 8px;
+  }
+
+  /* Shorter tick: the label is what matters at this size */
+  .chart-y-axis .y-tick i {
+    width: 3px;
+  }
+
+  .chart-y-axis .y-tick {
+    gap: 2px;
+    font-size: 0.58rem;
   }
 }
 
@@ -1683,7 +1754,9 @@ input:checked+.slider:before {
   body.buoys-mode .model-legend#modelLegend {
     top: 34px;
     right: 12px;
-    left: 12px;
+    /* Flush with the app container's own 0.8rem padding — no extra inset,
+       so the row starts as far left as the screen allows. */
+    left: 0;
     max-width: none;
     justify-content: flex-start;
   }
@@ -1695,7 +1768,9 @@ input:checked+.slider:before {
   body.models-mode .model-legend#modelLegend {
     top: 34px;
     right: 12px;
-    left: 12px;
+    /* Flush with the app container's own 0.8rem padding — no extra inset,
+       so the row starts as far left as the screen allows. */
+    left: 0;
     max-width: none;
     justify-content: flex-start;
   }
@@ -1720,22 +1795,40 @@ input:checked+.slider:before {
   /* Too little width for a full row of named chips: collapse them to their
      colour swatch alone. Tapping one pins that model (as on desktop) and
      that chip alone spells out its name. */
-  body.models-mode .model-legend .legend-chip .legend-chip-name {
+  body.models-mode .model-legend .legend-chip .legend-chip-name,
+  body.buoys-mode .model-legend .legend-chip .legend-chip-name {
     display: none;
   }
 
-  body.models-mode .model-legend .legend-chip {
+  body.models-mode .model-legend .legend-chip,
+  body.buoys-mode .model-legend .legend-chip {
     gap: 0;
     padding: 0 6px;
   }
 
-  body.models-mode .model-legend .legend-chip.legend-chip--pinned .legend-chip-name {
+  body.models-mode .model-legend .legend-chip.legend-chip--pinned .legend-chip-name,
+  body.buoys-mode .model-legend .legend-chip.legend-chip--pinned .legend-chip-name {
     display: inline;
   }
 
-  body.models-mode .model-legend .legend-chip.legend-chip--pinned {
+  body.models-mode .model-legend .legend-chip.legend-chip--pinned,
+  body.buoys-mode .model-legend .legend-chip.legend-chip--pinned {
     gap: 4px;
     padding: 0 8px;
+  }
+
+  /* Names are hidden here, so name the row instead */
+  body.models-mode .model-legend .legend-count,
+  body.buoys-mode .model-legend .legend-count {
+    display: inline-flex;
+  }
+
+  /* Bars view: the Models/Buoys buttons sit in the strip at 6px + 22px tall,
+     so start the box below them — the desktop 20px inset would run under the
+     buttons whenever a mid-chart day is selected. */
+  #waveChartContainer .chart-highlight-overlay,
+  .hero.compact~.chart-section #waveChartContainer .chart-highlight-overlay {
+    top: 34px;
   }
 
   /* Legend wraps to several rows on narrow screens: drop the highlight
@@ -2198,11 +2291,16 @@ body.buoys-mode .chart-container {
   top: 36px;
 }
 
-/* Buoys view collapses the bar wrappers (zero width), so the crosshair's
-   time axis is gone — hide it there. */
-#waveChartContainer.buoys-active .chart-crosshair,
+/* The buoys view builds its own crosshair off the chart's time scale (the
+   bar wrappers it would otherwise measure are collapsed to zero width).
+   The legend row sits level with the buttons here, so the hour label clears
+   it and the line starts just below the label. */
 #waveChartContainer.buoys-active .chart-crosshair-label {
-  display: none;
+  top: 30px;
+}
+
+#waveChartContainer.buoys-active .chart-crosshair {
+  top: 46px;
 }
 
 .chart-crosshair.visible {
@@ -2596,6 +2694,8 @@ body.buoys-mode .chart-container {
 
 .chart-highlight-overlay {
   position: absolute;
+  /* Fallback only: app.js sets top/height from the measured plot area so the
+     box spans the full day in every mode (bars, models, buoys). */
   top: 20px;
   bottom: 0px;
   border: 1px solid rgba(7, 7, 7, 0.492);
@@ -2603,7 +2703,7 @@ body.buoys-mode .chart-container {
   /* No fill as requested */
   border-radius: 12px;
   pointer-events: none;
-  transition: left 0.3s ease, width 0.3s ease;
+  transition: left 0.3s ease, width 0.3s ease, top 0.3s ease, height 0.3s ease;
   z-index: 50;
   display: none;
   box-shadow: none;
