@@ -8,9 +8,15 @@ the shore normal (deg true, pointing offshore).
 
 Selection for a spot (lat, lon):
   1. nearest transect by prediction-site distance (cos-lat scaled);
-  2. reject if > MAX_DIST_KM (~1.5 km): the spot is inland, outside CA, or
-     too far from any modeled transect — callers yield no rows, matching
-     the non-critical convention of the grid adapter;
+  2. reject if > MAX_DIST_KM (2 km): the spot is inland, outside CA, or too
+     far from any modeled transect — callers yield no rows, matching the
+     non-critical convention of the grid adapter. Raised from 1.5 km on
+     2026-08-04: CDIP's transects thin out along the wide straight beaches
+     of Santa Cruz and Humboldt, leaving 14 spots (Tolowa Dunes, Capitola,
+     Moonstone, Little River …) with a nearest transect at 1.5-2.4 km and
+     so no nearshore forecast at all. 2 km recovers 11 of them; the
+     remainder sit far enough out that a transect would be a weak claim
+     about local conditions;
   3. sanity: the bearing from the transect's backbeach point to the spot
      must sit within +/-90 deg of the shore normal, so a spot never snaps
      across a headland or harbor mouth to the wrong coastline face. Spots
@@ -32,7 +38,7 @@ TABLE_FILE = os.path.join(BASE_DIR, '..', 'data', 'mop_transects.csv')
 CACHE_FILE = os.path.join(BASE_DIR, '..', 'data', 'mop_cache',
                           'transect_map.json')
 
-MAX_DIST_KM = 1.5
+MAX_DIST_KM = 2.0
 BEARING_SKIP_KM = 0.3
 KM_PER_DEG = 111.32
 
@@ -100,12 +106,20 @@ def _load_map():
 
 
 def transect_for(spot):
-    """Memoized transect label for a spot, or None if no transect fits."""
+    """Memoized transect label for a spot, or None if no transect fits.
+
+    Only hits are memoized. Caching a miss would pin the spot to "no
+    transect" for as long as the cache survives — and CI persists it across
+    runs — so a later MAX_DIST_KM raise or transect-table refresh would
+    silently not apply to exactly the spots it was meant to fix.
+    """
     cached = _load_map()
-    if spot.slug in cached:
+    if cached.get(spot.slug):
         return cached[spot.slug]
     picked = select_transect(spot.latitude, spot.longitude)
-    cached[spot.slug] = picked[0] if picked else None
+    if not picked:
+        return None
+    cached[spot.slug] = picked[0]
     os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
     with open(CACHE_FILE, 'w') as f:
         json.dump(cached, f, indent=1, sort_keys=True)
