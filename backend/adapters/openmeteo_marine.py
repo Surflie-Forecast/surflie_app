@@ -6,14 +6,20 @@ with the first entry of MODELS (NCEP GFS Wave) as the default. Model choice
 and ordering come from data_exploration/model_exploration_devereaux.ipynb.
 
 A model's nearest grid cell can be dead nearshore even with
-cell_selection=sea — GFS Wave's 25 km land-sea mask returns all-zero inside
-the Santa Barbara Channel at C st. When that happens the model is re-sampled
-at increasing seaward offsets (one, then two, 25 km cells; westward
+cell_selection=sea — a 25 km land-sea mask returns all-zero inside the
+Santa Barbara Channel at C st. When that happens the model is re-sampled at
+increasing seaward offsets (one, then two, 0.25 deg steps; westward
 directions first for a west coast) until a live cell answers, mirroring the
-nearest-valid-water-cell logic of the MOP adapter.
+nearest-valid-water-cell logic of the MOP adapter. The finer grids rarely
+need it: measured 2026-08-03, GFS Wave 0.16 deg resolved a live cell at all
+276 spots' own coordinates, against ~155 needing the offset search on the
+0.25 deg grid, which also displaced some spots (Malibu, Topanga) 30+ km
+offshore — past the Channel Islands shadow line that decides their swell.
 
-Not every model serves every variable (ECMWF WAM is Hs-only); missing
-variables simply yield no rows. A single model failing degrades to the
+Not every model serves every variable; missing variables simply yield no
+rows. ECMWF WAM publishes only combined Hs/period/direction — no swell
+partition at either resolution, so the 9 km domain loses nothing the 25 km
+one had (verified against the API 2026-08-03). A single model failing degrades to the
 remaining models, never the whole source: the adapter only fails if no
 model returned anything.
 
@@ -42,11 +48,9 @@ META_SLUGS = {'gwam': 'dwd_gwam'}
 
 # api model name -> source tag (the store/builders contract), preference order
 MODELS = [
-    ('ncep_gfswave025', 'openmeteo:gfswave025'),
+    ('ncep_gfswave016', 'openmeteo:gfswave016'),
     ('meteofrance_wave', 'openmeteo:mfwam'),
     ('ecmwf_wam', 'openmeteo:ecmwf_wam9'),
-    ('ecmwf_wam025', 'openmeteo:ecmwf_wam25'),
-    ('gwam', 'openmeteo:gwam'),
 ]
 
 # wave_height (combined Hs — what a buoy measures) is the displayed "wave";

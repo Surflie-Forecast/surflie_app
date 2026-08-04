@@ -80,7 +80,7 @@ class SkillScoring(unittest.TestCase):
         day1 = datetime(2026, 7, 18, 2, 0, tzinfo=timezone.utc)
         _write_dump(skill.STORE_DUMP,
                     [(day1 + timedelta(hours=6), 'wave_height', 1.0,
-                      'openmeteo:gfswave025')])
+                      'openmeteo:gfswave016')])
         skill.score_spots([FakeSpot()], self.api, now=day1)
         later = day1 + timedelta(days=skill.MAX_RUN_AGE_DAYS + 1)
         _write_dump(skill.STORE_DUMP, [])

@@ -338,12 +338,10 @@ function updateStar() {
 // variables (Hs + peak period/direction) at a shorter horizon (~5-8 days),
 // the sharpest local data.
 const ALARM_MODELS = [
-    { id: 'gfswave025', label: 'GFS Wave 25km', full: true },
+    { id: 'gfswave016', label: 'GFS Wave 16km', full: true },
     { id: 'mfwam', label: 'MFWAM 8km', full: true },
-    { id: 'gwam', label: 'DWD GWAM 25km', full: true },
     { id: 'mop', label: 'CDIP MOP (nearshore)', full: true },
     { id: 'ecmwf_wam9', label: 'ECMWF WAM 9km', full: false },
-    { id: 'ecmwf_wam25', label: 'ECMWF WAM 25km', full: false },
 ];
 const ALARM_MODELS_BUOY = ALARM_MODELS;
 

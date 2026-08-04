@@ -31,11 +31,9 @@ RATING_HOURS = (7, 19)     # local hours (inclusive) considered for the daily ra
 # preference order must match backend/adapters/openmeteo_marine.py; the app
 # displays the first model with usable data at each spot.
 WAVE_MODELS = {
-    'openmeteo:gfswave025': 'GFS Wave 25km',
+    'openmeteo:gfswave016': 'GFS Wave 16km',
     'openmeteo:mfwam': 'MFWAM 8km',
     'openmeteo:ecmwf_wam9': 'ECMWF WAM 9km',
-    'openmeteo:ecmwf_wam25': 'ECMWF WAM 25km',
-    'openmeteo:gwam': 'DWD GWAM 25km',
     # Nearshore products, after every global model: they act as last-resort
     # display picks but mainly feed the comparison overlay (our salix
     # forecast is what skill scoring evaluates before any promotion).

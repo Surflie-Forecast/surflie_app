@@ -371,11 +371,9 @@ document.querySelectorAll('.unit-toggle').forEach(t =>
 // sharing the bars' y-scale and time axis (bars = default model).
 
 const MODEL_COLORS = {
-    gfswave025: '#131929',
+    gfswave016: '#131929',
     mfwam: '#f59e0b',
     ecmwf_wam9: '#7c3aed',
-    ecmwf_wam25: '#c084fc',
-    gwam: '#10b981',
     mop: '#e34948', // notebook-reserved MOP red
     // Transect (~100 m) forecast: same model family as the grid, so a
     // darker shade of the MOP red — kin to the grid line, but separable.
@@ -1045,9 +1043,9 @@ const BUOY_INK = '#0b0b0b'; // observations are ink, not a series hue
 
 // Same hues the site's models view shows: there GFS Wave (the usual default)
 // is drawn in the bars' blue, so the buoy panel matches — and the near-black
-// MODEL_COLORS.gfswave025 would collide with the ink observation dots here.
+// MODEL_COLORS.gfswave016 would collide with the ink observation dots here.
 // MOP keeps its reserved red.
-const BUOY_MODEL_COLORS = { ...MODEL_COLORS, gfswave025: '#38bdf8' };
+const BUOY_MODEL_COLORS = { ...MODEL_COLORS, gfswave016: '#38bdf8' };
 
 function setupBuoyCompare(spotName) {
     const btn = document.getElementById('buoyCompareBtn');

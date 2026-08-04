@@ -21,8 +21,8 @@ on:
   schedule:
     # Twice daily, phased to when new model runs land on Open-Meteo (measured
     # from marine-api.open-meteo.com/data/{model}/static/meta.json, July
-    # 2026): GFS Wave ~H+5.3h, ECMWF WAM9 ~H+6.2h, WAM25 ~H+7.0h after each
-    # 00/06/12/18Z init; MFWAM lands ~00:05/12:05, GWAM ~04:25/16:25 UTC.
+    # 2026): GFS Wave ~H+5.3h, ECMWF WAM9 ~H+6.2h after each 00/06/12/18Z
+    # init; MFWAM lands ~00:05/12:05 UTC.
     # 01:45 catches the 00Z MFWAM + prior GFS/WAM; 13:45 the 12Z MFWAM +
     # ~06Z GFS/WAM. Cut from 4x to 2x/day to stay in the Actions free tier
     # at 276 spots (the 276-spot build is ~15-25 min via CDIP's slow THREDDS

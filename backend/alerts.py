@@ -11,7 +11,7 @@ An alarm targets a spot or buoy, selects forecast models, and sets any
 subset of conditions (null = ignore):
 
     min_height_m   combined Hs >= x         all models
-    min_period_s   swell period >= x        gfswave025 / mfwam / gwam only
+    min_period_s   swell period >= x        gfswave016 / mfwam only
     dir_min/max    swell direction in range (wraps 360), same models
     max_wind_kts   wind speed <= x          spots only (GFS)
     wind_dir_*     wind direction in range  spots only
@@ -54,13 +54,25 @@ ALERTS_FROM = os.environ.get('ALERTS_FROM', 'Surflie <onboarding@resend.dev>')
 DRY_RUN = os.environ.get('ALERTS_DRY_RUN') == '1'
 
 # Alarm with empty models[] watches the app's default wave model
-DEFAULT_MODEL = 'gfswave025'
+DEFAULT_MODEL = 'gfswave016'
 
 WIND_SOURCE = 'openmeteo:gfs'
 MODEL_LABELS = {
-    'mop': 'CDIP MOP', 'gfswave025': 'GFS Wave 25km', 'mfwam': 'MFWAM 8km',
-    'ecmwf_wam9': 'ECMWF WAM 9km', 'ecmwf_wam25': 'ECMWF WAM 25km',
-    'gwam': 'DWD GWAM 25km',
+    'mop': 'CDIP MOP', 'gfswave016': 'GFS Wave 16km', 'mfwam': 'MFWAM 8km',
+    'ecmwf_wam9': 'ECMWF WAM 9km',
+}
+
+# Models retired 2026-08-03 -> their replacement. Alarms saved before the
+# switch still name the old ids in Supabase; without remapping they would
+# select a model the artifact no longer carries and silently never fire.
+# gfswave025 -> the same NCEP model on the finer 0.16 deg grid;
+# ecmwf_wam25 -> the same ECMWF model at 9 km (identical variable set);
+# gwam -> MFWAM, the nearest survivor that also serves swell period and
+# direction, so period/direction alarms keep working (ECMWF is Hs-only).
+RETIRED_MODELS = {
+    'gfswave025': 'gfswave016',
+    'ecmwf_wam25': 'ecmwf_wam9',
+    'gwam': 'mfwam',
 }
 
 
@@ -219,6 +231,10 @@ def _window(hours, start):
 def evaluate(alarm, hours_by_model, now):
     """(window_start, window_end, matched_model_ids) or None."""
     selected = alarm.get('models') or [DEFAULT_MODEL]
+    # Retired ids map to their replacement, de-duplicated: an alarm that
+    # watched both ECMWF resolutions collapses to the surviving 9 km one
+    # rather than counting it twice under require_all_models.
+    selected = list(dict.fromkeys(RETIRED_MODELS.get(m, m) for m in selected))
     snooze = alarm.get('snooze_until')
     after = now
     if snooze:

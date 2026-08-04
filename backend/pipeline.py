@@ -9,9 +9,11 @@ new run since our last successful fetch (per-model meta.json vs the stamps
 in data/model_state.json — see openmeteo_marine.plan_models). Skipped
 models' rows are carried forward from the previous run's store dump
 (data/store.csv), so builders see the full model set either way; CI
-persists both files in the actions cache. With the 01:45/07:45/13:45/19:45
-UTC schedule, the twice-daily models (MFWAM, GWAM) each skip 2 of 4 runs
-with zero freshness loss. Local runs (no flag) always fetch everything.
+persists both files in the actions cache. On the 01:45/13:45 UTC schedule
+the twice-daily MFWAM skips a run whenever its 00Z/12Z publish hasn't
+landed yet, with zero freshness loss. Local runs (no flag) fetch
+everything — which on a 276-spot set is enough Open-Meteo calls to hit the
+free tier's hourly cap if repeated back-to-back.
 
 Exits non-zero if any CRITICAL source produced no data for any spot, so the
 CI deploy is skipped and the previously published snapshot stays live.
@@ -82,9 +84,9 @@ _PARTITION_VARS = {'swell2_height', 'swell2_period', 'swell2_direction',
                    'swell3_height', 'swell3_period', 'swell3_direction',
                    'windwave_height', 'windwave_period', 'windwave_direction'}
 _EXPECTED_VARS = {
-    'openmeteo:gfswave025': _BASE_WAVE_VARS | _PARTITION_VARS,
+    'openmeteo:gfswave016': _BASE_WAVE_VARS | _PARTITION_VARS,
     'openmeteo:mfwam': _BASE_WAVE_VARS | _PARTITION_VARS,
-    # ECMWF WAM / GWAM publish no (or minimal) partition — base only.
+    # ECMWF WAM publishes no partition at either resolution — base only.
 }
 
 
@@ -181,17 +183,28 @@ def main():
     # A model that was DUE but produced nothing (transient timeout, upstream
     # 5xx) must not simply vanish: _pick_wave_source would silently fall
     # through to a lesser model — e.g. GFS Wave timing out dropped every spot
-    # onto partition-less GWAM, losing the swell breakdown site-wide. Serving
-    # its previous rows keeps the display model stable across a blip.
-    if due_models:
+    # onto a shorter-horizon model, losing days off the end of the forecast.
+    # Serving its previous rows keeps the display model stable across a blip.
+    # Guarding this on `due_models` meant it only ran under --scheduled: a
+    # local run left due_models None and let a blipped model vanish from the
+    # artifact outright (observed 2026-08-03, a different model each run —
+    # once GFS Wave, dropping every spot onto MFWAM and the horizon from 16
+    # days to 9). Expected sources are the full MODELS list when nothing was
+    # planned, so the net holds either way.
+    expected = due_models if due_models is not None else openmeteo_marine.MODELS
+    if expected:
         got = store.sources()
-        missing = {source for _, source in due_models if source not in got}
+        missing = {source for _, source in expected if source not in got}
         if missing:
             recovered = _carry_forward_rows(missing)
             if recovered:
                 store.extend(recovered)
-                print(f"\n! due models with no rows ({', '.join(sorted(missing))}"
+                print(f"\n! wave models with no rows ({', '.join(sorted(missing))}"
                       f"); carried {len(recovered)} previous rows forward")
+            still = missing - store.sources()
+            if still:
+                print(f"\n! wave models missing with nothing to carry forward: "
+                      f"{', '.join(sorted(still))}")
 
     if skipped_sources:
         carried = _carry_forward_rows(skipped_sources)
