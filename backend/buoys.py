@@ -117,6 +117,21 @@ def _parse_utc(s):
     return datetime.fromisoformat(s.replace('Z', '+00:00'))
 
 
+def _num(raw):
+    """float from an ERDDAP cell, or None if it isn't a real measurement.
+    A station that's reporting but has no wave solution for a sample sends
+    the literal 'NaN' (not an empty cell), which is truthy and survives
+    float() — round() on it then dies. Fill values get the same treatment
+    as in the THREDDS path."""
+    if not raw:
+        return None
+    try:
+        v = float(raw)
+    except ValueError:
+        return None
+    return None if math.isnan(v) or v < FILL_CUTOFF else v
+
+
 # ---------------------------------------------------------------------------
 # Static roster (data/buoys.csv)
 
@@ -152,13 +167,15 @@ def refresh_roster(path=ROSTER_FILE):
     stations = {}
     for row in reader:
         sid, name = row['station_id'], row['metaStationName']
-        if not sid or ', CA ' not in name or not row['waveHs']:
+        lat, lon = _num(row['latitude']), _num(row['longitude'])
+        if (not sid or ', CA ' not in name or _num(row['waveHs']) is None
+                or lat is None or lon is None):
             continue
         stations[sid] = {
             'station_id': sid,
             'name': _pretty_name(name),
-            'latitude': float(row['latitude']),
-            'longitude': float(row['longitude']),
+            'latitude': lat,
+            'longitude': lon,
         }
 
     with open(path, 'w', newline='') as f:
@@ -188,18 +205,19 @@ def _fetch_observations(station_ids, start_utc):
     out = {}
     for row in reader:
         sid = row['station_id']
-        if sid not in wanted or not row['waveHs']:
+        hs = _num(row['waveHs'])
+        if sid not in wanted or hs is None:
             continue
         ts = _parse_utc(row['time'])
         e = out.setdefault(sid, {'observed': [], 'latest': None, '_ts': None})
-        e['observed'].append((ts, float(row['waveHs'])))
+        e['observed'].append((ts, hs))
         if e['_ts'] is None or ts > e['_ts']:  # don't trust row order
-            latest = {'time': _fmt_local(ts),
-                      'hs': round(float(row['waveHs']), 2)}
-            if row.get('waveTp'):
-                latest['tp'] = round(float(row['waveTp']), 1)
-            if row.get('waveDp'):
-                latest['dp'] = round(float(row['waveDp']))
+            latest = {'time': _fmt_local(ts), 'hs': round(hs, 2)}
+            tp, dp = _num(row.get('waveTp')), _num(row.get('waveDp'))
+            if tp is not None:
+                latest['tp'] = round(tp, 1)
+            if dp is not None:
+                latest['dp'] = round(dp)
             e['latest'], e['_ts'] = latest, ts
     for e in out.values():
         e['observed'].sort()
@@ -219,10 +237,12 @@ def _fetch_latest_sst(station_ids, since_utc):
     reader = csv.DictReader(StringIO(r.text))
     next(reader)  # units row
     wanted = set(station_ids)
-    return {
-        row['station_id']: round(float(row['sstSeaSurfaceTemperature']), 1)
-        for row in reader
-        if row['station_id'] in wanted and row['sstSeaSurfaceTemperature']}
+    out = {}
+    for row in reader:
+        sst = _num(row['sstSeaSurfaceTemperature'])
+        if row['station_id'] in wanted and sst is not None:
+            out[row['station_id']] = round(sst, 1)
+    return out
 
 
 def _fetch_models(roster, start_utc, end_utc, skipped_sources=()):
