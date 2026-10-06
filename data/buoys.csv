@@ -1,27 +1,41 @@
-station_id,name,latitude,longitude
-028,Santa Monica Bay,33.859932,-118.6411
-029,Point Reyes,37.9415,-123.4645
-045,Oceanside Offshore,33.1808,-117.475
-067,San Nicolas Island,33.2255,-119.8915
-071,Harvest,34.4515,-120.78
-076,Diablo Canyon,35.203815,-120.859314
-092,San Pedro,33.61428,-118.31417
-094,Cape Mendocino,40.2915,-124.7475
-100,Torrey Pines Outer,32.93,-117.392
-103,Topanga Nearshore,34.02222,-118.57833
-142,San Francisco Bar,37.788,-122.6318
-153,Del Mar Nearshore,32.95654,-117.27956
-156,Monterey Canyon Outer,36.759167,-121.95028
-157,Point Sur,36.341637,-122.10962
-168,Humboldt Bay North Spit,40.8956,-124.358086
-191,Point Loma South,32.517532,-117.425285
-201,Scripps Nearshore,32.86785,-117.26667
-203,Santa Cruz Basin,33.7685,-119.563
-213,San Pedro South,33.576168,-118.181786
-215,Long Beach Channel,33.7002,-118.2006
-220,Mission Bay West,32.749416,-117.4985
-222,Santa Lucia Escarpment,34.774,-121.491
-262,Leucadia Nearshore,33.062077,-117.31407
-264,Red Beach Nearshore,33.29076,-117.50146
-271,Green Beach Offshore,33.336388,-117.65861
-284,Capistrano Beach Nearshore,33.445168,-117.68015
+station_id,name,latitude,longitude,source
+028,Santa Monica Bay,33.859932,-118.6411,cdip
+029,Point Reyes,37.9415,-123.4645,cdip
+045,Oceanside Offshore,33.1808,-117.475,cdip
+067,San Nicolas Island,33.2255,-119.8915,cdip
+071,Harvest,34.4515,-120.78,cdip
+076,Diablo Canyon,35.203815,-120.859314,cdip
+092,San Pedro,33.61428,-118.31417,cdip
+094,Cape Mendocino,40.2915,-124.7475,cdip
+100,Torrey Pines Outer,32.93,-117.392,cdip
+103,Topanga Nearshore,34.02222,-118.57833,cdip
+142,San Francisco Bar,37.788,-122.6318,cdip
+153,Del Mar Nearshore,32.95654,-117.27956,cdip
+156,Monterey Canyon Outer,36.759167,-121.95028,cdip
+157,Point Sur,36.341637,-122.10962,cdip
+168,Humboldt Bay North Spit,40.8956,-124.358086,cdip
+191,Point Loma South,32.517532,-117.425285,cdip
+201,Scripps Nearshore,32.86785,-117.26667,cdip
+203,Santa Cruz Basin,33.7685,-119.563,cdip
+213,San Pedro South,33.576168,-118.181786,cdip
+215,Long Beach Channel,33.7002,-118.2006,cdip
+220,Mission Bay West,32.749416,-117.4985,cdip
+222,Santa Lucia Escarpment,34.774,-121.491,cdip
+262,Leucadia Nearshore,33.062077,-117.31407,cdip
+264,Red Beach Nearshore,33.29076,-117.50146,cdip
+271,Green Beach Offshore,33.336388,-117.65861,cdip
+284,Capistrano Beach Nearshore,33.445168,-117.68015,cdip
+46011,Santa Maria,34.937,-120.999,ndbc
+46013,Bodega Bay,38.235,-123.317,ndbc
+46014,Point Arena,39.225,-123.98,ndbc
+46022,Eel River,40.716,-124.54,ndbc
+46025,Santa Monica Basin,33.765,-119.077,ndbc
+46026,San Francisco Offshore,37.75,-122.838,ndbc
+46027,St Georges,41.84,-124.382,ndbc
+46028,Cape San Martin,35.763,-121.9,ndbc
+46042,Monterey Offshore,36.787,-122.408,ndbc
+46047,Tanner Bank,32.418,-119.535,ndbc
+46053,East Santa Barbara,34.246,-119.842,ndbc
+46054,West Santa Barbara,34.274,-120.468,ndbc
+46069,South Santa Rosa,33.657,-120.227,ndbc
+46086,San Clemente Basin,32.504,-118.029,ndbc

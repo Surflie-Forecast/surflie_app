@@ -11,6 +11,17 @@ Outputs:
     api/buoys.json          the roster (id, name, position, stale flag)
     api/buoys/{id}.json     observed + MOP + per-model Hs, one per buoy
 
+TWO observation sources, split by the roster's `source` column:
+
+  - CDIP (`cdip`, the default for a blank column) — the nearshore Waverider
+    array. Batched ERDDAP queries, plus the MOP forecast at the exact site.
+  - NDBC (`ndbc`) — NOAA's offshore buoys, for the stations CDIP doesn't
+    operate. OBSERVATIONS ONLY: one realtime2 text file per station, SST
+    included inline. They have no MOP transect, so their only forecast is
+    the global models re-fetched at their coordinates. NDBC also mirrors the
+    CDIP buoys at lower resolution — we deliberately do NOT use it for
+    those; CDIP is the operator and the better source.
+
 WHICH buoys is static: data/buoys.csv, committed like locations.csv, is the
 roster the scheduled pipeline builds — no per-run discovery, so the set of
 detail files never changes on its own. Refresh it explicitly with
@@ -19,9 +30,11 @@ detail files never changes on its own. Refresh it explicitly with
 
 which re-queries ERDDAP for active California stations ("active" = an
 observation within ACTIVE_WITHIN_H hours, "California" = ', CA ' in the
-station name) and rewrites the CSV for you to review and commit. Every
-roster buoy gets a detail file, because the frontend lets the user open ANY
-buoy (map markers and search) — not just each spot's assigned one.
+station name) and rewrites the CSV for you to review and commit. That
+discovery only knows CDIP; the hand-curated NDBC rows are carried through
+untouched. Every roster buoy gets a detail file, because the frontend lets
+the user open ANY buoy (map markers and search) — not just each spot's
+assigned one.
 
 The live data for that fixed roster is fetched with a fixed, small request
 budget (~300 sequential requests before; ~2 + 5 + 2/buoy now, the per-buoy
@@ -70,7 +83,7 @@ from builders import WAVE_MODELS, _write_json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROSTER_FILE = os.path.join(BASE_DIR, '..', 'data', 'buoys.csv')
-ROSTER_FIELDS = ['station_id', 'name', 'latitude', 'longitude']
+ROSTER_FIELDS = ['station_id', 'name', 'latitude', 'longitude', 'source']
 
 PAST_DAYS = 3            # observation window shown left of "now"
 # Fetch each model to its full native horizon: shorter models (MFWAM ~10,
@@ -91,6 +104,13 @@ MOP_WORKERS = 6          # THREDDS reads in flight; be polite to CDIP
 
 ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/wave_agg.csv'
 SST_ERDDAP = 'https://erddap.cdip.ucsd.edu/erddap/tabledap/sst_agg.csv'
+# NDBC: observations ONLY, for the offshore stations CDIP doesn't operate.
+# One text file per station, newest row first, 'MM' for missing. These buoys
+# have no MOP transect, so they carry the global models as their only
+# forecast — see build_buoys.
+NDBC_REALTIME = 'https://www.ndbc.noaa.gov/data/realtime2/{sid}.txt'
+NDBC_WORKERS = 6         # one request per NDBC station; be polite to NOAA
+SRC_CDIP, SRC_NDBC = 'cdip', 'ndbc'
 MOP_URL = ('https://thredds.cdip.ucsd.edu/thredds/dodsC/'
            'cdip/model/MOP_validation/BP{sid}_forecast.nc')
 FILL_CUTOFF = -100.0     # values below this are the -999.99 fill
@@ -117,26 +137,34 @@ def _parse_utc(s):
     return datetime.fromisoformat(s.replace('Z', '+00:00'))
 
 
-def _num(raw):
+def _num(raw, fill=True):
     """float from an ERDDAP cell, or None if it isn't a real measurement.
     A station that's reporting but has no wave solution for a sample sends
     the literal 'NaN' (not an empty cell), which is truthy and survives
     float() — round() on it then dies. Fill values get the same treatment
-    as in the THREDDS path."""
+    as in the THREDDS path.
+
+    fill=False skips the FILL_CUTOFF test, for values that are legitimately
+    very negative: every California longitude is below the cutoff."""
     if not raw:
         return None
     try:
         v = float(raw)
     except ValueError:
         return None
-    return None if math.isnan(v) or v < FILL_CUTOFF else v
+    if math.isnan(v):
+        return None
+    return None if fill and v < FILL_CUTOFF else v
 
 
 # ---------------------------------------------------------------------------
 # Static roster (data/buoys.csv)
 
 def load_roster(path=ROSTER_FILE):
-    """{station_id: {'name', 'latitude', 'longitude'}} from the static CSV."""
+    """{station_id: {'name', 'latitude', 'longitude', 'source'}} from the
+    static CSV. A blank/absent source column means CDIP — the column was
+    added when NDBC-only stations joined the roster, and every pre-existing
+    row is CDIP."""
     roster = {}
     with open(path, newline='') as f:
         for row in csv.DictReader(f):
@@ -144,8 +172,13 @@ def load_roster(path=ROSTER_FILE):
                 'name': row['name'].strip(),
                 'latitude': float(row['latitude']),
                 'longitude': float(row['longitude']),
+                'source': (row.get('source') or '').strip() or SRC_CDIP,
             }
     return roster
+
+
+def _by_source(roster, source):
+    return {sid: e for sid, e in roster.items() if e['source'] == source}
 
 
 def _pretty_name(meta_name):
@@ -167,7 +200,8 @@ def refresh_roster(path=ROSTER_FILE):
     stations = {}
     for row in reader:
         sid, name = row['station_id'], row['metaStationName']
-        lat, lon = _num(row['latitude']), _num(row['longitude'])
+        lat = _num(row['latitude'], fill=False)
+        lon = _num(row['longitude'], fill=False)
         if (not sid or ', CA ' not in name or _num(row['waveHs']) is None
                 or lat is None or lon is None):
             continue
@@ -176,15 +210,32 @@ def refresh_roster(path=ROSTER_FILE):
             'name': _pretty_name(name),
             'latitude': lat,
             'longitude': lon,
+            'source': SRC_CDIP,
         }
+
+    # This discovery only knows CDIP. NDBC rows are hand-curated (they have
+    # no equivalent "active CA stations" query), so carry them through
+    # untouched instead of dropping them on every roster refresh.
+    kept = 0
+    try:
+        for sid, e in load_roster(path).items():
+            if e['source'] != SRC_CDIP and sid not in stations:
+                stations[sid] = {'station_id': sid, 'name': e['name'],
+                                 'latitude': e['latitude'],
+                                 'longitude': e['longitude'],
+                                 'source': e['source']}
+                kept += 1
+    except FileNotFoundError:
+        pass
 
     with open(path, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=ROSTER_FIELDS)
         writer.writeheader()
         for sid in sorted(stations):
             writer.writerow(stations[sid])
-    print(f"✓ {path}: {len(stations)} active CA stations "
-          f"(reported within {ACTIVE_WITHIN_H}h)")
+    print(f"✓ {path}: {len(stations) - kept} active CA CDIP stations "
+          f"(reported within {ACTIVE_WITHIN_H}h)"
+          f"{f' + {kept} NDBC rows kept' if kept else ''}")
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +273,83 @@ def _fetch_observations(station_ids, start_utc):
     for e in out.values():
         e['observed'].sort()
         del e['_ts']
+    return out
+
+
+def _ndbc_rows(text):
+    """Data rows of an NDBC realtime2 file as lists of fields, newest first.
+    Two leading '#' lines are the header and the units."""
+    for line in text.splitlines():
+        line = line.strip()
+        if line and not line.startswith('#'):
+            fields = line.split()
+            if len(fields) >= 15:
+                yield fields
+
+
+def _ndbc_num(raw):
+    """NDBC writes 'MM' for a missing value; everything else is numeric."""
+    if raw == 'MM':
+        return None
+    try:
+        v = float(raw)
+    except ValueError:
+        return None
+    return None if math.isnan(v) or v < FILL_CUTOFF else v
+
+
+def _fetch_ndbc_observations(station_ids, start_utc):
+    """Same shape as _fetch_observations, for NDBC stations: {sid: {'observed',
+    'latest'}}. One request per station (NDBC has no batched endpoint like
+    ERDDAP's), run through a small pool.
+
+    Columns are positional in a fixed 19-field layout:
+        0-4 YY MM DD hh mm   8 WVHT(m)  9 DPD(s)  11 MWD(degT)  14 WTMP(degC)
+
+    SST rides along in the same file, so these stations need no second
+    request — unlike CDIP, where SST is a separate aggregate."""
+    def fetch(sid):
+        text = _get(NDBC_REALTIME.format(sid=sid)).text
+        observed, latest, latest_ts = [], None, None
+        for f in _ndbc_rows(text):
+            hs = _ndbc_num(f[8])
+            if hs is None:
+                continue  # met-only row: this station reports wind every
+                          # 10 min but waves only every 30-60
+            try:
+                ts = datetime(*(int(x) for x in f[:5]), tzinfo=timezone.utc)
+            except ValueError:
+                continue
+            if ts < start_utc:
+                break  # rows are newest-first, so everything below is older
+            observed.append((ts, hs))
+            if latest_ts is None or ts > latest_ts:
+                latest = {'time': _fmt_local(ts), 'hs': round(hs, 2)}
+                tp, dp = _ndbc_num(f[9]), _ndbc_num(f[11])
+                sst = _ndbc_num(f[14])
+                if tp is not None:
+                    latest['tp'] = round(tp, 1)
+                if dp is not None:
+                    latest['dp'] = round(dp)
+                if sst is not None:
+                    latest['sst'] = round(sst, 1)
+                latest_ts = ts
+        observed.sort()
+        return sid, observed, latest
+
+    out = {}
+    if not station_ids:
+        return out
+    with ThreadPoolExecutor(max_workers=NDBC_WORKERS) as pool:
+        futures = [pool.submit(fetch, sid) for sid in sorted(station_ids)]
+        for fut in futures:
+            try:
+                sid, observed, latest = fut.result()
+            except Exception as err:
+                print(f"    ! NDBC station fetch failed: {err}")
+                continue
+            if observed:
+                out[sid] = {'observed': observed, 'latest': latest}
     return out
 
 
@@ -478,16 +606,24 @@ def build_buoys(api_dir, spots=(), roster_path=ROSTER_FILE,
     # One request each: every station's 3-day obs series (+ latest Hs/Tp/Dp)
     # and every station's latest SST. Either failing degrades that field to
     # absent — never the whole build.
+    cdip_roster = _by_source(roster, SRC_CDIP)
+    ndbc_roster = _by_source(roster, SRC_NDBC)
     try:
-        obs = _fetch_observations(roster, start_utc)
+        obs = _fetch_observations(cdip_roster, start_utc)
     except Exception as err:
         obs = {}
         print(f"  ! observations fetch failed: {err}")
     try:
-        sst = _fetch_latest_sst(roster, now - timedelta(days=2))
+        sst = _fetch_latest_sst(cdip_roster, now - timedelta(days=2))
     except Exception as err:
         sst = {}
         print(f"  ! SST fetch failed: {err}")
+    # NDBC stations are independent per request, so a failure there can only
+    # cost those stations — never the CDIP ones.
+    try:
+        obs.update(_fetch_ndbc_observations(ndbc_roster, start_utc))
+    except Exception as err:
+        print(f"  ! NDBC observations fetch failed: {err}")
 
     # Per-run swell-aware pick among FRESH buoys: the "Closest buoy" button
     # opens the nearest station toward today's swell source, not just the
@@ -520,8 +656,11 @@ def build_buoys(api_dir, spots=(), roster_path=ROSTER_FILE,
         except Exception as err:
             return sid, [], err
 
+    # MOP is a CDIP product: NDBC stations have no transect and simply carry
+    # the global models as their forecast.
     with ThreadPoolExecutor(max_workers=MOP_WORKERS) as pool:
-        mop_results = list(pool.map(fetch_mop, sorted(roster)))
+        mop_results = list(pool.map(fetch_mop, sorted(cdip_roster)))
+    mop_results += [(sid, [], None) for sid in sorted(ndbc_roster)]
 
     for sid, mop, mop_err in mop_results:
         e = roster[sid]
@@ -557,7 +696,8 @@ def build_buoys(api_dir, spots=(), roster_path=ROSTER_FILE,
 
         _write_json(path, {
             'id': sid,
-            'label': f"CDIP {sid} — {e['name']}",
+            'label': f"{'NDBC' if e['source'] == SRC_NDBC else 'CDIP'} "
+                     f"{sid} — {e['name']}",
             'latitude': e['latitude'],
             'longitude': e['longitude'],
             'unit': 'm',
@@ -585,12 +725,21 @@ def refresh_observations(api_dir, roster_path=ROSTER_FILE):
     """
     now = datetime.now(timezone.utc)
     roster = load_roster(roster_path)
-    obs = _fetch_observations(roster, now - timedelta(days=PAST_DAYS))
+    start_utc = now - timedelta(days=PAST_DAYS)
+    obs = _fetch_observations(_by_source(roster, SRC_CDIP), start_utc)
     try:
-        sst = _fetch_latest_sst(roster, now - timedelta(days=2))
+        sst = _fetch_latest_sst(_by_source(roster, SRC_CDIP),
+                                now - timedelta(days=2))
     except Exception as err:
         sst = {}
         print(f"! SST fetch failed (continuing without): {err}")
+    # NDBC carries its own SST inline, so it needs no companion request. A
+    # failure here leaves those stations stale without touching CDIP's.
+    try:
+        obs.update(_fetch_ndbc_observations(
+            _by_source(roster, SRC_NDBC), start_utc))
+    except Exception as err:
+        print(f"! NDBC observations fetch failed (continuing without): {err}")
 
     index_path = os.path.join(api_dir, 'buoys.json')
     with open(index_path) as f:
@@ -623,6 +772,12 @@ def refresh_observations(api_dir, roster_path=ROSTER_FILE):
         raise RuntimeError('no buoy detail files found to patch')
     print(f"✓ observations refreshed: {patched} buoys patched, "
           f"{len(obs)} reporting")
+    # Roster stations with no detail file yet (newly added): this job only
+    # patches, so they stay absent until the next full build creates them.
+    missing = len(roster) - patched
+    if missing:
+        print(f"  note: {missing} roster buoys have no detail file yet — "
+              "they appear after the next full build")
 
 
 if __name__ == '__main__':
