@@ -741,6 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Open/Close Handlers
     function openMap() {
+        window.track('map_open');
         mapOverlay.classList.add('active');
         // Lets CSS clear the boundary strip for the site name row (the
         // compare buttons/legend drop below it while the map is open)
@@ -929,6 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 unitToggles.forEach(t => t.checked = newState);
 
                 updateDisplayedUnits();
+                window.track('unit_toggle', { unit: currentUnit });
             });
         });
 
@@ -1432,6 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Check if superseded
             if (renderId !== currentRenderId) return;
+            window.track('spot_view', { spot_name: spotName });
 
             lastRenderedSpot = data.spotName;
 

@@ -133,6 +133,7 @@ async function toggleFavorite(kind, id) {
         }
     } else {
         favs.add(key);
+        window.track('favorite_add', { kind, item_id: id });
         const { error } = await sb.from('favorites')
             .insert({ user_id: user.id, kind, item_id: id });
         if (error) {
@@ -1253,7 +1254,10 @@ let lastUserId; // dedupe: supabase fires several events for one login
 sb.auth.onAuthStateChange((event, session) => {
     const userId = session?.user?.id || null;
     if (event === 'INITIAL_SESSION' || userId !== lastUserId) {
+        if (event === 'SIGNED_IN' && userId) window.track('login', { method: 'magic_link' });
         lastUserId = userId;
+        window.gtag('set', { user_id: userId });
+        window.gtag('set', 'user_properties', { account: userId ? 'signed_in' : 'anonymous' });
         onSession(session);
     }
 });
