@@ -62,13 +62,29 @@ function currentFavTarget() {
     return currentSpot.slug ? { kind: 'spot', id: currentSpot.slug } : null;
 }
 
-// CDIP id -> station name, for the favorites list (buoys.json is tiny and
-// served from the same static api/ the app already fetches)
+// Station id -> name and network, for the favorites list (buoys.json is
+// tiny and served from the same static api/ the app already fetches)
 let buoyNames = {};
+let buoyNetworks = {};
 fetch('api/buoys.json')
     .then(r => r.ok ? r.json() : [])
     .catch(() => [])
-    .then(buoys => { buoys.forEach(b => { buoyNames[String(b.id)] = b.name; }); });
+    .then(buoys => {
+        buoys.forEach(b => {
+            buoyNames[String(b.id)] = b.name;
+            buoyNetworks[String(b.id)] = buoyNetwork(b);
+        });
+    });
+
+// 'CDIP' or 'NDBC' for a buoys.json entry. Files built before the source
+// field existed are all CDIP. Global: app.js uses it too.
+function buoyNetwork(b) {
+    return (b.source || 'cdip').toUpperCase();
+}
+
+function buoyLabel(id) {
+    return `${buoyNetworks[id] || 'CDIP'} ${id}`;
+}
 
 // ---------------------------------------------------------------------------
 // Data
@@ -223,7 +239,7 @@ async function saveUnits(units) {
 // Display label for a (kind, id) pair
 function favLabel(kind, id) {
     return kind === 'buoy'
-        ? `CDIP ${id} — ${buoyNames[id] || 'buoy'}`
+        ? `${buoyLabel(id)} — ${buoyNames[id] || 'buoy'}`
         : spotNameForSlug(id);
 }
 
@@ -1046,7 +1062,7 @@ function renderAccountPanel() {
         // the DEFAULT badge on the favorites row says what opens on visit;
         // this small action just moves it to the current view
         (canSetDefault
-            ? `<button id="setDefaultBtn" class="account-action-small">Set ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'current spot')} as default view</button>`
+            ? `<button id="setDefaultBtn" class="account-action-small">Set ${target.kind === 'buoy' ? buoyLabel(target.id) : (currentSpot.name || 'current spot')} as default view</button>`
             : '') +
         '</div>' +
         '<div class="account-group">' +
@@ -1064,7 +1080,7 @@ function renderAccountPanel() {
                 '</div>').join('')
             : '<p class="account-hint">No alerts yet.</p>') +
         (target
-            ? `<button id="newAlarmBtn" class="account-action">New alert for ${target.kind === 'buoy' ? `CDIP ${target.id}` : (currentSpot.name || 'this spot')}</button>`
+            ? `<button id="newAlarmBtn" class="account-action">New alert for ${target.kind === 'buoy' ? buoyLabel(target.id) : (currentSpot.name || 'this spot')}</button>`
             : '') +
         '</div>' +
         // Sessions: only when a SPOT owns the hero (buoys aren't surfed)

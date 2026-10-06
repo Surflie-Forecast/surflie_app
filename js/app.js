@@ -634,7 +634,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const buoys = await buoysPromise;
         buoys.forEach(b => {
             const m = buoyMarker(b, 6, true).addTo(map);
-            m.bindTooltip(`CDIP ${b.id} — ${b.name}`, { direction: 'top' });
+            m.bindTooltip(`${buoyNetwork(b)} ${b.id} — ${b.name}`, { direction: 'top' });
             m.on('click', () => {
                 closeMap();
                 if (typeof openBuoyView === 'function') openBuoyView(String(b.id));
@@ -1078,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 run: () => renderForecast(s.name),
             }));
         let buoyList = availableBuoys.filter(b =>
-            !q || b.name.toLowerCase().includes(q) || `cdip ${b.id}`.includes(q));
+            !q || b.name.toLowerCase().includes(q) || `${buoyNetwork(b).toLowerCase()} ${b.id}`.includes(q));
         if (!q) {
             const closest = window._spotBuoys[lastRenderedSpot];
             if (closest) {
@@ -1090,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const buoys = buoyList.map(b => ({
             kind: 'buoy',
-            label: `CDIP ${b.id} — ${b.name}`,
+            label: `${buoyNetwork(b)} ${b.id} — ${b.name}`,
             run: () => {
                 if (typeof openBuoyView === 'function') openBuoyView(String(b.id));
             },

@@ -1238,7 +1238,7 @@ async function openBuoyView(buoyId, viaToggle = false) {
             }
             const buoyName = (data.label || '').split('—').pop().trim();
             titleEl._buoyTitleHTML =
-                `CDIP ${esc(String(data.id))}` +
+                `${esc((data.label || 'CDIP').split(' ')[0])} ${esc(String(data.id))}` +
                 `<span class="hero-region">${esc(buoyName)}</span>` +
                 (subText ? `<span class="buoy-hero-sub">${esc(subText)}</span>` : '');
             titleEl.innerHTML = titleEl._buoyTitleHTML;

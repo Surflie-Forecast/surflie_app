@@ -365,6 +365,13 @@ def run():
             spot_names = {s['slug']: s['name'] for s in json.load(f)}
     except Exception:
         pass
+    buoy_networks = {}   # station id -> 'CDIP' / 'NDBC'
+    try:
+        with open(os.path.join(API_DIR, 'buoys.json')) as f:
+            buoy_networks = {b['id']: b.get('source', 'cdip').upper()
+                             for b in json.load(f)}
+    except Exception:
+        pass
 
     now = datetime.now(timezone.utc)
     hours_cache = {}
@@ -387,7 +394,8 @@ def run():
             label = spot_names.get(alarm['item_id'], alarm['item_id'])
             slug_hash = alarm['item_id']
         else:
-            label = f"CDIP {alarm['item_id']}"
+            label = (f"{buoy_networks.get(alarm['item_id'], 'CDIP')} "
+                     f"{alarm['item_id']}")
             slug_hash = None
         print(f"  ✓ alarm {alarm['id'][:8]} ({label}): match "
               f"{_fmt(start)} → {_fmt(end)} via {','.join(models)}"

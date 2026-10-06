@@ -637,6 +637,7 @@ def build_buoys(api_dir, spots=(), roster_path=ROSTER_FILE,
             'name': e['name'],
             'latitude': e['latitude'],
             'longitude': e['longitude'],
+            'source': e['source'],   # frontend labels it CDIP / NDBC
             **({} if sid in obs else {'stale': True}),
         }
         for sid, e in sorted(roster.items())
