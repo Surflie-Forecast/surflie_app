@@ -51,6 +51,13 @@ OVERLAY_ONLY = {
     'cdip:mop-nowcast': 'CDIP observed',
 }
 
+# Headline ("surf") source: where it has data, its Hs + peak period/direction
+# replace the display model's in bars, cards and the rating height. Skill vs
+# the MOP nowcast put it at ~0.19 m RMSE / ~0 bias against GFS Wave's 0.29 /
+# +0.10 (Oct 2026). The display model (wave_src) still supplies the swell-
+# train breakdown, the rating's period/direction, and any hour it lacks.
+SURF_SOURCE = 'surflie:nearshore'
+
 
 def _usable(series):
     """A model's series counts only if it has real (non-masked) values.
@@ -68,6 +75,19 @@ def _pick_wave_source(store, slug):
                 and store.series(slug, 'swell_period', src)):
             return src
     return None
+
+
+def _surf_series(store, slug, tz):
+    """Headline-source (height, period, direction) local series.
+
+    Points without a real height are dropped: salix artifacts end on a
+    0.0 m point with no period/direction.
+    """
+    h = {dt: v for dt, v in _local_series(
+        store, slug, 'wave_height', tz, source=SURF_SOURCE).items() if v > 0.01}
+    p = _local_series(store, slug, 'swell_period', tz, source=SURF_SOURCE)
+    d = _local_series(store, slug, 'swell_direction', tz, source=SURF_SOURCE)
+    return h, p, d
 
 
 def _write_json(path, data):
@@ -199,6 +219,18 @@ def build_spot(store, spot, out_dir):
               or swell_p)
     disp_d = (_local_series(store, spot.slug, 'wave_direction', tz, source=wave_src)
               or swell_d)
+    # Surf headline: the nearshore source's height and peak pair override
+    # the display model hour by hour where it has data. The rating keeps the
+    # display model's primary swell period/direction (swell_p/swell_d) but
+    # scores the headline height, so rating and bar agree on size.
+    model_h = wave_h
+    surf_h, surf_p, surf_d = _surf_series(store, spot.slug, tz)
+    surf_h = {dt: v for dt, v in surf_h.items() if dt in wave_h}
+    head_src = SURF_SOURCE if surf_h else wave_src
+    if surf_h and wave_src != SURF_SOURCE:
+        wave_h = {dt: surf_h.get(dt, v) for dt, v in wave_h.items()}
+        disp_p = {**disp_p, **{dt: surf_p[dt] for dt in surf_h if dt in surf_p}}
+        disp_d = {**disp_d, **{dt: surf_d[dt] for dt in surf_h if dt in surf_d}}
     wind_s = _local_series(store, spot.slug, 'wind_speed', tz)
     wind_d = _local_series(store, spot.slug, 'wind_direction', tz)
     tide_raw = _local_series(store, spot.slug, 'tide_height', tz)
@@ -294,8 +326,14 @@ def build_spot(store, spot, out_dir):
     # different resolutions, and seeing them disagree is itself signal.
     models_out = []
     for src, label in {**WAVE_MODELS, **OVERLAY_ONLY}.items():
-        series = (wave_h if src == wave_src
-                  else _local_series(store, spot.slug, 'wave_height', tz, source=src))
+        # Each line is its source's own series (the bars are the blended
+        # headline); the headline source's line is the default one.
+        if src == SURF_SOURCE and surf_h:
+            series = _surf_series(store, spot.slug, tz)[0]
+        elif src == wave_src:
+            series = model_h
+        else:
+            series = _local_series(store, spot.slug, 'wave_height', tz, source=src)
         if not _usable(series):
             continue
         # Full native resolution (hourly for the global models, 6-hourly for
@@ -324,7 +362,7 @@ def build_spot(store, spot, out_dir):
             models_out.append({
                 'id': src.split(':', 1)[1],
                 'label': label,
-                'default': src == wave_src,
+                'default': src == head_src,
                 'series': points,
             })
     if models_out:
@@ -344,7 +382,8 @@ def build_spot(store, spot, out_dir):
     print(f"  ✓ {spot.name}: {len(forecast)} days, "
           f"{len(hourly_by_date)} hourly files, "
           f"{len(tide_raw)} tide points, "
-          f"waves from {WAVE_MODELS[wave_src]}, "
+          f"waves from {WAVE_MODELS[wave_src]}"
+          f"{f' (surf from {WAVE_MODELS[head_src]})' if head_src != wave_src else ''}, "
           f"{len(models_out)} models in overlay")
     return True
 

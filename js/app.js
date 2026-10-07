@@ -1577,7 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="daily-summary">
                         <div class="metric-row main-row">
                             <div class="metric">
-                                <span class="metric-label">Swell Height</span>
+                                <span class="metric-label">Surf Height</span>
                                 <span class="metric-value" data-type="swell-height" data-val-m="${day.swell.height}">
                                     ${formatHeight(day.swell.height, currentUnit)}<span class="metric-unit">${getHeightUnit(currentUnit)}</span>
                                 </span>

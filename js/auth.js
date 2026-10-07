@@ -831,7 +831,7 @@ function sessionCondRowHtml(s) {
     // no time cell: the record's title already says when; the color bar
     // leads the row like in the cards
     return '<div class="session-cond-header">' +
-        '<span></span><span>Swell</span><span>Wind</span><span>Tide</span></div>' +
+        '<span></span><span>Surf</span><span>Wind</span><span>Tide</span></div>' +
         '<div class="hourly-row session-cond-row">' +
         `<div class="hourly-rating-bar" style="background-color: ${color};"></div>` +
         '<div class="hourly-swell">' +

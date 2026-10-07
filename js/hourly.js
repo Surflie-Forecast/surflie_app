@@ -37,7 +37,7 @@ async function toggleHourlyDetails(card, dateISO, spotName) {
 
         // Build hourly view
         let html = '<div class="hourly-container">';
-        html += '<div class="hourly-header"><span>Time</span><span></span><span>Swell</span><span>Wind</span></div>';
+        html += '<div class="hourly-header"><span>Time</span><span></span><span>Surf</span><span>Wind</span></div>';
 
         hourlyData.forEach((hour, hourIdx) => {
             const timeObj = new Date(hour.datetime);
