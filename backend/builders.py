@@ -18,7 +18,7 @@ import json
 import os
 import shutil
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from statistics import mean, median
 from zoneinfo import ZoneInfo
 
@@ -77,16 +77,45 @@ def _pick_wave_source(store, slug):
     return None
 
 
-def _surf_series(store, slug, tz):
+SURF_MAX_GAP_H = 3   # widest gap between headline points that gets filled
+
+
+def _fill_hours(series, circular=False):
+    """Linearly fill whole hours between points at most SURF_MAX_GAP_H apart.
+
+    Salix turns 3-hourly on the UTC grid after ~4.5 days, which never meets
+    the bars' local 3-hourly grid (UTC-7/-8); without filling, every later
+    bar fell back to the display model. Steps run in UTC so DST transitions
+    stay exact; directions interpolate along the shorter arc.
+    """
+    out = dict(series)
+    pts = sorted(series.items())
+    for (t0, v0), (t1, v1) in zip(pts, pts[1:]):
+        gap_h = (t1 - t0).total_seconds() / 3600
+        if gap_h <= 1 or gap_h > SURF_MAX_GAP_H:
+            continue
+        delta = ((v1 - v0 + 180) % 360 - 180) if circular else v1 - v0
+        u0 = t0.astimezone(timezone.utc)
+        for k in range(1, int(gap_h)):
+            t = (u0 + timedelta(hours=k)).astimezone(t0.tzinfo)
+            v = v0 + delta * k / gap_h
+            out[t] = v % 360 if circular else v
+    return dict(sorted(out.items()))
+
+
+def _surf_series(store, slug, tz, fill=True):
     """Headline-source (height, period, direction) local series.
 
     Points without a real height are dropped: salix artifacts end on a
-    0.0 m point with no period/direction.
+    0.0 m point with no period/direction. fill=True adds interpolated whole
+    hours (for the bars' grid); the overlay line uses the raw points.
     """
     h = {dt: v for dt, v in _local_series(
         store, slug, 'wave_height', tz, source=SURF_SOURCE).items() if v > 0.01}
     p = _local_series(store, slug, 'swell_period', tz, source=SURF_SOURCE)
     d = _local_series(store, slug, 'swell_direction', tz, source=SURF_SOURCE)
+    if fill:
+        h, p, d = _fill_hours(h), _fill_hours(p), _fill_hours(d, circular=True)
     return h, p, d
 
 
@@ -329,7 +358,7 @@ def build_spot(store, spot, out_dir):
         # Each line is its source's own series (the bars are the blended
         # headline); the headline source's line is the default one.
         if src == SURF_SOURCE and surf_h:
-            series = _surf_series(store, spot.slug, tz)[0]
+            series = _surf_series(store, spot.slug, tz, fill=False)[0]
         elif src == wave_src:
             series = model_h
         else:
