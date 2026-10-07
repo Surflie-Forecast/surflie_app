@@ -1677,7 +1677,6 @@ input:checked+.slider:before {
 
 /* Model view replaces the bars: keep the wrappers (they define the time
    axis, date labels, and day-highlight geometry), hide only the bars.
-   Bars sink and fade in step with the date labels dropping down.
    (ID-scoped: .chart-bar is declared three times further down and the last
    one would otherwise override the transition.) */
 #waveChartContainer .chart-bar {
@@ -1685,21 +1684,16 @@ input:checked+.slider:before {
     transform 0.65s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Bars fade in place: the model lines share their scale and baseline. */
 #waveChartContainer.models-active .chart-bar {
   opacity: 0;
-  transform: translateY(26px);
   pointer-events: none;
 }
 
-/* Date labels slide from the top of the plot to the bottom in model view
-   (inline top:0 is set in JS, hence the !important). The easing lands
-   softly: fast start, long gentle deceleration. */
+/* Date labels stay in the plot's top headroom in model view too: the lines
+   share the bars' scale, so a bottom strip would collide with low lines. */
 #waveChartContainer .axis-label {
   transition: top 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
-}
-
-#waveChartContainer.models-active .axis-label {
-  top: calc(100% - 20px) !important;
 }
 
 /* The day-highlight box shrinks from its top edge while the legend occupies
@@ -1784,10 +1778,10 @@ input:checked+.slider:before {
     height: calc(34px + var(--legend-h, 22px) + 2px);
   }
 
-  /* The 30px top padding is headroom for the bar chart's day labels; in a
-     compare view the legend already separates the plot from the strip, so
-     trim it and let the lines sit up close under the legend. */
-  body.models-mode .chart-container,
+  /* The top padding is headroom for the bar chart's day labels; the buoys
+     view trims it (the legend already separates the plot from the strip).
+     The models view keeps it: its lines share the bars' scale AND plot box,
+     so a taller plot would shift every line off its bar. */
   body.buoys-mode .chart-container {
     padding-top: 8px !important;
   }
@@ -2279,16 +2273,26 @@ body.buoys-mode .chart-container {
   transition: opacity 0.15s ease;
 }
 
-/* Models view: the day-highlight box starts lower (32px, under the legend
-   row) and the date row drops to the bottom strip — shift the label/line
-   down to hug the box top and stop the line above the bottom dates. */
+/* Models view (desktop): the legend row takes the label strip above the
+   plot and the date row stays at 40-54px, so the hour label drops just
+   below the dates and the line follows it. */
 #waveChartContainer.models-active .chart-crosshair {
-  top: 52px;
-  bottom: 30px;
+  top: 70px;
 }
 
 #waveChartContainer.models-active .chart-crosshair-label {
-  top: 36px;
+  top: 56px;
+}
+
+/* Mobile keeps the legend outside the chart: base positions apply. */
+@media (max-width: 768px) {
+  #waveChartContainer.models-active .chart-crosshair {
+    top: 40px;
+  }
+
+  #waveChartContainer.models-active .chart-crosshair-label {
+    top: 24px;
+  }
 }
 
 /* The buoys view builds its own crosshair off the chart's time scale (the

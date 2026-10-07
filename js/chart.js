@@ -371,7 +371,9 @@ document.querySelectorAll('.unit-toggle').forEach(t =>
 // sharing the bars' y-scale and time axis (bars = default model).
 
 const MODEL_COLORS = {
-    gfswave016: '#131929',
+    // Salix is built from GFS Wave (its offshore input), so GFS takes the
+    // bars' blue that Salix wears as the default line in the nearshore view.
+    gfswave016: '#38bdf8',
     mfwam: '#f59e0b',
     ecmwf_wam9: '#7c3aed',
     mop: '#e34948', // notebook-reserved MOP red
@@ -731,14 +733,15 @@ function drawModelOverlay(data) {
         }, []),
     }));
 
-    // The model view has its own y-scale: fit the highest line rather than
-    // clip everything above the bars' max. The bottom band stays clear for
-    // the date labels, which drop down there in model view.
+    // Same y-scale and geometry as the bars, so the default line lands on
+    // the bar tops it replaces; the scale only grows (with the bars' 1.2
+    // headroom) when a line would otherwise clip. Date labels stay in the
+    // top headroom, as in the bar view.
     let vMax = 0;
     projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
-    const scaleMax = Math.max(vMax, 0.1) * 1.1;
-    const yTop = top + 4;
-    const yBottom = top + barH - 26;
+    const scaleMax = Math.max(container._scaleMax || 0, vMax * 1.2, 0.1);
+    const yTop = top;
+    const yBottom = top + barH;
     const yFor = v => yTop + (yBottom - yTop) * (1 - v / scaleMax);
 
     const ns = 'http://www.w3.org/2000/svg';
@@ -1041,11 +1044,9 @@ const DEFAULT_BUOY = '071'; // Harvest
 // right — so every series is drawn to where its own data actually runs out.
 const BUOY_INK = '#0b0b0b'; // observations are ink, not a series hue
 
-// Same hues the site's models view shows: there GFS Wave (the usual default)
-// is drawn in the bars' blue, so the buoy panel matches — and the near-black
-// MODEL_COLORS.gfswave016 would collide with the ink observation dots here.
-// MOP keeps its reserved red.
-const BUOY_MODEL_COLORS = { ...MODEL_COLORS, gfswave016: '#38bdf8' };
+// Same hues the site's models view shows (GFS Wave in the bars' blue, clear
+// of the ink observation dots). MOP keeps its reserved red.
+const BUOY_MODEL_COLORS = MODEL_COLORS;
 
 function setupBuoyCompare(spotName) {
     const btn = document.getElementById('buoyCompareBtn');
