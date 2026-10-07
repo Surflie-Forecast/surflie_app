@@ -1690,10 +1690,28 @@ input:checked+.slider:before {
   pointer-events: none;
 }
 
-/* Date labels stay in the plot's top headroom in model view too: the lines
-   share the bars' scale, so a bottom strip would collide with low lines. */
+/* Model view: the chart grows a 24px strip at the BOTTOM (the box loses
+   its top to the legend row, and gets it back below) and the date labels
+   drop into it, under the plot floor. The plot itself keeps its exact box
+   (taller container, equally taller bottom padding), so the shared y-scale
+   lands on the same pixels as the bars. Inline top:0 on the labels is set
+   in JS, hence the !important. */
+#waveChartContainer {
+  transition: height 0.65s cubic-bezier(0.22, 1, 0.36, 1),
+    padding-bottom 0.65s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#waveChartContainer.models-active {
+  height: 224px;
+  padding-bottom: 34px;
+}
+
 #waveChartContainer .axis-label {
   transition: top 0.65s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.4s ease;
+}
+
+#waveChartContainer.models-active .axis-label {
+  top: calc(100% + 5px) !important;
 }
 
 /* The day-highlight box shrinks from its top edge while the legend occupies
@@ -2273,18 +2291,18 @@ body.buoys-mode .chart-container {
   transition: opacity 0.15s ease;
 }
 
-/* Models view (desktop): the legend row takes the label strip above the
-   plot and the date row stays at 40-54px, so the hour label drops just
-   below the dates and the line follows it. */
+/* Models view (desktop): the hour label hugs the box top (32px, under the
+   legend row); the line stops above the bottom date strip. */
 #waveChartContainer.models-active .chart-crosshair {
-  top: 70px;
+  top: 52px;
+  bottom: 34px;
 }
 
 #waveChartContainer.models-active .chart-crosshair-label {
-  top: 56px;
+  top: 36px;
 }
 
-/* Mobile keeps the legend outside the chart: base positions apply. */
+/* Mobile keeps the legend outside the chart: base label position. */
 @media (max-width: 768px) {
   #waveChartContainer.models-active .chart-crosshair {
     top: 40px;

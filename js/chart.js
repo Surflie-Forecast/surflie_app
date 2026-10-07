@@ -32,7 +32,17 @@ async function renderWaveHeightChart(spotName, forecastDays) {
                 .catch(err => null);
         });
 
-        const results = await Promise.all(promises);
+        // The models file is fetched alongside: every model line (nearshore
+        // and offshore) feeds the one shared y-scale, and the models view
+        // reuses this copy instead of refetching.
+        const modelsPromise = fetch(`api/models/${apiSpotId(spotName)}.json`)
+            .then(res => (res.ok ? res.json() : null))
+            .catch(() => null);
+
+        const [results, modelsFile] = await Promise.all(
+            [Promise.all(promises), modelsPromise]);
+        chartContainer._modelsFile =
+            modelsFile && modelsFile.models && modelsFile.models.length ? modelsFile : null;
 
         // Flatten data
         let allHours = [];
@@ -49,7 +59,7 @@ async function renderWaveHeightChart(spotName, forecastDays) {
             return;
         }
 
-        renderChart(allHours);
+        renderChart(allHours, chartContainer._modelsFile);
         setupModelCompare(spotName);
         setupBuoyCompare(spotName);
 
@@ -71,7 +81,7 @@ async function renderWaveHeightChart(spotName, forecastDays) {
     }
 }
 
-function renderChart(hourlyData) {
+function renderChart(hourlyData, modelsFile) {
     const chartContainer = document.getElementById('waveChartContainer');
     chartContainer.innerHTML = '';
 
@@ -99,12 +109,20 @@ function renderChart(hourlyData) {
     overlay.className = 'chart-highlight-overlay';
     chartContainer.appendChild(overlay);
 
-    // Determine max height for scaling
+    // One y-scale for bars and every model line (both families) over the
+    // bars' time window, so switching views never rescales anything.
     let maxVal = 0;
     hourlyData.forEach(h => {
         const val = parseFloat(h.swell.height);
         if (val > maxVal) maxVal = val;
     });
+    if (modelsFile && hourlyData.length) {
+        const tFirst = hourlyData[0].datetime;
+        const tLast = hourlyData[hourlyData.length - 1].datetime;
+        modelsFile.models.forEach(m => m.series.forEach(pt => {
+            if (pt.t >= tFirst && pt.t <= tLast && pt.v > maxVal) maxVal = pt.v;
+        }));
+    }
     const scaleMax = (maxVal > 0 ? maxVal : 1) * 1.2;
 
     // Track the date of the previous iteration
@@ -226,7 +244,7 @@ function renderChart(hourlyData) {
             // Position at TOP
             timeLabel.style.position = 'absolute';
             timeLabel.style.top = '0px';
-            timeLabel.style.left = '6px';
+            timeLabel.style.left = '8px';
             timeLabel.style.whiteSpace = 'nowrap';
             timeLabel.style.fontSize = '0.75rem';
             timeLabel.style.fontWeight = 'bold';
@@ -305,7 +323,7 @@ function removeYAxis() {
     section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
 }
 
-function renderYAxisTicks(scaleMax, yScreenFor) {
+function renderYAxisTicks(scaleMax, yScreenFor, withZero = false) {
     const section = document.getElementById('waveChartSection');
     if (!section) return;
     section.classList.add('models-gutters');
@@ -325,7 +343,7 @@ function renderYAxisTicks(scaleMax, yScreenFor) {
     ['left', 'right'].forEach(side => {
         const axis = document.createElement('div');
         axis.className = `chart-y-axis chart-y-axis--${side}`;
-        for (let v = step; v < maxDisp; v = Math.round((v + step) * 100) / 100) {
+        for (let v = withZero ? 0 : step; v < maxDisp; v = Math.round((v + step) * 100) / 100) {
             const tick = document.createElement('div');
             tick.className = 'y-tick';
             tick.style.top = `${(yScreenFor(v / factor) - sectionTop).toFixed(1)}px`;
@@ -352,9 +370,9 @@ function renderBarYAxis(container) {
     container._axisRender = () => renderBarYAxis(container);
 }
 
-function renderModelYAxis(svg, scaleMax, yForOffset) {
+function renderModelYAxis(svg, scaleMax, yForOffset, withZero = false) {
     renderYAxisTicks(scaleMax,
-        v => svg.getBoundingClientRect().top + yForOffset(v));
+        v => svg.getBoundingClientRect().top + yForOffset(v), withZero);
 }
 
 // Redraw the axis (and, in buoy view, the latest-observation cards) in the
@@ -589,9 +607,12 @@ async function toggleModelOverlay() {
     }
 
     try {
-        const res = await fetch(`api/models/${apiSpotId(btn.dataset.spot)}.json`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        let data = container._modelsFile;
+        if (!data) {
+            const res = await fetch(`api/models/${apiSpotId(btn.dataset.spot)}.json`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            data = await res.json();
+        }
         if (!data.models || data.models.length === 0) throw new Error('no models');
 
         clearBuoyView();
@@ -733,10 +754,10 @@ function drawModelOverlay(data) {
         }, []),
     }));
 
-    // Same y-scale and geometry as the bars, so the default line lands on
-    // the bar tops it replaces; the scale only grows (with the bars' 1.2
-    // headroom) when a line would otherwise clip. Date labels stay in the
-    // top headroom, as in the bar view.
+    // The bars' y-scale and geometry: that scale already spans every model
+    // line in both families (renderChart), so toggling views or families
+    // never rescales and the default line lands on the bar tops. The max()
+    // only guards a models file that failed to load with the bars.
     let vMax = 0;
     projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
     const scaleMax = Math.max(container._scaleMax || 0, vMax * 1.2, 0.1);
@@ -929,8 +950,9 @@ function drawModelOverlay(data) {
         svg.style.opacity = '1';
     }));
     container.classList.add('models-active');
-    renderModelYAxis(svg, scaleMax, yFor);
-    container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
+    // Lines float free of a bar floor, so this view labels its zero
+    renderModelYAxis(svg, scaleMax, yFor, true);
+    container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor, true);
 
     // The Nearshore/Offshore toggle (static markup beside the Models button):
     // shown only when the spot actually has both families to switch between.

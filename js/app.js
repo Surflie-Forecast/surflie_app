@@ -1358,6 +1358,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const sRect = startEl.getBoundingClientRect();
                 topPx = Math.min(topPx, toLocal(sRect.top));
                 bottomPx = Math.max(bottomPx, toLocal(sRect.bottom));
+                // Models view drops the date row below the plot floor: the
+                // frame reaches down to take it in, as on desktop.
+                const dateEl = container.classList.contains('models-active')
+                    && startEl.querySelector('.axis-label');
+                if (dateEl) {
+                    // Final resting spot (top: 100% + 5px of the column),
+                    // not the live rect: the label may still be sliding.
+                    bottomPx = Math.max(bottomPx,
+                        toLocal(sRect.bottom) + 5 + dateEl.offsetHeight + 4);
+                }
 
                 if (isFinite(topPx) && isFinite(bottomPx)) {
                     // Clamp the top only: the container is overflow-y visible,
