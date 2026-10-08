@@ -11,10 +11,10 @@ This regenerates js/rating.js (the JavaScript port) from the Python here.
 
 SCORING MODEL
 -------------
-The score is a continuous 0-100 number built from four INDEPENDENT factors,
-each in [0, 1], multiplied together:
+The score is a continuous 0-100 number built from five INDEPENDENT factors,
+each in [0, 1] (wind can nudge slightly above 1), multiplied together:
 
-    overall = energy x direction x wind x tide          (then x100)
+    overall = energy x direction x wind x tide x sea_state   (then x100)
 
 Multiplying (rather than adding) means any single dealbreaker - flat surf, a
 blocked swell, howling onshore wind - drags the whole score down, which is how
@@ -24,19 +24,33 @@ labels/colors the UI has always used (Poor -> Epic).
     energy     from swell HEIGHT and PERIOD, shaped by the spot's working
                size range. Short wind-swell is penalized; long groundswell
                rewarded. Above the spot's close-out size the score falls off.
-    direction  cosine falloff from the spot's swell window; ~0 when the swell
-               comes from a direction the break can't see.
-    wind       offshore grooms (boost), cross is neutral, onshore ruins it -
-               all scaled by speed, so calm wind is neutral regardless of dir.
+    direction  cosine falloff from the spot's swell window (each side of the
+               ideal bearing scaled to its own edge); ~0 when the swell comes
+               from a direction the break can't see.
+    wind       three zones by angle off straight offshore: offshore (within
+               offshore_width) grooms, cross-shore is near neutral and turns
+               slightly bad as it strengthens, onshore ruins it. The offshore
+               boost peaks at moderate speed; above STRONG_WIND_KT every
+               direction loses quality (storm wind is never clean).
     tide       optional per-spot preferred band; 1.0 (no effect) when a spot
                has no tide preference, so untuned spots are never penalized.
+    sea_state  steep, short-period storm seas (Hs / deep-water wavelength
+               above STORM_STEEPNESS) close out and break disorganised.
+
+The wind and sea-state constants were tuned against Surfline's own model
+ratings for Old Man's at Tourmaline (data_exploration/quality_labels/
+sweep_wind.py), restricted to settings that pass surf-sense guards (e.g.
+17 kt offshore on a clean swell is at most Fair, 12 kt offshore at least
+Good). The data pins the strong-wind onset (8-10 kt) and floor (0.15-0.2)
+and the cross-shore penalty; the rest is surf knowledge.
 
 PER-SPOT METADATA
 -----------------
 Each factor can be tuned per break via a SpotProfile (see build_profile()).
 When a spot supplies no metadata, a profile is DERIVED from its coastline
-orientation (computed from lat/lon by the caller) so new spots score sensibly
-with zero manual data entry. Hand-entered values always win over derived ones.
+orientation so new spots score sensibly with zero manual data entry; for
+mapped spots the caller passes the generated orientation (spots.py,
+data/spot_orientation.csv). Hand-entered values always win over derived ones.
 """
 import math
 
@@ -44,10 +58,14 @@ import math
 # ---------------------------------------------------------------------------
 # Buckets: the continuous 0-100 score maps to these five labels/colors.
 # `floor` is the inclusive lower bound of the score band. Order high -> low.
+# Epic is kept for near-perfect hours (all factors close to their best); the
+# 2026-10-07 recalibration moved its floor 80 -> 92 and widened Good (42-70)
+# and Excellent (70-92). On that day's 276-spot forecast: Epic 0.2% of days
+# (was 1.4%), Excellent 3.9%, Good 18.5%.
 # ---------------------------------------------------------------------------
 BUCKETS = [
-    {'name': 'Epic',      'color': '#a855f7', 'floor': 80},   # Purple
-    {'name': 'Excellent', 'color': '#15803d', 'floor': 62},   # Dark Green
+    {'name': 'Epic',      'color': '#a855f7', 'floor': 92},   # Purple
+    {'name': 'Excellent', 'color': '#15803d', 'floor': 70},   # Dark Green
     {'name': 'Good',      'color': '#22c55e', 'floor': 42},   # Green
     {'name': 'Fair',      'color': '#eab308', 'floor': 22},   # Yellow
     {'name': 'Poor',      'color': '#ef4444', 'floor': 0},    # Red
@@ -62,8 +80,11 @@ DEFAULT_PROFILE = {
     # Swell window the break receives, as (min_deg, ideal_deg, max_deg) where
     # the arc runs clockwise from min to max through ideal. 0..360, compass.
     'swell_min': 180.0, 'swell_ideal': 270.0, 'swell_max': 360.0,
-    # Wind direction (compass, "from") that is offshore/grooming for the break.
-    'offshore_dir': 0.0,
+    # Wind direction (compass, "from") that is offshore/grooming for the break,
+    # and how many degrees either side of it still count as fully offshore
+    # (the boost then fades out over WIND_FADE_DEG). Widen for cliff-backed or
+    # sheltered breaks that stay clean in quartering wind.
+    'offshore_dir': 0.0, 'offshore_width': 30.0,
     # Hs (m): where it starts breaking, the sweet spot, and where it closes out.
     'size_min': 0.5, 'size_ideal': 1.8, 'size_max': 4.0,
     # Optional tide band (m) where it works best; None => tide has no effect.
@@ -75,7 +96,8 @@ class SpotProfile:
     """Per-spot tuning for the score. Construct via build_profile()."""
 
     __slots__ = ('swell_min', 'swell_ideal', 'swell_max', 'offshore_dir',
-                 'size_min', 'size_ideal', 'size_max', 'tide_min', 'tide_max')
+                 'offshore_width', 'size_min', 'size_ideal', 'size_max',
+                 'tide_min', 'tide_max')
 
     def __init__(self, **kw):
         for k, v in DEFAULT_PROFILE.items():
@@ -113,12 +135,35 @@ def build_profile(meta=None, coast_normal=None):
 
 
 # ---------------------------------------------------------------------------
+# Wind and sea-state constants (see module docstring for provenance).
+# ---------------------------------------------------------------------------
+WIND_FADE_DEG = 30.0        # offshore boost fades to 0 over this many deg
+WIND_CROSS_END_DEG = 120.0  # beyond this off offshore, the onshore ramp starts
+WIND_CROSS_PENALTY = 0.15   # cross-shore penalty, as a fraction of onshore's
+WIND_ONSHORE_FULL_KT = 12.0  # cross/onshore penalty reaches full strength here
+WIND_BOOST = 0.12           # max offshore grooming boost
+WIND_BOOST_PEAK_KT = 8.0    # offshore boost peaks here...
+WIND_BOOST_END_KT = 15.0    # ...and is gone by here
+STRONG_WIND_KT = 10.0       # above this, every direction loses quality...
+STRONG_WIND_SPAN_KT = 8.0   # ...reaching the floor this many kt later
+STRONG_WIND_FLOOR = 0.2
+STORM_STEEPNESS = 0.013     # Hs / L0 where the storm penalty starts
+STORM_FLOOR = 0.5           # reached at twice that steepness
+
+
+# ---------------------------------------------------------------------------
 # Angle helpers
 # ---------------------------------------------------------------------------
 def _ang_diff(a, b):
     """Smallest absolute difference between two compass bearings, in [0, 180]."""
     d = abs((a - b) % 360.0)
     return d if d <= 180.0 else 360.0 - d
+
+
+def _signed_diff(a, b):
+    """Signed difference a - b in (-180, 180]; > 0 when a is clockwise of b."""
+    d = (a - b) % 360.0
+    return d - 360.0 if d > 180.0 else d
 
 
 # ---------------------------------------------------------------------------
@@ -164,10 +209,12 @@ def _direction_factor(swell_dir, p):
     ~0.5 at the window edge (half-width from ideal), then decaying smoothly to
     a small floor as the swell rotates outside the window - no cliff at the
     edge, since a swell 1 deg outside the arc is barely worse than 1 deg inside.
+    The half-width is that of the side the swell comes from, so a window
+    blocked by a headland on one side is narrower on that side only.
     """
     off = _ang_diff(swell_dir, p.swell_ideal)
-    half_width = max(_ang_diff(p.swell_ideal, p.swell_min),
-                     _ang_diff(p.swell_ideal, p.swell_max), 1.0)
+    edge = p.swell_max if _signed_diff(swell_dir, p.swell_ideal) >= 0 else p.swell_min
+    half_width = max(_ang_diff(p.swell_ideal, edge), 1.0)
     x = off / half_width
     if x <= 1.0:
         # Inside the window: 1.0 at ideal -> 0.5 at the edge.
@@ -178,19 +225,51 @@ def _direction_factor(swell_dir, p):
 
 
 def _wind_factor(speed, direction, p):
-    """Offshore grooms, onshore ruins, cross neutral - all scaled by speed."""
+    """Three zones by angle off straight offshore, scaled by speed:
+
+        0 .. width            offshore: grooming boost
+        width .. +FADE        boost fades out
+        .. CROSS_END          cross-shore: penalty grows to CROSS_PENALTY
+        .. 180                onshore: penalty grows to full at straight on
+
+    plus a direction-blind strong-wind penalty above STRONG_WIND_KT.
+    """
     if speed < 3.0:
         return 1.0  # glass / near-calm: great regardless of direction
-    # Alignment: 1 when wind is straight offshore, -1 when straight onshore.
-    off = _ang_diff(direction, p.offshore_dir)          # 0 => offshore
-    align = math.cos(math.radians(off))                 # +1 offshore .. -1 onshore
-    # Strength ramp: light wind matters little, strong wind matters a lot.
-    strength = min((speed - 3.0) / 17.0, 1.0)           # 0 at 3kt .. 1 at 20kt+
-    if align >= 0:
-        # Offshore: a modest boost that grows with wind, capped.
-        return 1.0 + 0.12 * align * strength
-    # Onshore/cross-onshore: penalty grows with both wind strength and alignment.
-    return max(0.1, 1.0 - (0.9 * (-align) * strength))
+    off = _ang_diff(direction, p.offshore_dir)          # 0 => straight offshore
+    zero = p.offshore_width + WIND_FADE_DEG
+    if off <= zero:
+        # Offshore: boost peaks at moderate wind, gone once it blows hard.
+        a = 1.0 if off <= p.offshore_width else (zero - off) / WIND_FADE_DEG
+        if speed <= WIND_BOOST_PEAK_KT:
+            bump = (speed - 3.0) / (WIND_BOOST_PEAK_KT - 3.0)
+        else:
+            bump = max(0.0, (WIND_BOOST_END_KT - speed)
+                       / (WIND_BOOST_END_KT - WIND_BOOST_PEAK_KT))
+        f = 1.0 + WIND_BOOST * a * bump
+    else:
+        # Cross-shore then onshore: penalty grows with angle and strength.
+        cross_end = max(WIND_CROSS_END_DEG, zero + 1.0)
+        if off <= cross_end:
+            a = WIND_CROSS_PENALTY * (off - zero) / (cross_end - zero)
+        else:
+            a = WIND_CROSS_PENALTY + (1.0 - WIND_CROSS_PENALTY) * (off - cross_end) / (180.0 - cross_end)
+        strength = min((speed - 3.0) / (WIND_ONSHORE_FULL_KT - 3.0), 1.0) ** 0.7
+        f = max(0.1, 1.0 - 0.9 * a * strength)
+    if speed > STRONG_WIND_KT:
+        f *= max(STRONG_WIND_FLOOR,
+                 1.0 - (1.0 - STRONG_WIND_FLOOR) * (speed - STRONG_WIND_KT) / STRONG_WIND_SPAN_KT)
+    return f
+
+
+def _sea_state_factor(height, period):
+    """Storm / close-out penalty from deep-water steepness Hs / L0
+    (L0 = 1.56 T^2 m): 1.0 for organised swell, falling to STORM_FLOOR as
+    short-period storm seas steepen."""
+    steep = height / (1.56 * max(period, 1.0) ** 2)
+    if steep <= STORM_STEEPNESS:
+        return 1.0
+    return max(STORM_FLOOR, 1.0 - (1.0 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS)
 
 
 def _tide_factor(tide, p):
@@ -212,13 +291,14 @@ def _tide_factor(tide, p):
 # ---------------------------------------------------------------------------
 def score_conditions(height, period, swell_dir, wind_speed, wind_dir,
                      tide=None, profile=None):
-    """Continuous 0-100 surf score from the four factors. See module docstring."""
+    """Continuous 0-100 surf score from the five factors. See module docstring."""
     p = profile or SpotProfile()
     energy = _energy_factor(height, period, p)
     direction = _direction_factor(swell_dir, p)
     wind = _wind_factor(wind_speed, wind_dir, p)
     tide_f = _tide_factor(tide, p)
-    raw = energy * direction * wind * tide_f
+    sea = _sea_state_factor(height, period)
+    raw = energy * direction * wind * tide_f * sea
     return max(0.0, min(100.0, raw * 100.0))
 
 
@@ -266,7 +346,11 @@ class RatingConfig:
         import json
         buckets_js = json.dumps(BUCKETS)
         default_js = json.dumps(DEFAULT_PROFILE)
-        return _JS_TEMPLATE.format(buckets=buckets_js, default=default_js)
+        consts = {k: v for k, v in globals().items()
+                  if k.startswith(('WIND_', 'STRONG_WIND_', 'STORM_'))}
+        consts_js = '\n'.join(f'const {k} = {json.dumps(v)};' for k, v in consts.items())
+        return _JS_TEMPLATE.format(buckets=buckets_js, default=default_js,
+                                   consts=consts_js)
 
 
 # ---------------------------------------------------------------------------
@@ -277,12 +361,13 @@ _JS_TEMPLATE = r"""// AUTO-GENERATED - DO NOT EDIT MANUALLY
 // Generated from backend/rating_config.py
 // To update, modify rating_config.py and run: python sync_rating_logic.py
 //
-// Continuous 0-100 surf score from four independent factors
-// (energy x direction x wind x tide), bucketed into five labels/colors.
+// Continuous 0-100 surf score from five independent factors
+// (energy x direction x wind x tide x sea state), bucketed into five labels/colors.
 // See backend/rating_config.py for the full model description.
 
 const RATING_BUCKETS = {buckets};
 const RATING_DEFAULT_PROFILE = {default};
+{consts}
 
 function _spotProfile(meta) {{
     const p = Object.assign({{}}, RATING_DEFAULT_PROFILE);
@@ -297,6 +382,11 @@ function _spotProfile(meta) {{
 function _angDiff(a, b) {{
     let d = Math.abs(((a - b) % 360 + 360) % 360);
     return d <= 180 ? d : 360 - d;
+}}
+
+function _signedDiff(a, b) {{
+    const d = ((a - b) % 360 + 360) % 360;
+    return d > 180 ? d - 360 : d;
 }}
 
 function _energyFactor(height, period, p) {{
@@ -324,9 +414,8 @@ function _energyFactor(height, period, p) {{
 
 function _directionFactor(swellDir, p) {{
     const off = _angDiff(swellDir, p.swell_ideal);
-    const halfWidth = Math.max(
-        _angDiff(p.swell_ideal, p.swell_min),
-        _angDiff(p.swell_ideal, p.swell_max), 1);
+    const edge = _signedDiff(swellDir, p.swell_ideal) >= 0 ? p.swell_max : p.swell_min;
+    const halfWidth = Math.max(_angDiff(p.swell_ideal, edge), 1);
     const x = off / halfWidth;
     if (x <= 1) return 0.5 + 0.5 * Math.cos(x * Math.PI / 2);
     const over = Math.min((off - halfWidth) / 45, 1);
@@ -336,10 +425,33 @@ function _directionFactor(swellDir, p) {{
 function _windFactor(speed, direction, p) {{
     if (speed < 3) return 1;
     const off = _angDiff(direction, p.offshore_dir);
-    const align = Math.cos(off * Math.PI / 180);
-    const strength = Math.min((speed - 3) / 17, 1);
-    if (align >= 0) return 1 + 0.12 * align * strength;
-    return Math.max(0.1, 1 - (0.9 * (-align) * strength));
+    const zero = p.offshore_width + WIND_FADE_DEG;
+    let f;
+    if (off <= zero) {{
+        const a = off <= p.offshore_width ? 1 : (zero - off) / WIND_FADE_DEG;
+        const bump = speed <= WIND_BOOST_PEAK_KT
+            ? (speed - 3) / (WIND_BOOST_PEAK_KT - 3)
+            : Math.max(0, (WIND_BOOST_END_KT - speed) / (WIND_BOOST_END_KT - WIND_BOOST_PEAK_KT));
+        f = 1 + WIND_BOOST * a * bump;
+    }} else {{
+        const crossEnd = Math.max(WIND_CROSS_END_DEG, zero + 1);
+        const a = off <= crossEnd
+            ? WIND_CROSS_PENALTY * (off - zero) / (crossEnd - zero)
+            : WIND_CROSS_PENALTY + (1 - WIND_CROSS_PENALTY) * (off - crossEnd) / (180 - crossEnd);
+        const strength = Math.pow(Math.min((speed - 3) / (WIND_ONSHORE_FULL_KT - 3), 1), 0.7);
+        f = Math.max(0.1, 1 - 0.9 * a * strength);
+    }}
+    if (speed > STRONG_WIND_KT) {{
+        f *= Math.max(STRONG_WIND_FLOOR,
+            1 - (1 - STRONG_WIND_FLOOR) * (speed - STRONG_WIND_KT) / STRONG_WIND_SPAN_KT);
+    }}
+    return f;
+}}
+
+function _seaStateFactor(height, period) {{
+    const steep = height / (1.56 * Math.pow(Math.max(period, 1), 2));
+    if (steep <= STORM_STEEPNESS) return 1;
+    return Math.max(STORM_FLOOR, 1 - (1 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS);
 }}
 
 function _tideFactor(tide, p) {{
@@ -355,7 +467,8 @@ function scoreConditions(height, period, swellDir, windSpeed, windDir, tide = nu
     const direction = _directionFactor(swellDir, p);
     const wind = _windFactor(windSpeed, windDir, p);
     const tideF = _tideFactor(tide, p);
-    const raw = energy * direction * wind * tideF;
+    const sea = _seaStateFactor(height, period);
+    const raw = energy * direction * wind * tideF * sea;
     return Math.max(0, Math.min(100, raw * 100));
 }}
 

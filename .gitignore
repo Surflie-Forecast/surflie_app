@@ -40,6 +40,9 @@ data/*
 !data/locations.csv
 !data/buoys.csv
 !data/mop_transects.csv
+# Generated locally by backend/build_spot_orientation.py (needs the Salix
+# grids, which CI does not have), so it is committed like a vendored table.
+!data/spot_orientation.csv
 _site/
 
 # Temporary files

@@ -228,9 +228,9 @@ def _tide_extremes(date_obj, tide_peaks, tide_raw):
 
 def build_spot(store, spot, out_dir):
     tz = ZoneInfo(spot.timezone)
-    # Rating profile: hand-entered CSV cells win; anything missing is derived
-    # from the spot's coastline orientation (swell window + offshore wind).
-    profile = build_profile(spot.rating_meta, coast_normal=spot.coast_normal)
+    # Rating profile: hand-entered CSV cells win over the generated
+    # orientation (spot_orientation.csv: swell window + offshore wind).
+    profile = build_profile(spot.profile_meta, coast_normal=spot.coast_normal)
     wave_src = _pick_wave_source(store, spot.slug)
     if wave_src is None:
         print(f"  ! no usable wave model for {spot.name}; skipping")

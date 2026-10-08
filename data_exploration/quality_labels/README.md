@@ -1,0 +1,192 @@
+# Quality labels: how Surfline does it vs. us
+
+Exploration branch `explore/quality-labels`. Nothing in the app is changed yet.
+
+## Our current system
+
+`backend/rating_config.py` (which generates `js/rating.js`):
+
+- score = energy × direction × wind × tide, scaled to 0–100.
+- Five buckets: **Poor** `#ef4444` (0), **Fair** `#eab308` (22), **Good** `#22c55e` (42),
+  **Excellent** `#15803d` (62), **Epic** `#a855f7` (80).
+- Fully automatic. Any hour can be labelled Epic if the model inputs line up.
+- Every spot in `locations.csv` has empty rating columns, so each profile is derived
+  from `Spot.coast_normal = 270`. That gives an offshore wind direction of 90°.
+
+## Surfline's system
+
+Sources: help center articles 36277684017819 (Surf Ratings & Colors) and
+35995874238491 (Observation Clarity), 4410127028251, and 40670765597467, read through
+the Zendesk API. The live site and `services.surfline.com` return a Cloudflare
+challenge (HTTP 403) to scripts, so they were not scraped.
+
+| API `rating.key` | value | bars | color (sampled from their image) | assigned by |
+|---|---|---|---|---|
+| VERY_POOR    | 0 | 1 | `#f1496a` pink-red  | model or forecaster |
+| POOR         | 1 | 2 | `#fd9500` orange    | model or forecaster |
+| POOR_TO_FAIR | 2 | 3 | `#ffce1c` yellow    | model or forecaster |
+| FAIR         | 3 | 4 | `#09d572` green     | model or forecaster |
+| FAIR_TO_GOOD | 4 | 5 | `#009371` teal      | model or forecaster (the model's ceiling) |
+| GOOD         | 5 | 5 | `#6751f4` indigo    | **forecaster only**, shown with an animation |
+| EPIC         | 6 | 5 | `#631ec7` purple    | **forecaster only** |
+
+What Surfline says about how it works:
+
+- **The model's ceiling is FAIR_TO_GOOD.** Only a forecaster who has watched the
+  surf can assign GOOD or EPIC. That is why the scale has 7 ratings but only 5 bars.
+- **Model inputs are breaking wave height, wind speed and wind direction only.**
+  Tide and wave shape are not included, and neither is swell analysis such as
+  spectra, energy or consistency.
+- **Ratings are per hour and relative to each spot's potential.** For example,
+  "Fair" at Pipeline is not the same as "Fair" at a beachbreak. Ratings are for
+  comparing days at one spot, not for comparing spots.
+- **Each spot has a configuration**, described as "a matrix of directions and periods
+  that we can adjust". Some spots are dialled in and others use basic logic. The API
+  exposes this as `optimalScore` (0/1/2) on the surf, on each swell, and on the wind,
+  and as a `directionType` (Onshore / Cross-shore / Offshore) for the wind.
+- **The model is trained on observations.** It is an ML model trained on 35 years of
+  forecaster observations, and forecaster corrections feed back into it.
+- **The UI shows where each rating came from** ("LOTUS model" vs. "Forecaster",
+  marked with an Observed badge).
+- **Users can switch color themes**: "Traffic Light" (the table above) or "Classic".
+  The Classic palette is only shown in screenshots, so we don't have its colors.
+- **The API returns a continuous `value`** (e.g. 2.67, 2.25) alongside the bucket key.
+  Like ours, it is a continuous score that gets bucketed.
+
+## Experiment: our engine on Surfline's own inputs
+
+`compare_surfline.py` takes 24 three-hourly Surfline API responses for Old Man's at
+Tourmaline (Feb 13–15 2023, a public sample in `TGOlson/surfline`) and scores the same
+hours with our engine. This spot is also in our `locations.csv`.
+
+```
+python data_exploration/quality_labels/compare_surfline.py
+```
+
+Spearman rank correlation with Surfline's `value`:
+
+- **+0.79** with the profile the app uses today (offshore = 90°).
+- **+0.42** when the profile uses offshore = 30°, the bearing Surfline's own
+  `directionType` labels imply. Using the more accurate wind direction makes the
+  agreement worse, for the reason in finding 1.
+
+Findings (n = 24, one spot, one swell event, so these are indicative only):
+
+1. **Strong wind is bad even when it's offshore.** In the Feb 14 storm (3.3–3.9 m Hs,
+   17–24 kt), Surfline rates **POOR**, including at 24 kt "Offshore". Our `_wind_factor`
+   gives offshore wind a boost that grows with speed, so with the corrected profile we
+   call those hours Excellent. A speed penalty is needed that applies in every
+   direction above roughly 15 kt, along with closeout handling for storm surf.
+2. **Our scale tops out too high.** On the clean offshore hours of Feb 15, Surfline's
+   model says FAIR_TO_GOOD and we say Excellent or Epic. Surfline deliberately keeps
+   its top two ratings for human observers. We have no observers, so a model-only
+   Epic will overclaim.
+3. **Light onshore wind on small days is penalised more by Surfline.** At about 1 m Hs,
+   7 s and 7–10 kt onshore, Surfline says POOR_TO_FAIR while we often say Good.
+4. **`coast_normal = 270` is wrong for Tourmaline.** Surfline's labels put offshore at
+   about 30°, and we use 90°. Every spot currently shares the same derived profile.
+
+## Possible directions (not implemented)
+
+- **Palette and scale.** Move to a 7-step scale (or 5 bars plus two reserved labels)
+  following Surfline's progression: red → orange → yellow → green → teal, with purple
+  reserved for the top. Cap model-only output at the equivalent of "Fair to Good",
+  unless we decide our model has earned higher.
+- **Wind.** Penalise strong wind in every direction and make the offshore boost peak
+  at moderate speeds.
+- **Per-spot offshore and swell window.** Fill these in `locations.csv`, perhaps
+  starting from a coastline dataset.
+- **Show the source of each rating** ("model") in the UI, the way Surfline does.
+- **Calibrate against more data.** One spot over three days is not enough. If Surfline
+  data can be collected legitimately (for example, logged manually from the app), fit
+  our score → bucket thresholds across several spots and seasons.
+
+## Step 1 implemented: spot orientation + wind rule (2026-10-07)
+
+**Orientation.** `backend/build_spot_orientation.py` writes `data/spot_orientation.csv`,
+which `spots.load_spots` reads as derived rating metadata (`locations.csv` columns
+still win; a new `offshore_width` column was added for hand tuning).
+
+- Facing = CDIP MOP shore normal at the spot's transect (the one the nearshore
+  forecast uses), averaged over the consecutive transects within ~±200 m of coast,
+  triangular weights. ±500 m / ±1 km averages flag a turning coast (spread > 20°).
+  CDIP's `1000` marker means "no normal" and is skipped.
+- 269 of 276 spots come from MOP; 7 (harbours, bays) use the centre of the open water.
+- Swell window = open-water arc within ±90° of facing, rays every 2° over the Salix
+  elevation grids. Only land within 30 km blocks: strict line of sight to 250 km made
+  distant islands walls (88 spots facing land). Channel Islands shadowing is not modelled.
+- Old Man's: facing 214°, offshore 34° (Surfline's labels imply ~30°).
+
+**Wind.** Three zones by angle off offshore (full boost within `offshore_width` = 30°,
+fading over 30°; cross-shore to 100° with a light penalty; onshore beyond), offshore
+boost peaking at 8 kt and gone by 15 kt, a direction-blind penalty from 12 kt to a
+0.4 floor at 20 kt, and a storm penalty from steepness Hs/L0 > 0.013. `sweep_wind.py`
+(414,720 configs) pinned down only the strong-wind onset, the cross-shore penalty and
+the storm steepness; the rest is surf knowledge. The swell direction factor now uses
+the half-width of the side the swell comes from.
+
+**Results.** Spearman vs Surfline (`compare_surfline.py`): **+0.90** with the app's
+profile (was +0.79; the old wind rule with the correct direction gave +0.42). Storm
+hours are now Poor (Surfline: POOR); clean Feb 15 hours are Good (Surfline:
+FAIR_TO_GOOD); nothing reaches Excellent/Epic. Across all 276 spots on the
+2026-10-07 store, Excellent+Epic days fall from 14.5% to 6.7%.
+
+Still open: the scale/colour choice (A/B/C above) and the model-only cap.
+
+**Bucket floors recalibrated (same day).** Epic kept for near-perfect hours:
+Good 42–70, Excellent 70–92, Epic 92+ (was 62 / 80). On the 2026-10-07 store, daily
+shares are Poor 41.4%, Fair 36.0%, Good 18.5%, Excellent 3.9%, Epic 0.2% (was 1.4%).
+Swell windows now bridge gaps up to 8° and keep the arc the break faces (Ventura
+Point: 152–264°, ideal 174°).
+
+**Wind retuned with guards (same day).** `sweep_wind.py` v2 searches 2.6M configs on
+the app's real Old Man's profile, keeping only those that pass ten surf-sense guards
+(e.g. 17 kt offshore on a clean swell ≤ Fair, 12 kt offshore ≥ Good). Applied: strong-
+wind penalty from 10 kt to a 0.2 floor at 18 kt, cross-shore penalty 0.15 of onshore
+out to 120°, onshore at full strength by 12 kt. Spearman **+0.92** (was +0.90, which
+failed three guards). The sample alone rewards ever-harsher wind penalties (only the
+four storm hours have strong wind), so the guards, not the data, set how harsh.
+Daily shares: Poor 41.8%, Fair 35.2%, Good 18.7%, Excellent 4.0%, Epic 0.3%.
+
+## To pick up later (not done)
+
+**Per-spot size range from slope + bottom type.** Every spot still uses the shared
+range (0.5 / 1.8 / 4.0 m Hs). Tested 2026-10-07 at Old Man's (only spot with
+Surfline data): a sweet spot >= 1.4 m keeps agreement at +0.925; "gentle = small"
+(2A) drops it to +0.890 (consistently, bootstrap); "steep sand closes out sooner"
+(2B) ties option 1 (+0.916, within noise) but gave Ghost Tree, a big-wave reef, the
+smallest sweet spot. Plan: 2B for sand beaches only, reefs/points keep the shared
+range unless hand-set; needs a `bottom_type` column (beach / reef / point).
+
+Bottom-type sources to check, in order (never Surfline: Cloudflare + ToS):
+1. NOAA ENC charts, seabed areas (SBDARE, NATSUR: sand / rock / gravel).
+2. California Seafloor Mapping Program substrate maps (likely starts ~10 m deep).
+3. OpenStreetMap (natural=reef / beach, surface=*); volunteer quality.
+4. Fallback: draft from spot names (Point, Reef, Cove, Jetty…) + "coast_turns"
+   flag, corrected by hand.
+
+**Ruled out for now.**
+- Breaking-height transform (Komar-Gaillard on offshore Hs): no better at ranking
+  Surfline's surf heights (+0.86 vs +0.87 for Hs) and worse for the rating (+0.889
+  vs +0.925; period counted twice). Salix nearshore Hs already covers sheltering.
+- Iribarren wave-shape factor: at one spot it is a mirror of wave steepness
+  (rank corr -1.00), so it adds nothing to the sea-state factor; every hour
+  classifies as spilling. Break-zone slope from NOAA CRM SoCal (1 arc-sec) matches
+  the 0-10 m average within ~30% at 9 of 11 spots (Malibu, Trestles ~1.8x steeper)
+  and rests on 1.4-5.8 grid cells, so it can't resolve bars or reef ledges.
+
+**Still open from earlier:** scale/colour choice (A / B / C), point-break swell
+windows by hand (Ventura Point, Rincon, Steamer Lane, Malibu, C St), Channel Islands
+shadowing, partition-aware direction (score each swell against the window).
+
+## Review page
+
+`review_page/` builds the spot orientation review page (published as the Claude
+artifact https://claude.ai/artifact/EvtJo9KWnUEMT15bDLxf8V): every spot's facing,
+offshore wind and swell window on its local coastline, plus a live breakdown of how
+each factor builds the label, using the app's own `js/rating.js`.
+
+    python data_exploration/quality_labels/review_page/build_review_page.py
+
+The page is a snapshot: rebuild it after changing `rating_config.py` (regenerate
+`js/rating.js` first) or `data/spot_orientation.csv`, then republish to the same URL.
