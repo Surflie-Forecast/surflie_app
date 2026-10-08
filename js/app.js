@@ -196,6 +196,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let map = null;
     let heroMap = null;
     let markers = [];
+    let spotCluster = null; // spot pins grouped on the full map
 
     // Active CA buoy positions (api/buoys.json) — drawn on the hero map and
     // the full map so the Buoys view's data sources are visible in place.
@@ -398,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // sizes as before. Never grows past the original 300px / 200px.
     const HERO_MAX = 300, HERO_PAD_MAX = 64, HERO_PAD_MIN = 16;
     const CHART_MAX = 200, CHART_MIN = 140;
-    const FIT_BOTTOM_GAP = 12; // breathing room under the cards
     function fitDefaultView() {
         const root = document.documentElement;
         const hero = document.querySelector('.hero');
@@ -421,35 +421,55 @@ document.addEventListener('DOMContentLoaded', () => {
         // rather than heights, so an in-flight chart transition can't skew it.
         const heroR = hero.getBoundingClientRect();
         const chartR = chart.getBoundingClientRect();
-        const cardsR = cards.getBoundingClientRect();
+        // Down to the page's real end: the cards plus the container's bottom
+        // padding (not the container's box — it stretches to the window), or
+        // the cards' scroller if its hover-shadow padding hangs lower still —
+        // so a fitted page has nothing left to scroll.
+        const app = document.querySelector('.app-container');
+        const padBottom = app ? parseFloat(getComputedStyle(app).paddingBottom) || 0 : 0;
+        const pageBottom = Math.max(
+            cards.getBoundingClientRect().bottom + padBottom,
+            (document.getElementById('forecastContainer') || cards).getBoundingClientRect().bottom);
         const rest = (heroR.top + window.scrollY)       // header
             + (chartR.top - heroR.bottom)               // gap above the chart
-            + (cardsR.bottom - chartR.bottom)           // labels + cards
-            + FIT_BOTTOM_GAP;
-        const room = window.innerHeight - rest;
+            + (pageBottom - chartR.bottom);             // labels, cards, padding
+        const room = Math.floor(window.innerHeight - rest);
 
         const contentH = heroContent.offsetHeight;
-        const heroMin = Math.min(HERO_MAX, contentH + 2 * HERO_PAD_MIN);
+        const heroMin = Math.min(HERO_MAX, Math.ceil(contentH) + 2 * HERO_PAD_MIN);
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-        const heroH = Math.round(clamp(room - CHART_MAX, heroMin, HERO_MAX));
-        const chartH = Math.round(clamp(room - heroH, CHART_MIN, CHART_MAX));
-        const heroPad = Math.round(clamp((heroH - contentH) / 2, HERO_PAD_MIN, HERO_PAD_MAX));
-
-        const prev = ['--hero-h', '--hero-pad', '--chart-h']
-            .map(v => root.style.getPropertyValue(v)).join();
-        const next = [`${heroH}px`, `${heroPad}px`, `${chartH}px`];
-        if (prev === next.join()) return;
+        let heroH = Math.floor(clamp(room - CHART_MAX, heroMin, HERO_MAX));
+        let chartH = Math.floor(clamp(room - heroH, CHART_MIN, CHART_MAX));
 
         // Apply without the chart's height transition: the y-axis, day box and
-        // any model overlay are re-measured right below.
-        const prevTransition = chart.style.transition;
-        chart.style.transition = 'none';
-        root.style.setProperty('--hero-h', next[0]);
-        root.style.setProperty('--hero-pad', next[1]);
-        root.style.setProperty('--chart-h', next[2]);
-        // eslint-disable-next-line no-unused-expressions
-        chart.offsetHeight; // reflow at the new size
-        chart.style.transition = prevTransition;
+        // any model overlay are re-measured below.
+        const apply = () => {
+            const heroPad = Math.floor(clamp((heroH - contentH) / 2, HERO_PAD_MIN, HERO_PAD_MAX));
+            const next = [`${heroH}px`, `${heroPad}px`, `${chartH}px`];
+            const prev = ['--hero-h', '--hero-pad', '--chart-h']
+                .map(v => root.style.getPropertyValue(v)).join();
+            if (prev === next.join()) return false;
+            const prevTransition = chart.style.transition;
+            chart.style.transition = 'none';
+            root.style.setProperty('--hero-h', next[0]);
+            root.style.setProperty('--hero-pad', next[1]);
+            root.style.setProperty('--chart-h', next[2]);
+            // eslint-disable-next-line no-unused-expressions
+            chart.offsetHeight; // reflow at the new size
+            chart.style.transition = prevTransition;
+            return true;
+        };
+        let changed = apply();
+        // Sub-pixel rounding can leave a pixel or two to scroll: trim it off
+        // the hero, then the chart, while they're above their minimums.
+        const extra = Math.ceil(document.documentElement.scrollHeight - window.innerHeight);
+        if (extra > 0) {
+            const fromHero = Math.min(extra, heroH - heroMin);
+            heroH -= Math.max(0, fromHero);
+            chartH = Math.max(CHART_MIN, chartH - (extra - Math.max(0, fromHero)));
+            changed = apply() || changed;
+        }
+        if (!changed) return;
 
         if (chart._axisRender) chart._axisRender();
         if (chart._modelData && typeof drawModelOverlay === 'function') {
@@ -459,6 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshHeroMapFraming();
     }
     window.fitDefaultView = fitDefaultView;
+    // Late web fonts / images can nudge the header and title heights after
+    // the first fit — re-fit once they've settled.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitDefaultView());
+    window.addEventListener('load', () => fitDefaultView());
     window.addEventListener('resize', () => {
         clearTimeout(fitDefaultView._t);
         fitDefaultView._t = setTimeout(fitDefaultView, 150);
@@ -609,6 +633,26 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear existing
         markers.forEach(m => map.removeLayer(m));
         markers = [];
+        if (spotCluster) map.removeLayer(spotCluster);
+
+        // Spots group into numbered clusters that split as you zoom in;
+        // past CLUSTER_OFF_ZOOM every pin stands alone, so close neighbours
+        // can be hovered and picked individually.
+        const CLUSTER_OFF_ZOOM = 12;
+        spotCluster = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            maxClusterRadius: 45,
+            disableClusteringAtZoom: CLUSTER_OFF_ZOOM,
+            iconCreateFunction: (cluster) => {
+                const n = cluster.getChildCount();
+                const size = n < 10 ? 34 : n < 50 ? 40 : 46;
+                return L.divIcon({
+                    html: `<div>${n}</div>`,
+                    className: 'spot-cluster',
+                    iconSize: [size, size],
+                });
+            },
+        });
 
         // Bounds builder
         const bounds = L.latLngBounds();
@@ -663,8 +707,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 iconAnchor: [20, 40]
             });
 
-            const marker = L.marker([spot.latitude, spot.longitude], { icon: arrowIcon })
-                .addTo(map);
+            // Into the cluster group (added to the map in one go below)
+            const marker = L.marker([spot.latitude, spot.longitude], { icon: arrowIcon });
 
             // Attach metadata to marker for event handlers
             marker.spotData = spot;
@@ -698,8 +742,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return marker;
         });
 
-        // Wait for all markers to be created
-        await Promise.all(markerPromises);
+        // Wait for all markers to be created, then cluster them in bulk
+        const spotMarkers = (await Promise.all(markerPromises)).filter(Boolean);
+        spotCluster.addLayers(spotMarkers);
+        map.addLayer(spotCluster);
 
         // Buoys on the full map: hover names the station, a click opens its
         // comparison view right away (bounds stay spot-driven — offshore
@@ -715,12 +761,33 @@ document.addEventListener('DOMContentLoaded', () => {
             markers.push(m);
         });
 
-        // Fit bounds if we have spots
-        if (markers.length > 0) {
+        // Whole coast only when there's no current spot to frame (openMap
+        // already centred on it — don't yank the view away once the pins land)
+        if (markers.length > 0 && !currentSpotLatLng()) {
             map.fitBounds(bounds, { padding: [50, 50] });
         }
 
         // Lazy-load the hover card's 3-day summary on first hover
+        // Hover card title on one line, as a compromise between card width
+        // and type size: shrink the title until it fits CARD_TITLE_MAX_W
+        // (card ~195px with its padding), and only past the smallest size
+        // let the card widen for it.
+        const CARD_TITLE_MAX_W = 170;
+        const CARD_TITLE_REM = 0.95, CARD_TITLE_MIN_REM = 0.72;
+        const fitCardTitle = (tooltip) => {
+            const t = tooltip.getElement()?.querySelector('.popup-name');
+            if (!t) return;
+            let rem = CARD_TITLE_REM;
+            t.style.fontSize = `${rem}rem`;
+            while (t.scrollWidth > CARD_TITLE_MAX_W && rem > CARD_TITLE_MIN_REM) {
+                rem = Math.max(CARD_TITLE_MIN_REM, rem - 0.02);
+                t.style.fontSize = `${rem}rem`;
+            }
+            // Re-centre over the pin at the new width. Not update(): that
+            // re-renders the bound content and would drop the font size.
+            if (tooltip._updatePosition) tooltip._updatePosition();
+        };
+
         map.on('tooltipopen', async (e) => {
             const marker = e.tooltip._source;
             if (!marker || !marker.spotData) return;
@@ -728,6 +795,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const spot = marker.spotData;
             const container = e.tooltip.getElement();
             if (!container) return;
+            // Tooltips re-render from their bound content on every hover, so
+            // fit on every open (cheap: a few steps at most).
+            fitCardTitle(e.tooltip);
             const dynamicContainer = container.querySelector('.popup-dynamic-content');
 
             if (!dynamicContainer || marker._cardLoaded) return;
@@ -766,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Mini Plot
                     // Placeholder sized to match new compact dimensions
-                    let plotHtml = '<div style="width: 50px; height:16px; background:rgba(0,0,0,0.05); border-radius:2px;"></div>';
+                    let plotHtml = '<div style="flex: 1; height:16px; background:rgba(0,0,0,0.05); border-radius:2px;"></div>';
                     if (hourly && hourly.length > 0) {
                         // Calc max per day for shape
                         let maxH = 0;
@@ -776,17 +846,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         if (maxH < 1) maxH = 1;
 
-                        // Generate Plot and Inject Inline Styles for Compactness
-                        // Use fixed width 50px as requested/hinted by user's CSS edit
+                        // The plot fills the row: the colour bars carry the
+                        // day's quality (no label pill), and the card is as
+                        // wide as its one-line title.
                         const originalHtml = generateMiniHourlyPlot(hourly, maxH);
-                        plotHtml = originalHtml.replace('class="mini-hourly-plot"', 'class="mini-hourly-plot" style="height: 16px; width: 50px;"');
+                        plotHtml = originalHtml.replace('class="mini-hourly-plot"', 'class="mini-hourly-plot" style="height: 16px; width: auto; flex: 1;"');
                     }
 
                     rowsHtml += `
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 2px;">
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
                             <div style="font-size: 0.7rem; font-weight: 500; color: #555; width: 40px; flex-shrink: 0; text-align: left; line-height: 1;">${dateStr}</div>
                             ${plotHtml}
-                            <span class="quality-label" style="background-color: ${day.color}; font-size: 0.55rem; padding: 1px 5px; min-width: 45px; text-align: center; border-radius: 4px; line-height: 1.4;">${ratingDisplayName(day.rating)}</span>
                         </div>
                     `;
                 });
@@ -813,8 +883,73 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Open/Close Handlers
+    // Desktop: the map reads as the hero extended down the window — same
+    // top/left/right as the hero, header still showing above, the rest of
+    // the page hidden behind plain page background. It has to live under
+    // <body>: the hero's backdrop-filter would make it the fixed panel's
+    // containing block and its overflow:hidden would clip it. Mobile keeps
+    // the in-hero map.
+    const mapHome = { parent: mapOverlay.parentNode, next: mapOverlay.nextSibling };
+    const isFullPageMap = () => window.innerWidth > 768;
+    function placeFullPageMap() {
+        const hero = document.querySelector('.hero');
+        if (!hero) return;
+        const r = hero.getBoundingClientRect();
+        const root = document.documentElement;
+        root.style.setProperty('--map-top', `${Math.round(r.top)}px`);
+        root.style.setProperty('--map-left', `${Math.round(r.left)}px`);
+        root.style.setProperty('--map-right', `${Math.round(window.innerWidth - r.right)}px`);
+    }
+    window.addEventListener('resize', () => {
+        if (!document.body.classList.contains('map-full-open')) return;
+        placeFullPageMap();
+        if (map) map.invalidateSize();
+    });
+
+    // The map opens on the spot being viewed, zoomed in a little: its pin and
+    // the neighbouring breaks/clusters in view, not the whole coast.
+    const MAP_SPOT_ZOOM = 10;
+    function currentSpotLatLng() {
+        const s = availableSpots.find(x => x.name === lastRenderedSpot);
+        return s && s.latitude && s.longitude ? [s.latitude, s.longitude] : null;
+    }
+    function centerMapOnSpot() {
+        const ll = currentSpotLatLng();
+        if (map && ll) map.setView(ll, MAP_SPOT_ZOOM, { animate: false });
+    }
+
     function openMap() {
         window.track('map_open');
+        if (isFullPageMap()) {
+            // Header in view, then grow the panel out of the hero's box
+            window.scrollTo(0, 0);
+            placeFullPageMap();
+            if (mapOverlay.parentNode !== document.body) document.body.appendChild(mapOverlay);
+            mapOverlay.classList.add('map-full');
+            document.body.classList.add('map-full-open');
+            // eslint-disable-next-line no-unused-expressions
+            mapOverlay.offsetWidth; // start the open transition from the moved spot
+            mapOverlay.classList.add('active');
+            if (!map) {
+                initMap();
+                setTimeout(async () => {
+                    map.invalidateSize();
+                    centerMapOnSpot();
+                    await populateMapMarkers();
+                }, 100);
+            } else {
+                setTimeout(() => {
+                    map.invalidateSize();
+                    centerMapOnSpot();
+                }, 300);
+            }
+            return;
+        }
+        // Mobile: back in the hero if a desktop open had moved it out
+        if (mapOverlay.parentNode !== mapHome.parent) {
+            mapHome.parent.insertBefore(mapOverlay, mapHome.next);
+        }
+        mapOverlay.classList.remove('map-full');
         mapOverlay.classList.add('active');
         // Lets CSS clear the boundary strip for the site name row (the
         // compare buttons/legend drop below it while the map is open)
@@ -856,12 +991,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // Tiny delay to ensure container has size before fitting bounds
             setTimeout(async () => {
                 map.invalidateSize();
+                centerMapOnSpot();
                 await populateMapMarkers();
             }, 100);
         } else {
             // Just refresh size in case window changed
             setTimeout(() => {
                 map.invalidateSize();
+                centerMapOnSpot();
             }, 300); // Wait for transition
         }
     }
@@ -869,6 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeMap() {
         mapOverlay.classList.remove('active');
         document.body.classList.remove('map-open');
+        document.body.classList.remove('map-full-open');
 
         // Hide Map Site Name Container
         const mapSiteNameContainer = document.getElementById('mapSiteNameContainer');
@@ -895,6 +1033,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Bind Buttons
     if (mapBtn) mapBtn.addEventListener('click', openMap);
     if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
+    // Full-page map: Esc or a click on the dimmed margin closes it
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.body.classList.contains('map-full-open')) closeMap();
+    });
+    document.addEventListener('click', (e) => {
+        if (e.target === document.body && document.body.classList.contains('map-full-open')) closeMap();
+    });
 
     // Brand → back to the landing state: drop the hash (spot/date/view) and
     // reload, so the site comes up exactly like a first visit

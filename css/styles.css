@@ -45,7 +45,9 @@ body {
 .app-container {
   width: 100%;
   max-width: 1200px;
-  padding: 0 2rem 2rem 2rem;
+  /* Slim bottom: it counts against the hero/chart when fitDefaultView sizes
+     the default view to the window */
+  padding: 0 2rem 0.75rem 2rem;
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -879,16 +881,6 @@ input:checked+.slider:before {
          Wait, line 741 is "Compact Hero State - Desktop Only" block which follows.
          So those rules will cascade and apply. Good.
       */
-  }
-}
-
-/* The map is an unfolded state: it gets the full-size hero back, whatever
-   fitDefaultView shrank the default view's hero to. */
-@media (min-width: 769px) {
-  body.map-open .hero {
-    min-height: 300px;
-    padding-top: 4rem;
-    padding-bottom: 4rem;
   }
 }
 
@@ -2819,6 +2811,67 @@ body.buoys-mode .chart-container {
   transform: translateY(0) scale(1);
 }
 
+/* Desktop: the map as the hero extended down the window (app.js moves it
+   under <body> and sets --map-top/left/right from the hero's box). The
+   header stays visible; below it the page is covered by its own plain
+   background, so nothing changes but the hero growing. */
+@media (min-width: 769px) {
+  .map-overlay.map-full {
+    position: fixed;
+    top: var(--map-top, 84px);
+    left: var(--map-left, 24px);
+    right: var(--map-right, 24px);
+    bottom: 24px;
+    z-index: 2000;
+  }
+
+  body.map-full-open {
+    overflow: hidden;
+  }
+
+  /* Page background over everything under the header; a click on it closes
+     the map (app.js) */
+  body.map-full-open::before {
+    content: '';
+    position: fixed;
+    top: var(--map-top, 84px);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--bg-dark);
+    background-image: var(--bg-gradient);
+    background-attachment: fixed;
+    z-index: 1999;
+    animation: mapBackdropIn 0.3s ease;
+  }
+}
+
+@keyframes mapBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Spot clusters: the pins' blue, count in the middle */
+.spot-cluster {
+  background: transparent;
+}
+
+.spot-cluster div {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #0078A8;
+  border: 2px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 /* The actual Leaflet Map div */
 #surfMap {
   width: 100%;
@@ -2891,6 +2944,16 @@ body.buoys-mode .chart-container {
 
 .popup-wrapper {
   min-width: 140px;
+}
+
+/* Map hover card title: always one line. app.js (fitCardTitle) shrinks the
+   type to keep the card ~195px wide, widening it only for the longest
+   names; the day rows' mini plots stretch to match. */
+.spot-hover-card .popup-name {
+  white-space: nowrap;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 6px !important;
 }
 
 /* Spot hover card on the full map (replaces the old click-popup): Leaflet
