@@ -595,10 +595,13 @@ function clearModelOverlay() {
     modelFilterKey = 'nearshore';   // next open starts on the nearshore family
 }
 
-async function toggleModelOverlay() {
+async function toggleModelOverlay(evt) {
     const btn = document.getElementById('modelCompareBtn');
     const container = document.getElementById('waveChartContainer');
     if (!btn || !container) return;
+    // Opened by a click straight from the bars view (not the step back from
+    // the buoy view, nor a deep-link restore): land with Salix pinned.
+    const fromBars = evt instanceof Event && !container._buoyData;
 
     if (container._modelData) {
         clearModelOverlay();
@@ -623,7 +626,7 @@ async function toggleModelOverlay() {
         if (buoyBtn) buoyBtn.textContent = 'Closest buoy';
 
         container._modelData = data;
-        drawModelOverlay(data);
+        drawModelOverlay(data, fromBars ? 'nearshore' : null);
         btn.classList.add('active');
         if (window.updateUrlView) window.updateUrlView({ models: true, buoys: false });
     } catch (e) {
@@ -704,7 +707,8 @@ function drawNowcastDots(svg, ns, pts, color, model, refs, tooltip, setHot,
     });
 }
 
-function drawModelOverlay(data) {
+// pinId: optionally open with that model pinned (if it's drawn).
+function drawModelOverlay(data, pinId = null) {
     const container = document.getElementById('waveChartContainer');
     const legend = document.getElementById('modelLegend');
     if (!container || !container._hourlyData || !container._scaleMax) return;
@@ -795,7 +799,9 @@ function drawModelOverlay(data) {
     // reads only the pinned model. Click again (or the background) to unpin.
     let pinned = null;
     const setHot = (id, on) => {
-        if (pinned) { id = pinned; on = true; }
+        // Hovering another chip still previews that model over a pin;
+        // leaving it falls back to the pinned one.
+        if (pinned && !on) { id = pinned; on = true; }
         Object.entries(refs).forEach(([oid, ref]) => {
             const hot = on && oid === id;
             const dim = on && !hot;
@@ -986,6 +992,7 @@ function drawModelOverlay(data) {
         });
         publishLegendHeight();
     }
+    if (pinId && refs[pinId]) togglePin(pinId);
     // The overlay lines change the plot's vertical extent, and the day box is
     // measured from it — re-run once this frame's layout has settled.
     refreshDayHighlight();
@@ -1127,6 +1134,19 @@ function clearBuoyView() {
         const wasActive = !!container._buoyData;
         container._buoyData = null;
         container.classList.remove('buoys-active');
+        if (wasActive) {
+            // Snap the chart straight back from buoys-mode's taller height
+            // instead of transitioning: the models overlay (often redrawn
+            // right after, e.g. "Closest buoy" -> back to Models) measures
+            // the bars to set its y-scale, and mid-shrink they'd read tall,
+            // dropping the lines below the plot. Same trick drawBuoyChart
+            // uses on the way in.
+            const prevTransition = container.style.transition;
+            container.style.transition = 'none';
+            // eslint-disable-next-line no-unused-expressions
+            container.offsetHeight; // force reflow at the final height
+            container.style.transition = prevTransition;
+        }
         // Drop this view's crosshair; the bars view rebuilds its own.
         if (container._buoyCrossMove) {
             container.removeEventListener('mousemove', container._buoyCrossMove);
