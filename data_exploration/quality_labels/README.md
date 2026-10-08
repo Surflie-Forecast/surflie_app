@@ -100,3 +100,81 @@ Findings (n = 24, one spot, one swell event, so these are indicative only):
 - **Calibrate against more data.** One spot over three days is not enough. If Surfline
   data can be collected legitimately (for example, logged manually from the app), fit
   our score → bucket thresholds across several spots and seasons.
+
+## Step 1 implemented: spot orientation + wind rule (2026-10-07)
+
+**Orientation.** `backend/build_spot_orientation.py` writes `data/spot_orientation.csv`,
+which `spots.load_spots` reads as derived rating metadata (`locations.csv` columns
+still win; a new `offshore_width` column was added for hand tuning).
+
+- Facing = CDIP MOP shore normal at the spot's transect (the one the nearshore
+  forecast uses), averaged over the consecutive transects within ~±200 m of coast,
+  triangular weights. ±500 m / ±1 km averages flag a turning coast (spread > 20°).
+  CDIP's `1000` marker means "no normal" and is skipped.
+- 269 of 276 spots come from MOP; 7 (harbours, bays) use the centre of the open water.
+- Swell window = open-water arc within ±90° of facing, rays every 2° over the Salix
+  elevation grids. Only land within 30 km blocks: strict line of sight to 250 km made
+  distant islands walls (88 spots facing land). Channel Islands shadowing is not modelled.
+- Old Man's: facing 214°, offshore 34° (Surfline's labels imply ~30°).
+
+**Wind.** Three zones by angle off offshore (full boost within `offshore_width` = 30°,
+fading over 30°; cross-shore to 100° with a light penalty; onshore beyond), offshore
+boost peaking at 8 kt and gone by 15 kt, a direction-blind penalty from 12 kt to a
+0.4 floor at 20 kt, and a storm penalty from steepness Hs/L0 > 0.013. `sweep_wind.py`
+(414,720 configs) pinned down only the strong-wind onset, the cross-shore penalty and
+the storm steepness; the rest is surf knowledge. The swell direction factor now uses
+the half-width of the side the swell comes from.
+
+**Results.** Spearman vs Surfline (`compare_surfline.py`): **+0.90** with the app's
+profile (was +0.79; the old wind rule with the correct direction gave +0.42). Storm
+hours are now Poor (Surfline: POOR); clean Feb 15 hours are Good (Surfline:
+FAIR_TO_GOOD); nothing reaches Excellent/Epic. Across all 276 spots on the
+2026-10-07 store, Excellent+Epic days fall from 14.5% to 6.7%.
+
+Still open: the scale/colour choice (A/B/C above) and the model-only cap.
+
+**Bucket floors recalibrated (same day).** Epic kept for near-perfect hours:
+Good 42–70, Excellent 70–92, Epic 92+ (was 62 / 80). On the 2026-10-07 store, daily
+shares are Poor 41.4%, Fair 36.0%, Good 18.5%, Excellent 3.9%, Epic 0.2% (was 1.4%).
+Swell windows now bridge gaps up to 8° and keep the arc the break faces (Ventura
+Point: 152–264°, ideal 174°).
+
+**Wind retuned with guards (same day).** `sweep_wind.py` v2 searches 2.6M configs on
+the app's real Old Man's profile, keeping only those that pass ten surf-sense guards
+(e.g. 17 kt offshore on a clean swell ≤ Fair, 12 kt offshore ≥ Good). Applied: strong-
+wind penalty from 10 kt to a 0.2 floor at 18 kt, cross-shore penalty 0.15 of onshore
+out to 120°, onshore at full strength by 12 kt. Spearman **+0.92** (was +0.90, which
+failed three guards). The sample alone rewards ever-harsher wind penalties (only the
+four storm hours have strong wind), so the guards, not the data, set how harsh.
+Daily shares: Poor 41.8%, Fair 35.2%, Good 18.7%, Excellent 4.0%, Epic 0.3%.
+
+## To pick up later (not done)
+
+**Per-spot size range from slope + bottom type.** Every spot still uses the shared
+range (0.5 / 1.8 / 4.0 m Hs). Tested 2026-10-07 at Old Man's (only spot with
+Surfline data): a sweet spot >= 1.4 m keeps agreement at +0.925; "gentle = small"
+(2A) drops it to +0.890 (consistently, bootstrap); "steep sand closes out sooner"
+(2B) ties option 1 (+0.916, within noise) but gave Ghost Tree, a big-wave reef, the
+smallest sweet spot. Plan: 2B for sand beaches only, reefs/points keep the shared
+range unless hand-set; needs a `bottom_type` column (beach / reef / point).
+
+Bottom-type sources to check, in order (never Surfline: Cloudflare + ToS):
+1. NOAA ENC charts, seabed areas (SBDARE, NATSUR: sand / rock / gravel).
+2. California Seafloor Mapping Program substrate maps (likely starts ~10 m deep).
+3. OpenStreetMap (natural=reef / beach, surface=*); volunteer quality.
+4. Fallback: draft from spot names (Point, Reef, Cove, Jetty…) + "coast_turns"
+   flag, corrected by hand.
+
+**Ruled out for now.**
+- Breaking-height transform (Komar-Gaillard on offshore Hs): no better at ranking
+  Surfline's surf heights (+0.86 vs +0.87 for Hs) and worse for the rating (+0.889
+  vs +0.925; period counted twice). Salix nearshore Hs already covers sheltering.
+- Iribarren wave-shape factor: at one spot it is a mirror of wave steepness
+  (rank corr -1.00), so it adds nothing to the sea-state factor; every hour
+  classifies as spilling. Break-zone slope from NOAA CRM SoCal (1 arc-sec) matches
+  the 0-10 m average within ~30% at 9 of 11 spots (Malibu, Trestles ~1.8x steeper)
+  and rests on 1.4-5.8 grid cells, so it can't resolve bars or reef ledges.
+
+**Still open from earlier:** scale/colour choice (A / B / C), point-break swell
+windows by hand (Ventura Point, Rincon, Steamer Lane, Malibu, C St), Channel Islands
+shadowing, partition-aware direction (score each swell against the window).

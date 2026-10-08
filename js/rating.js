@@ -2,12 +2,24 @@
 // Generated from backend/rating_config.py
 // To update, modify rating_config.py and run: python sync_rating_logic.py
 //
-// Continuous 0-100 surf score from four independent factors
-// (energy x direction x wind x tide), bucketed into five labels/colors.
+// Continuous 0-100 surf score from five independent factors
+// (energy x direction x wind x tide x sea state), bucketed into five labels/colors.
 // See backend/rating_config.py for the full model description.
 
-const RATING_BUCKETS = [{"name": "Epic", "color": "#a855f7", "floor": 80}, {"name": "Excellent", "color": "#15803d", "floor": 62}, {"name": "Good", "color": "#22c55e", "floor": 42}, {"name": "Fair", "color": "#eab308", "floor": 22}, {"name": "Poor", "color": "#ef4444", "floor": 0}];
-const RATING_DEFAULT_PROFILE = {"swell_min": 180.0, "swell_ideal": 270.0, "swell_max": 360.0, "offshore_dir": 0.0, "size_min": 0.5, "size_ideal": 1.8, "size_max": 4.0, "tide_min": null, "tide_max": null};
+const RATING_BUCKETS = [{"name": "Epic", "color": "#a855f7", "floor": 92}, {"name": "Excellent", "color": "#15803d", "floor": 70}, {"name": "Good", "color": "#22c55e", "floor": 42}, {"name": "Fair", "color": "#eab308", "floor": 22}, {"name": "Poor", "color": "#ef4444", "floor": 0}];
+const RATING_DEFAULT_PROFILE = {"swell_min": 180.0, "swell_ideal": 270.0, "swell_max": 360.0, "offshore_dir": 0.0, "offshore_width": 30.0, "size_min": 0.5, "size_ideal": 1.8, "size_max": 4.0, "tide_min": null, "tide_max": null};
+const WIND_FADE_DEG = 30.0;
+const WIND_CROSS_END_DEG = 120.0;
+const WIND_CROSS_PENALTY = 0.15;
+const WIND_ONSHORE_FULL_KT = 12.0;
+const WIND_BOOST = 0.12;
+const WIND_BOOST_PEAK_KT = 8.0;
+const WIND_BOOST_END_KT = 15.0;
+const STRONG_WIND_KT = 10.0;
+const STRONG_WIND_SPAN_KT = 8.0;
+const STRONG_WIND_FLOOR = 0.2;
+const STORM_STEEPNESS = 0.013;
+const STORM_FLOOR = 0.5;
 
 function _spotProfile(meta) {
     const p = Object.assign({}, RATING_DEFAULT_PROFILE);
@@ -22,6 +34,11 @@ function _spotProfile(meta) {
 function _angDiff(a, b) {
     let d = Math.abs(((a - b) % 360 + 360) % 360);
     return d <= 180 ? d : 360 - d;
+}
+
+function _signedDiff(a, b) {
+    const d = ((a - b) % 360 + 360) % 360;
+    return d > 180 ? d - 360 : d;
 }
 
 function _energyFactor(height, period, p) {
@@ -49,9 +66,8 @@ function _energyFactor(height, period, p) {
 
 function _directionFactor(swellDir, p) {
     const off = _angDiff(swellDir, p.swell_ideal);
-    const halfWidth = Math.max(
-        _angDiff(p.swell_ideal, p.swell_min),
-        _angDiff(p.swell_ideal, p.swell_max), 1);
+    const edge = _signedDiff(swellDir, p.swell_ideal) >= 0 ? p.swell_max : p.swell_min;
+    const halfWidth = Math.max(_angDiff(p.swell_ideal, edge), 1);
     const x = off / halfWidth;
     if (x <= 1) return 0.5 + 0.5 * Math.cos(x * Math.PI / 2);
     const over = Math.min((off - halfWidth) / 45, 1);
@@ -61,10 +77,33 @@ function _directionFactor(swellDir, p) {
 function _windFactor(speed, direction, p) {
     if (speed < 3) return 1;
     const off = _angDiff(direction, p.offshore_dir);
-    const align = Math.cos(off * Math.PI / 180);
-    const strength = Math.min((speed - 3) / 17, 1);
-    if (align >= 0) return 1 + 0.12 * align * strength;
-    return Math.max(0.1, 1 - (0.9 * (-align) * strength));
+    const zero = p.offshore_width + WIND_FADE_DEG;
+    let f;
+    if (off <= zero) {
+        const a = off <= p.offshore_width ? 1 : (zero - off) / WIND_FADE_DEG;
+        const bump = speed <= WIND_BOOST_PEAK_KT
+            ? (speed - 3) / (WIND_BOOST_PEAK_KT - 3)
+            : Math.max(0, (WIND_BOOST_END_KT - speed) / (WIND_BOOST_END_KT - WIND_BOOST_PEAK_KT));
+        f = 1 + WIND_BOOST * a * bump;
+    } else {
+        const crossEnd = Math.max(WIND_CROSS_END_DEG, zero + 1);
+        const a = off <= crossEnd
+            ? WIND_CROSS_PENALTY * (off - zero) / (crossEnd - zero)
+            : WIND_CROSS_PENALTY + (1 - WIND_CROSS_PENALTY) * (off - crossEnd) / (180 - crossEnd);
+        const strength = Math.pow(Math.min((speed - 3) / (WIND_ONSHORE_FULL_KT - 3), 1), 0.7);
+        f = Math.max(0.1, 1 - 0.9 * a * strength);
+    }
+    if (speed > STRONG_WIND_KT) {
+        f *= Math.max(STRONG_WIND_FLOOR,
+            1 - (1 - STRONG_WIND_FLOOR) * (speed - STRONG_WIND_KT) / STRONG_WIND_SPAN_KT);
+    }
+    return f;
+}
+
+function _seaStateFactor(height, period) {
+    const steep = height / (1.56 * Math.pow(Math.max(period, 1), 2));
+    if (steep <= STORM_STEEPNESS) return 1;
+    return Math.max(STORM_FLOOR, 1 - (1 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS);
 }
 
 function _tideFactor(tide, p) {
@@ -80,7 +119,8 @@ function scoreConditions(height, period, swellDir, windSpeed, windDir, tide = nu
     const direction = _directionFactor(swellDir, p);
     const wind = _windFactor(windSpeed, windDir, p);
     const tideF = _tideFactor(tide, p);
-    const raw = energy * direction * wind * tideF;
+    const sea = _seaStateFactor(height, period);
+    const raw = energy * direction * wind * tideF * sea;
     return Math.max(0, Math.min(100, raw * 100));
 }
 
