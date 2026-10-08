@@ -391,6 +391,79 @@ document.addEventListener('DOMContentLoaded', () => {
     // chart.js swaps in the buoy title and needs the same fit
     window.fitHeroTitle = fitHeroTitle;
 
+    // Desktop: size the hero, then the chart, so the folded default view
+    // (header, hero, chart, forecast cards) fits the window without
+    // scrolling. Only the default state is measured; unfolded states
+    // (expanded cards' compact hero, buoy view, map) carry on from these
+    // sizes as before. Never grows past the original 300px / 200px.
+    const HERO_MAX = 300, HERO_PAD_MAX = 64, HERO_PAD_MIN = 16;
+    const CHART_MAX = 200, CHART_MIN = 140;
+    const FIT_BOTTOM_GAP = 12; // breathing room under the cards
+    function fitDefaultView() {
+        const root = document.documentElement;
+        const hero = document.querySelector('.hero');
+        const heroContent = hero && hero.querySelector('.hero-content');
+        const chart = document.getElementById('waveChartContainer');
+        const cards = document.querySelector('.forecast-wrapper');
+        if (!hero || !heroContent || !chart || !cards) return;
+
+        if (window.innerWidth <= 768) {
+            // Mobile has its own layout: drop any desktop sizing
+            ['--hero-h', '--hero-pad', '--chart-h'].forEach(v => root.style.removeProperty(v));
+            return;
+        }
+        const body = document.body;
+        if (hero.classList.contains('compact') || body.classList.contains('buoys-mode')
+            || body.classList.contains('map-open')
+            || !cards.querySelector('.forecast-card')) return;
+
+        // Everything but the hero and the chart box: measured from positions
+        // rather than heights, so an in-flight chart transition can't skew it.
+        const heroR = hero.getBoundingClientRect();
+        const chartR = chart.getBoundingClientRect();
+        const cardsR = cards.getBoundingClientRect();
+        const rest = (heroR.top + window.scrollY)       // header
+            + (chartR.top - heroR.bottom)               // gap above the chart
+            + (cardsR.bottom - chartR.bottom)           // labels + cards
+            + FIT_BOTTOM_GAP;
+        const room = window.innerHeight - rest;
+
+        const contentH = heroContent.offsetHeight;
+        const heroMin = Math.min(HERO_MAX, contentH + 2 * HERO_PAD_MIN);
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        const heroH = Math.round(clamp(room - CHART_MAX, heroMin, HERO_MAX));
+        const chartH = Math.round(clamp(room - heroH, CHART_MIN, CHART_MAX));
+        const heroPad = Math.round(clamp((heroH - contentH) / 2, HERO_PAD_MIN, HERO_PAD_MAX));
+
+        const prev = ['--hero-h', '--hero-pad', '--chart-h']
+            .map(v => root.style.getPropertyValue(v)).join();
+        const next = [`${heroH}px`, `${heroPad}px`, `${chartH}px`];
+        if (prev === next.join()) return;
+
+        // Apply without the chart's height transition: the y-axis, day box and
+        // any model overlay are re-measured right below.
+        const prevTransition = chart.style.transition;
+        chart.style.transition = 'none';
+        root.style.setProperty('--hero-h', next[0]);
+        root.style.setProperty('--hero-pad', next[1]);
+        root.style.setProperty('--chart-h', next[2]);
+        // eslint-disable-next-line no-unused-expressions
+        chart.offsetHeight; // reflow at the new size
+        chart.style.transition = prevTransition;
+
+        if (chart._axisRender) chart._axisRender();
+        if (chart._modelData && typeof drawModelOverlay === 'function') {
+            drawModelOverlay(chart._modelData);
+        }
+        updateChartHighlight({ scroll: false });
+        refreshHeroMapFraming();
+    }
+    window.fitDefaultView = fitDefaultView;
+    window.addEventListener('resize', () => {
+        clearTimeout(fitDefaultView._t);
+        fitDefaultView._t = setTimeout(fitDefaultView, 150);
+    });
+
     // Tight box around the spot name itself. Measures the leading text node
     // only: .hero-region is a block child inside the same h1, so selecting the
     // whole element would return a rect covering the subtitle line too.
@@ -1701,6 +1774,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Update scroll indicator after rendering
             setTimeout(() => {
+                fitDefaultView();
                 updateScrollIndicator();
                 // Deep link (#slug/date): restore the selected day now that
                 // the cards exist (also re-adds /date to the URL).

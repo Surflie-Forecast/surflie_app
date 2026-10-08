@@ -465,6 +465,13 @@ input:checked+.slider:before {
   display: none;
 }
 
+/* Unfolded: each card keeps its own height — opening one hour's swell
+   breakdown grows that card only, not (via the row's default stretch)
+   every card beside it. */
+.forecast-container:has(.forecast-card.expanded) {
+  align-items: flex-start;
+}
+
 /* Custom Scroll Indicator */
 .scroll-indicator {
   display: flex;
@@ -756,13 +763,16 @@ input:checked+.slider:before {
 /* Hero Section */
 .hero {
   flex: 0 0 auto;
-  min-height: 300px;
+  /* --hero-h / --hero-pad: app.js (fitDefaultView) shrinks the desktop hero
+     so the folded default view fits a laptop window; 300px / 4rem when
+     there's room. */
+  min-height: var(--hero-h, 300px);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   text-align: center;
-  padding: 4rem 2rem;
+  padding: var(--hero-pad, 4rem) 2rem;
   position: relative;
   border-radius: var(--card-radius);
   color: #131929;
@@ -869,6 +879,16 @@ input:checked+.slider:before {
          Wait, line 741 is "Compact Hero State - Desktop Only" block which follows.
          So those rules will cascade and apply. Good.
       */
+  }
+}
+
+/* The map is an unfolded state: it gets the full-size hero back, whatever
+   fitDefaultView shrank the default view's hero to. */
+@media (min-width: 769px) {
+  body.map-open .hero {
+    min-height: 300px;
+    padding-top: 4rem;
+    padding-bottom: 4rem;
   }
 }
 
@@ -1718,7 +1738,7 @@ input:checked+.slider:before {
 }
 
 #waveChartContainer.models-active {
-  height: 224px;
+  height: calc(var(--chart-h, 200px) + 24px);
   padding-bottom: 34px;
 }
 
@@ -2270,7 +2290,8 @@ body.buoys-mode .chart-container {
 .chart-container {
   display: flex;
   align-items: flex-end;
-  height: 200px;
+  /* --chart-h: fitDefaultView's second lever after the hero (200px max) */
+  height: var(--chart-h, 200px);
   width: 100%;
   /* Removed gap between days, using border separator instead */
   gap: 0;
