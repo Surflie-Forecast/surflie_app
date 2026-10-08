@@ -45,6 +45,11 @@ def main():
         orient = {r['slug']: r for r in csv.DictReader(f)}
     table = mt._load_table()
     idx = {r[0]: i for i, r in enumerate(table)}
+    bottom = {}
+    bpath = os.path.join(ROOT, 'data', 'spot_bottom.csv')
+    if os.path.exists(bpath):
+        with open(bpath, newline='') as f:
+            bottom = {r['slug']: r for r in csv.DictReader(f)}
 
     spots = []
     for s in load_spots(os.path.join(ROOT, 'data', 'locations.csv')):
@@ -65,6 +70,14 @@ def main():
             'src': r['facing_source'], 'off': num(r['offshore_dir']),
             'arcs': r['open_arcs'],
             'flags': [x for x in r['flags'].split(';') if x],
+            'bottom': (bottom.get(s.slug) or {}).get('bottom_type'),
+            'hard': num((bottom.get(s.slug) or {}).get('hard_share', '')),
+            'bcov': num((bottom.get(s.slug) or {}).get('coverage', '')),
+            'bend': num((bottom.get(s.slug) or {}).get('convexity', '')),
+            'bwhy': (bottom.get(s.slug) or {}).get('reason'),
+            'shore': {g: num((bottom.get(s.slug) or {}).get(f'shore_{g}', ''))
+                      for g in ('rock', 'armoured', 'gravel', 'sand', 'flat')},
+            'bflags': [x for x in ((bottom.get(s.slug) or {}).get('flags') or '').split(';') if x],
             'meta': s.profile_meta,      # what the app scores with
             'hand': s.rating_meta,       # hand-entered overrides only
         })

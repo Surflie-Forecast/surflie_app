@@ -154,6 +154,7 @@ dd { margin: 0; font-family: var(--font-mono); font-size: 0.86rem; font-variant-
     <div class="label">How the orientation was derived</div>
     <p><b>Facing</b> is the CDIP MOP shore normal at the transect the nearshore forecast already uses for the spot, averaged with its neighbours over about ±200 m of coast (closer transects weigh more). The ±500 m and ±1 km averages are only a stability check.</p>
     <p><b>Offshore wind</b> comes from facing + 180°. <b>Swell window</b> is the open water within ±90° of facing, from rays every 2° over the Salix elevation grids. Only land within 30 km blocks a ray, and gaps up to 8° (a small island's shadow) are bridged. Channel Islands shadowing is not modelled, and swell that wraps around a point from outside the window is not seen: point breaks need a hand-set window.</p>
+    <p><b>Bottom type</b>: point if the coast bends seaward by 20° or more within ±500 m (from the MOP shore normals); otherwise reef if at least 40% of the transect is hard seabed in CDFW's <i>Predicted Nearshore Benthic Substrates of California</i> (BIOS ds3091, CC BY 4.0, 10 m), or at least 25% with a mostly rocky shoreline in CDFW's <i>Shoreline Types</i> (BIOS ds3115, NOAA ESI, CC BY 4.0); otherwise beach. Cobble points read as soft seabed, so they are found by the coastline bend. Breakwaters can bend the coast too, so check points next to harbours and jetties.</p>
     <p>Anything entered in the rating columns of locations.csv overrides these values. Tide is not part of the hourly score yet, so its factor is always 1.00.</p>
   </div>
 </div>
@@ -169,8 +170,12 @@ const FLAG_TEXT = {
   split_window: ['Split window', 'Nearby land splits the open water into several arcs. The arc the break faces is used.'],
   no_transect: ['No MOP transect', 'No transect within 2 km. Facing is the centre of the open water around the pin.'],
   no_normal: ['No shore normal', 'The transect has no CDIP shore normal. Facing is the centre of the open water around the pin.'],
+  armoured_shore: ['Armoured shoreline', 'The shoreline here is mostly riprap or seawall. A harbour or jetty can fake a headland, so check whether this is really a point (real points with seawalls, like Ventura Point, get this flag too).'],
+  no_shoreline: ['No mapped shoreline', 'No classified shoreline within 250 m. Around Seal Beach and Anaheim Bay these are jetty-made "points": check the bottom type.'],
 };
-const FILTERS = [['all', 'All'], ['flagged', 'Needs check'], ['coast_turns', 'Coast turns'], ['facing_blocked', 'Facing blocked'], ['split_window', 'Split window'], ['no_transect', 'No transect']];
+const FILTERS = [['all', 'All'], ['flagged', 'Needs check'], ['coast_turns', 'Coast turns'], ['facing_blocked', 'Facing blocked'], ['split_window', 'Split window'], ['no_transect', 'No transect'],
+  ['b:point', 'Points'], ['b:reef', 'Reefs'], ['b:beach', 'Beaches'], ['shorecheck', 'Shoreline check']];
+const BOTTOM_TEXT = { point: 'Point', reef: 'Reef', beach: 'Beach' };
 const KM = 111.32, rad = d => d * Math.PI / 180, mod = a => ((a % 360) + 360) % 360;
 const fmt = v => v == null ? '–' : Math.round(v) + '°';
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -202,7 +207,12 @@ document.getElementById('stats').innerHTML =
 
 function visible() {
   const q = query.toLowerCase();
-  return S.filter(s => (filter === 'all' || (filter === 'flagged' ? s.flags.length : s.flags.includes(filter)))
+  const match = s => filter === 'all' ? true
+    : filter === 'flagged' ? s.flags.length
+    : filter.startsWith('b:') ? s.bottom === filter.slice(2)
+    : filter === 'shorecheck' ? (s.bflags || []).length
+    : s.flags.includes(filter);
+  return S.filter(s => match(s)
     && (!q || s.name.toLowerCase().includes(q) || s.region.toLowerCase().includes(q)));
 }
 function renderFilters() {
@@ -221,7 +231,7 @@ function renderList() {
     `<button class="row${sel && sel.slug === s.slug ? ' sel' : ''}" type="button" data-s="${s.slug}">
       <span class="nm"><span class="dot${s.flags.length ? ' flag' : ''}"></span>${s.name}</span>
       <span class="deg">faces ${fmt(s.facing)}</span>
-      <span class="rg">${s.region}</span>
+      <span class="rg">${s.region}${s.bottom ? ' · ' + BOTTOM_TEXT[s.bottom] : ''}</span>
       <span class="deg">offshore ${fmt(s.off)}</span>
     </button>`).join('') || '<p style="padding:12px;color:var(--muted)">No spots match.</p>';
 }
@@ -283,8 +293,9 @@ function renderHead() {
   const s = sel, hand = Object.keys(s.hand || {});
   document.getElementById('head').innerHTML = `<h2>${s.name}</h2>
     <div class="sub">${s.region} · ${s.tr ? 'MOP ' + s.tr : 'no MOP transect'} · facing from ${s.src === 'mop' ? 'shore normals' : 'open water'}${hand.length ? ' · hand-set: ' + hand.join(', ') : ''}</div>`;
-  const flags = s.flags.length
-    ? s.flags.map(f => `<div class="flagnote"><b>${FLAG_TEXT[f][0]}.</b> ${FLAG_TEXT[f][1]}</div>`).join('')
+  const allFlags = [...s.flags, ...(s.bflags || [])];
+  const flags = allFlags.length
+    ? allFlags.map(f => `<div class="flagnote"><b>${FLAG_TEXT[f][0]}.</b> ${FLAG_TEXT[f][1]}</div>`).join('')
     : '<div class="flagnote okn"><b>No flags.</b> The three averages agree and the break faces open water.</div>';
   document.getElementById('facts').innerHTML = `<dl>
       <dt>Facing</dt><dd>${fmt(s.facing)} ${s.facing != null ? card(s.facing) : ''}</dd>
@@ -294,6 +305,10 @@ function renderHead() {
       <dt>Spread of the averages</dt><dd>${fmt(s.spread)}</dd>
       <dt>Swell window</dt><dd>${fmt(prof.swell_min)} – ${fmt(prof.swell_max)}</dd>
       <dt>Ideal swell from</dt><dd>${fmt(prof.swell_ideal)} ${card(prof.swell_ideal)}</dd>
+      <dt>Bottom type</dt><dd>${s.bottom ? BOTTOM_TEXT[s.bottom] + ' (' + s.bwhy + ')' : '–'}</dd>
+      <dt>Hard seabed / mapped</dt><dd>${s.hard == null ? '–' : Math.round(s.hard * 100) + '%'} / ${s.bcov == null ? '–' : Math.round(s.bcov * 100) + '% of transect'}</dd>
+      <dt>Shoreline within 250 m</dt><dd>${s.shore && s.shore.sand != null ? ['rock', 'gravel', 'sand', 'armoured'].filter(g => s.shore[g] > 0.04).map(g => g + ' ' + Math.round(s.shore[g] * 100) + '%').join(', ') : 'not mapped'}</dd>
+      <dt>Coast bend (+ = headland)</dt><dd>${s.bend == null ? '–' : (s.bend > 0 ? '+' : '') + Math.round(s.bend) + '°'}</dd>
       <dt>Working size (Hs)</dt><dd>${prof.size_min}–${prof.size_ideal}–${prof.size_max} m</dd>
       <dt>Open water within ±90°</dt><dd>${s.arcs ? s.arcs.split(';').map(a => a.replace('-', '–') + '°').join(', ') : 'none'}</dd>
     </dl><div class="flags">${flags}</div>`;

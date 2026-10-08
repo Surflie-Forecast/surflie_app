@@ -190,3 +190,24 @@ each factor builds the label, using the app's own `js/rating.js`.
 
 The page is a snapshot: rebuild it after changing `rating_config.py` (regenerate
 `js/rating.js` first) or `data/spot_orientation.csv`, then republish to the same URL.
+
+## Bottom type (2026-10-08, branch explore/quality-labels-2)
+
+`backend/build_spot_bottom.py` writes `data/spot_bottom.csv` (needs network and
+`pip install lerc`, local only): **point** if the coast bends seaward >= 20° within
+±500 m (MOP shore normals), else **reef** if >= 40% of the transect is hard seabed in
+CDFW BIOS ds3091 (10 m hard/soft raster, CC BY 4.0) or >= 25% with a mostly rocky
+shoreline in CDFW BIOS ds3115 (NOAA ESI shoreline types, CC BY 4.0), else **beach**.
+Result: 70 points, 42 reefs, 164 beaches; 23/24 known spots right (C Street, a cobble
+point on straight coast, reads beach). 16 spots flagged for a shoreline check
+(armoured shoreline, or none mapped), mostly harbour/jetty-made "points".
+
+Ruled out as bottom-type sources: NOAA ENC charts (seabed samples km offshore),
+OpenStreetMap (maps the shore, calls cobble points sand beaches). Paid Surfline
+scrapers (anakin.io, parse.bot) and surflinef (direct API calls) were rejected:
+outsourced Cloudflare bypass and ToS breach. Swell "cleanliness" (one dominant swell vs
+crossed seas) showed no effect on the Surfline sample (+0.925 at any penalty) and
+Surfline's model ignores swell mix, so it waits for user ratings.
+
+Surfline agreement unchanged at +0.925: bottom type doesn't feed the score yet, and
+Old Man's (the only spot with Surfline data) is a reef either way.
