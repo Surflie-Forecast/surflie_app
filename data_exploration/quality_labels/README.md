@@ -178,3 +178,15 @@ Bottom-type sources to check, in order (never Surfline: Cloudflare + ToS):
 **Still open from earlier:** scale/colour choice (A / B / C), point-break swell
 windows by hand (Ventura Point, Rincon, Steamer Lane, Malibu, C St), Channel Islands
 shadowing, partition-aware direction (score each swell against the window).
+
+## Review page
+
+`review_page/` builds the spot orientation review page (published as the Claude
+artifact https://claude.ai/artifact/EvtJo9KWnUEMT15bDLxf8V): every spot's facing,
+offshore wind and swell window on its local coastline, plus a live breakdown of how
+each factor builds the label, using the app's own `js/rating.js`.
+
+    python data_exploration/quality_labels/review_page/build_review_page.py
+
+The page is a snapshot: rebuild it after changing `rating_config.py` (regenerate
+`js/rating.js` first) or `data/spot_orientation.csv`, then republish to the same URL.
