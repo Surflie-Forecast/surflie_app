@@ -1165,8 +1165,6 @@ function clearBuoyView() {
             svg.style.opacity = '0';
             setTimeout(() => { svg.remove(); refreshDayHighlight(); }, 400);
         }
-        const spacer = container.querySelector('.buoy-scroll-spacer');
-        if (spacer) spacer.remove();
         if (wasActive) {
             container.scrollLeft = 0; // bars start at the left edge again
             renderBarYAxis(container); // back to the bars' scale
@@ -1343,19 +1341,18 @@ function drawBuoyChart(data) {
     ];
     const tMin = allT.length ? Math.min(...allT) : now - 3 * 86400e3;
     const tMax = allT.length ? Math.max(...allT) : now + 8 * 86400e3;
-    const spanDays = Math.max((tMax - tMin) / 86400e3, 1);
 
     // Measure the drawing band and pixels-per-day. buoys-mode grows the chart
     // via a CSS height transition, so the bar wrappers (still mid-animation)
     // would read short — suppress the transition for this frame so the
-    // container reports its FINAL height, measure, then restore it. We build
-    // our own wide, scrollable timeline at the SAME density as the bars; the
-    // observation window fills the screen first, the forecast tail scrolls in.
+    // container reports its FINAL height, measure, then restore it. The
+    // timeline always fits the visible width: the whole series — past
+    // observations through each model's last forecast hour — in one view,
+    // no horizontal scroll (day labels thin out when they get tight).
     const prevTransition = container.style.transition;
     container.style.transition = 'none';
     // eslint-disable-next-line no-unused-expressions
     container.offsetHeight; // force reflow at the final height
-    const wrappers = container.querySelectorAll('.chart-bar-wrapper');
     const cs = getComputedStyle(container);
     const padTop = parseFloat(cs.paddingTop) || 0;
     const padBottom = parseFloat(cs.paddingBottom) || 0;
@@ -1363,18 +1360,7 @@ function drawBuoyChart(data) {
     const barH = Math.max(container.clientHeight - padTop - padBottom, 100);
     container.style.transition = prevTransition;
 
-    const viewW = container.clientWidth;
-    let pxPerDay = (viewW - 2 * PADX) / spanDays;
-    if (wrappers.length >= 2 && container._hourlyData) {
-        const barMs = container._hourlyData;
-        const spanBarsDays =
-            (parseT(barMs[barMs.length - 1].datetime) - parseT(barMs[0].datetime)) / 86400e3;
-        const barsPx = wrappers[wrappers.length - 1].offsetLeft
-            + wrappers[wrappers.length - 1].offsetWidth
-            - wrappers[0].offsetLeft;
-        if (spanBarsDays > 0) pxPerDay = barsPx / spanBarsDays;
-    }
-    const W = Math.max(viewW, Math.round(pxPerDay * spanDays + 2 * PADX));
+    const W = container.clientWidth;
     const xFor = t => PADX + ((t - tMin) / (tMax - tMin)) * (W - 2 * PADX);
 
     // Now collapse the bars and switch on the buoy layout
@@ -1401,9 +1387,12 @@ function drawBuoyChart(data) {
     svg.setAttribute('width', W);
     svg.setAttribute('height', top + barH);
 
-    // Day separators + date labels (every other day when narrow)
+    // Day separators + date labels: the whole series fits the width, so
+    // label every Nth day — as few as keep a "12 Mon" label (~46px) clear
+    // of the next one (every day on desktop, every 3rd on a phone).
     const nDays = (tMax - tMin) / 86400e3;
-    const labelEvery = (W / nDays) < 46 ? 2 : 1;
+    const DAY_LABEL_PX = 46;
+    const labelEvery = Math.max(1, Math.ceil(DAY_LABEL_PX / (W / nDays)));
     const dayStart = new Date(tMin);
     dayStart.setHours(0, 0, 0, 0);
     dayStart.setDate(dayStart.getDate() + 1);
@@ -1657,20 +1646,8 @@ function drawBuoyChart(data) {
     });
     if (dots.length) refs.observed = { dots };
 
-    // The SVG is absolutely positioned (out of flow), so on its own it can't
-    // widen the scrollport. Our timeline spans the full data extent, wider
-    // than the bars. A zero-height spacer at width W gives the container the
-    // right scrollWidth so it scrolls the full span.
-    const spacer = document.createElement('div');
-    spacer.className = 'buoy-scroll-spacer';
-    spacer.style.cssText =
-        `width:${W}px;min-width:${W}px;height:0;flex:0 0 ${W}px;pointer-events:none;`;
-    container.appendChild(spacer);
-
-    // Fade in over the bars fading out (shared CSS transition). Start at the
-    // left edge: the past observations and the near-term forecast (where the
-    // models are checkable against the dots) already fill the screen; the
-    // forecast tail is a scroll to the right, like the bars/models views.
+    // Fade in over the bars fading out (shared CSS transition). The timeline
+    // fits the view, so there's nothing to scroll — pin it at the left edge.
     svg.style.opacity = '0';
     container.appendChild(svg);
     container.scrollLeft = 0;
