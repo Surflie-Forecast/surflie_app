@@ -211,3 +211,27 @@ Surfline's model ignores swell mix, so it waits for user ratings.
 
 Surfline agreement unchanged at +0.925: bottom type doesn't feed the score yet, and
 Old Man's (the only spot with Surfline data) is a reef either way.
+
+**Size by bottom type (scheme 2).** `rating_config.size_range()`: every spot keeps
+size_min 0.5 m and size_ideal 1.8 m; only beaches close out sooner: size_max 4.0 m ×
+clamp((1/50 ÷ slope)^0.4, 0.6, 1) × 0.85 if the shoreline is >= 50% gravel/coarse sand.
+43 beaches affected (most close out ~3.4 m, steepest ~2.5 m). Reefs, points and gentle
+beaches unchanged. Rejected: shrinking the whole range (raised steep beaches on small
+days) and absolute ranges per type (moved 661 of 4,140 spot-days on guessed numbers).
+Surfline agreement +0.925 (Old Man's is a reef). Hand override: `bottom_type` column
+in locations.csv. Note: Steamer Lane, Devereaux and C Street have had hand-entered
+rating values since 2026-07-11 (commit 2f4fe62); they override the generated ones.
+
+## Label scale adopted (2026-10-08): Surfline-style, capped
+
+The model now labels Very poor (0), Poor (5), Poor to fair (8), Fair (28) and Fair to
+good (48+), capped there like Surfline's model. Fair to good was fitted at 42 and
+raised to 48 on purpose, so the model's top label stays rare given the uncertainty
+(18/24 exact matches instead of 20, still all within one; ~18% of days instead of ~25%). Good and Epic (`RESERVED_BUCKETS`) are
+kept for people (a human forecast or observation) or, later, a model calibrated on user
+session reports. Floors from Poor to Fair to good fitted on Surfline's 24 rated hours
+(21 exact, all within one); Very poor is a guess. Colors: Surfline's red / orange /
+yellow with our greens (#22c55e Fair, #15803d Fair to good). Pills pick dark or white
+text by luminance (`ratingTextColor` in the generated js/rating.js). Replaced: Poor 0,
+Fair 22, Good 42, Excellent 70, Epic 92. On the 2026-10-08 forecast: Very poor 12.5%,
+Poor 4.0%, Poor to fair 34.8%, Fair 23.8%, Fair to good 24.9% of spot-days.

@@ -18,6 +18,11 @@ SUBSTRATE (hard_share)
   Tiles are cached in data/bottom_cache/ (gitignored).
   Cobble and boulder points read soft: loose cobbles aren't rugose at 10 m.
 
+SLOPE
+  Average nearshore slope: 10 m depth over the transect's backbeach-to-
+  prediction-site distance (prediction sites sit at ~10 m). Blank when the
+  two points coincide (CDIP's no-normal transects).
+
 HEADLAND (convexity)
   How much the coast bends seaward around the transect, from the MOP shore
   normals: the signed change in normal between the transects ~500 m either
@@ -96,7 +101,7 @@ ARMOURED_SHORE = 0.80
 POINT_DEG = 20.0
 MIN_COVERAGE = 0.30          # below this, hard_share is not trusted
 
-FIELDS = ['slug', 'transect', 'hard_share', 'coverage', 'convexity',
+FIELDS = ['slug', 'transect', 'slope', 'hard_share', 'coverage', 'convexity',
           *(f'shore_{g}' for g in SHORE_GROUPS), 'shoreline',
           'bottom_type', 'reason', 'flags']
 
@@ -306,7 +311,13 @@ def main():
         if shore is None:
             flags.append('no_shoreline')
         fmt = lambda v, p: '' if v is None else f'{v:.{p}f}'  # noqa: E731
-        rows.append({'slug': s.slug, 'transect': t, 'hard_share': fmt(hard, 2),
+        slope = None
+        if t:
+            r = table[idx[t]]
+            d_m = mt._dist_km(r[1], r[2], r[3], r[4]) * 1000
+            slope = 10.0 / d_m if d_m >= 20 else None
+        rows.append({'slug': s.slug, 'transect': t, 'slope': fmt(slope, 4),
+                     'hard_share': fmt(hard, 2),
                      'coverage': fmt(cov, 2), 'convexity': fmt(conv, 0),
                      **{f'shore_{g}': fmt(shore[g] if shore else None, 2) for g in SHORE_GROUPS},
                      'shoreline': max(SHORE_GROUPS, key=shore.get) if shore else '',
