@@ -1,7 +1,7 @@
 <title>Spot Orientation Review</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: survey sheet — coast overview + spot list on the left; on the right one spot's local chart, then a live breakdown of how its rating is built */
+/* Layout: one-screen console — spot list on the left; on the right the spot's chart, conditions + factor bars, and the score read on three label scales side by side; details fold away below */
 :root {
   --bg: #f4f7f8; --surface: #ffffff; --fg: #13222c; --muted: #5a6b76; --line: #d4dde2; --grid: #e6ecef;
   --coast: #6f7f73;
@@ -21,140 +21,162 @@
   --facing: #4a93c8; --wind: #3fa66c; --swell: #b07ad0; --flag: #ec8a55; --ok: #6cc2b8;
   --sel: #e3ebef; color-scheme: dark }
 * { box-sizing: border-box }
-body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--font-body); }
-.wrap { max-width: 1280px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 40px; }
-header h1 { font-size: 1.6rem; margin: 0; text-wrap: balance; letter-spacing: -0.01em }
-header p { margin: 4px 0 0; color: var(--muted); max-width: 72ch }
-.stats { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 14px 0 18px; font-size: 0.9rem; color: var(--muted) }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--font-body); }
+.wrap { max-width: 1440px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 24px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin-bottom: 10px }
+header h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.82rem; color: var(--muted) }
 .stats b { color: var(--fg); font-variant-numeric: tabular-nums }
-.grid { display: grid; grid-template-columns: minmax(0, 360px) minmax(0, 1fr); gap: 18px; align-items: start }
-@media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr) } }
+.grid { display: grid; grid-template-columns: minmax(0, 290px) minmax(0, 1fr); gap: 12px; align-items: start }
+@media (max-width: 960px) { .grid { grid-template-columns: minmax(0, 1fr) } }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; min-width: 0 }
-.overview svg { width: 100%; height: auto; display: block }
-.filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line) }
-.chip { font: 600 0.78rem var(--font-body); letter-spacing: 0.02em; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer }
+.side { display: flex; flex-direction: column; max-height: calc(100vh - 70px); position: sticky; top: env(safe-area-inset-top, 0px) }
+@media (max-width: 960px) { .side { position: static; max-height: none } }
+.overview svg { width: 100%; height: 170px; display: block }
+.filters { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 10px; border-top: 1px solid var(--line) }
+.chip { font: 600 0.72rem var(--font-body); letter-spacing: 0.02em; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 999px; padding: 2px 8px; cursor: pointer }
 .chip[aria-pressed="true"] { background: var(--fg); color: var(--surface); border-color: var(--fg) }
-.chip:focus-visible, .row:focus-visible, input:focus-visible, .preset:focus-visible { outline: 2px solid var(--facing); outline-offset: 2px }
-.search { padding: 0 12px 10px }
-.search input { width: 100%; font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg) }
-.list { max-height: 560px; overflow-y: auto; border-top: 1px solid var(--line) }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; background: transparent; width: 100%; text-align: left; font: inherit; color: inherit; border-left: 3px solid transparent }
+.chip:focus-visible, .row:focus-visible, input:focus-visible, .preset:focus-visible, summary:focus-visible { outline: 2px solid var(--facing); outline-offset: 2px }
+.search { padding: 0 10px 8px }
+.search input { width: 100%; font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg) }
+.list { flex: 1; min-height: 160px; overflow-y: auto; border-top: 1px solid var(--line) }
+@media (max-width: 960px) { .list { max-height: 320px } }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding: 5px 10px; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; background: transparent; width: 100%; text-align: left; font: inherit; color: inherit; border-left: 3px solid transparent }
 .row:hover { background: var(--bg) }
 .row.sel { border-left-color: var(--sel); background: var(--bg) }
-.row .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
-.row .rg { font-size: 0.8rem; color: var(--muted) }
-.row .deg { font: 0.82rem var(--font-mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums }
+.row .nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem }
+.row .rg { font-size: 0.74rem; color: var(--muted) }
+.row .deg { font: 0.74rem var(--font-mono); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums }
 .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 6px; vertical-align: 1px }
 .dot.flag { background: var(--flag) }
-.detail { padding: 16px 18px; display: grid; gap: 18px }
-.detail h2 { margin: 0; font-size: 1.3rem; text-wrap: balance }
-.detail .sub { color: var(--muted); font-size: 0.9rem }
-.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px }
-@media (max-width: 640px) { .two { grid-template-columns: minmax(0, 1fr) } }
+.main { padding: 10px 14px; display: grid; gap: 8px }
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px }
+.head h2 { margin: 0; font-size: 1.2rem }
+.head .sub { color: var(--muted); font-size: 0.82rem }
+.console { display: grid; grid-template-columns: minmax(0, 250px) minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; align-items: start }
+@media (max-width: 1250px) { .console { grid-template-columns: minmax(0, 220px) minmax(0, 1fr) } .scales { grid-column: 1 / -1 } }
+@media (max-width: 700px) { .console { grid-template-columns: minmax(0, 1fr) } }
 .local svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; background: var(--bg) }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.8rem; color: var(--muted); margin-top: 6px }
-.legend i { display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: 3px }
+.legend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 0.72rem; color: var(--muted); margin-top: 4px }
+.legend i { display: inline-block; width: 12px; height: 3px; margin-right: 4px; vertical-align: 3px }
 .legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important }
-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 14px; margin: 0; font-size: 0.92rem }
-dt { color: var(--muted) }
-dd { margin: 0; font-family: var(--font-mono); font-size: 0.86rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
-.flags { margin-top: 14px; display: grid; gap: 8px }
-.flagnote { border-left: 3px solid var(--flag); padding: 4px 0 4px 10px; font-size: 0.9rem }
-.flagnote b { color: var(--flag) }
-.okn { border-left-color: var(--ok) } .okn b { color: var(--ok) }
-.label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin: 0 0 8px }
-.section { border-top: 1px solid var(--line); padding-top: 16px }
-.section > h3 { margin: 0 0 4px; font-size: 1.1rem }
-.section > p { margin: 0 0 12px; color: var(--muted); font-size: 0.9rem; max-width: 75ch }
-.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px }
-.preset { font: 600 0.8rem var(--font-body); border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 6px; padding: 4px 10px; cursor: pointer }
+.label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin: 0 0 4px }
+.presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px }
+.preset { font: 600 0.72rem var(--font-body); border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 5px; padding: 2px 7px; cursor: pointer }
 .preset:hover { border-color: var(--muted) }
-.ctrls { display: grid; gap: 10px }
-.ctrl { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 4.6em; gap: 8px; align-items: center; font-size: 0.88rem }
+.ctrls { display: grid; gap: 4px; margin-bottom: 10px }
+.ctrl { display: grid; grid-template-columns: 6.2em minmax(0, 1fr) 4.4em; gap: 6px; align-items: center; font-size: 0.8rem }
 .ctrl label { color: var(--muted) }
-.ctrl output { font: 0.85rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
-.ctrl input[type=range] { width: 100%; accent-color: var(--fg) }
-.factors { display: grid; gap: 10px }
-.factor { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 3.4em; gap: 2px 10px; align-items: center }
-.factor .fn { font-weight: 600; font-size: 0.9rem }
-.factor .fv { font: 500 0.9rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
-.factor .why { grid-column: 2 / 4; font-size: 0.82rem; color: var(--muted) }
-.bar { position: relative; height: 10px; background: var(--grid); border-radius: 2px }
+.ctrl output { font: 0.78rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
+.ctrl input[type=range] { width: 100%; accent-color: var(--fg); margin: 0 }
+.factors { display: grid; gap: 5px }
+.factor { display: grid; grid-template-columns: 6.2em minmax(0, 1fr) 2.8em; gap: 0 6px; align-items: center }
+.factor .fn { font-weight: 600; font-size: 0.8rem }
+.factor .fv { font: 500 0.8rem var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
+.factor .why { grid-column: 2 / 4; font-size: 0.72rem; color: var(--muted); line-height: 1.3 }
+.bar { position: relative; height: 8px; background: var(--grid); border-radius: 2px }
 .bar span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 4px 4px 0; background: var(--fg) }
 .bar .one { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--muted) }
-.chain { font: 0.88rem var(--font-mono); font-variant-numeric: tabular-nums; margin-top: 14px; overflow-wrap: anywhere }
-.result { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap }
-.pill { font-weight: 700; padding: 4px 12px; border-radius: 6px; font-size: 1rem }
-.score { font: 600 1.6rem var(--font-mono); font-variant-numeric: tabular-nums }
-.scale svg { width: 100%; height: auto; display: block; margin-top: 10px }
+.chain { font: 0.76rem var(--font-mono); font-variant-numeric: tabular-nums; margin-top: 6px; color: var(--muted); overflow-wrap: anywhere }
+.scorebox { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px }
+.score { font: 600 2rem/1 var(--font-mono); font-variant-numeric: tabular-nums }
+.scorebox .of { color: var(--muted); font-size: 0.8rem }
+.scale { margin-bottom: 7px }
+.scale .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 3px }
+.scale .nm { font-weight: 600; font-size: 0.82rem }
+.scale .nm small { font-weight: 400; color: var(--muted) }
+.pill { font-weight: 700; padding: 1px 9px; border-radius: 5px; font-size: 0.82rem; white-space: nowrap }
+.scale svg { width: 100%; height: auto; display: block }
+.reserved { font-size: 0.72rem; color: var(--muted); margin-top: 3px }
+.ftg { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 8px; font-size: 0.76rem; color: var(--muted) }
+.ftg button { font: 600 0.74rem var(--font-body); border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 5px; padding: 2px 7px; cursor: pointer; font-variant-numeric: tabular-nums }
+.ftg button[aria-pressed="true"] { background: var(--fg); color: var(--surface); border-color: var(--fg) }
+.ftg button small { font-weight: 400; opacity: .75 }
+.share svg { width: 100%; height: auto; display: block }
+.note { font-size: 0.74rem; color: var(--muted); margin: 4px 0 0 }
+details { border-top: 1px solid var(--line); padding-top: 6px }
+summary { cursor: pointer; font-weight: 600; font-size: 0.86rem; padding: 2px 0 }
+summary span { font-weight: 400; color: var(--muted); font-size: 0.78rem; margin-left: 6px }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; margin-top: 6px }
+@media (max-width: 700px) { .two { grid-template-columns: minmax(0, 1fr) } }
+dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; margin: 0; font-size: 0.82rem }
+dt { color: var(--muted) }
+dd { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere }
+.flags { display: grid; gap: 6px }
+.flagnote { border-left: 3px solid var(--flag); padding: 2px 0 2px 8px; font-size: 0.8rem }
+.flagnote b { color: var(--flag) }
+.okn { border-left-color: var(--ok) } .okn b { color: var(--ok) }
 .curve { position: relative }
 .curve svg { width: 100%; height: auto; display: block }
-.curve h4 { margin: 0 0 2px; font-size: 0.95rem }
-.curve p { margin: 0 0 6px; font-size: 0.82rem; color: var(--muted) }
-.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: 0.8rem var(--font-mono); white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.12) }
-.method { font-size: 0.86rem; color: var(--muted); max-width: 78ch; margin-top: 22px }
-.method p { margin: 6px 0 }
+.curve h4 { margin: 0; font-size: 0.84rem }
+.curve p { margin: 0 0 4px; font-size: 0.74rem; color: var(--muted) }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font: 0.76rem var(--font-mono); white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.12) }
+.method { font-size: 0.8rem; color: var(--muted); max-width: 90ch }
+.method p { margin: 4px 0 }
 @media (prefers-reduced-motion: no-preference) { .bar span { transition: width .15s ease } }
 </style>
 
 <div class="wrap">
   <header>
     <h1>Spot orientation review</h1>
-    <p>Which way each of the 276 breaks faces, where its offshore wind comes from, which swell directions reach it, and how those turn an hour's conditions into a quality label.</p>
+    <div class="stats" id="stats"></div>
   </header>
-  <div class="stats" id="stats"></div>
   <div class="grid">
-    <div class="panel">
+    <div class="panel side">
       <div class="overview" id="overview"></div>
       <div class="filters" id="filters" role="group" aria-label="Filter spots"></div>
       <div class="search"><input id="q" type="search" placeholder="Search spot or region" aria-label="Search spots"></div>
       <div class="list" id="list"></div>
     </div>
-    <div class="panel detail">
-      <div id="head"></div>
-      <div class="two">
-        <div class="local"><div id="map"></div>
+    <div class="panel main">
+      <div class="head" id="head"></div>
+      <div class="console">
+        <div class="local">
+          <div id="map"></div>
           <div class="legend">
             <span style="color:var(--facing)"><i style="background:var(--facing)"></i><span style="color:var(--muted)">Facing</span></span>
-            <span style="color:var(--wind)"><i class="dash" style="background:var(--wind)"></i><span style="color:var(--muted)">Offshore direction</span></span>
-            <span><i style="background:var(--swell);opacity:.4;height:8px"></i>Swell window</span>
-            <span><i style="background:var(--swell)"></i>Swell now</span>
-            <span><i style="background:var(--wind)"></i>Wind now</span>
+            <span style="color:var(--wind)"><i class="dash" style="background:var(--wind)"></i><span style="color:var(--muted)">Offshore</span></span>
+            <span><i style="background:var(--swell);opacity:.4;height:7px"></i>Window</span>
+            <span><i style="background:var(--swell)"></i>Swell</span>
+            <span><i style="background:var(--wind)"></i>Wind</span>
           </div>
         </div>
-        <div id="facts"></div>
-      </div>
-
-      <div class="section">
-        <h3>How the label is built</h3>
-        <p>Set an hour's conditions, or pick an example. Each factor runs the app's own scoring code for this spot. The score is their product × 100, and the label comes from the score band.</p>
-        <div class="presets" id="presets"></div>
-        <div class="two">
+        <div>
+          <div class="label">Conditions</div>
+          <div class="presets" id="presets"></div>
           <div class="ctrls" id="ctrls"></div>
-          <div>
-            <div class="factors" id="factors"></div>
-            <div class="chain" id="chain"></div>
-            <div class="result" id="result"></div>
-            <div class="scale" id="scale"></div>
-          </div>
+          <div class="label">Factors (product × 100 = score)</div>
+          <div class="factors" id="factors"></div>
+          <div class="chain" id="chain"></div>
+        </div>
+        <div class="scales">
+          <div class="scorebox"><span class="score" id="score"></span><span class="of">/ 100 · same score on each scale; the first is what the app shows</span></div>
+          <div class="ftg" id="ftg" role="group" aria-label="Where Fair to good starts"></div>
+          <div id="scales"></div>
+          <div class="label" style="margin-top:6px" id="share-label">Forecast, all spots (daily labels)</div>
+          <div class="share" id="share"></div>
+          <p class="note">Surfline cutoffs fitted on the 24 rated hours at Old Man's (21 exact, all within one label). Very poor and the top two are set by hand: the sample has none.</p>
         </div>
       </div>
 
-      <div class="section">
-        <h3>What each direction would score</h3>
-        <p>The same hour with only the direction changed. The marker is the current setting; hover for any bearing.</p>
-        <div class="two">
-          <div class="curve" id="dircurve"></div>
-          <div class="curve" id="windcurve"></div>
+      <details id="d-spot">
+        <summary>Spot details and flags <span id="d-spot-sum"></span></summary>
+        <div class="two"><div id="facts"></div><div class="flags" id="flags"></div></div>
+      </details>
+      <details id="d-dir">
+        <summary>Score by direction <span>what each swell and wind direction would score</span></summary>
+        <div class="two"><div class="curve" id="dircurve"></div><div class="curve" id="windcurve"></div></div>
+      </details>
+      <details id="d-method">
+        <summary>How this was derived</summary>
+        <div class="method">
+          <p><b>Facing</b> is the CDIP MOP shore normal at the transect the nearshore forecast uses for the spot, averaged over about ±200 m of coast. <b>Offshore wind</b> comes from facing + 180°. <b>Swell window</b> is the open water within ±90° of facing (rays every 2° over the Salix elevation grids; only land within 30 km blocks; gaps up to 8° bridged).</p>
+          <p><b>Bottom type</b>: point if the coast bends seaward by 20° or more within ±500 m; otherwise reef if at least 40% of the transect is hard seabed in CDFW's <i>Predicted Nearshore Benthic Substrates of California</i> (BIOS ds3091, CC BY 4.0), or at least 25% with a mostly rocky shoreline in CDFW's <i>Shoreline Types</i> (BIOS ds3115, NOAA ESI, CC BY 4.0); otherwise beach. <b>Size</b>: every spot peaks at 1.8 m; steep or gravel beaches close out sooner.</p>
+          <p><b>Label scales.</b> Adopted (2026-10-08): Very poor 0, Poor 5, Poor to fair 8, Fair 28, Fair to good 48 (fitted at 42, raised to keep the top label rare), capped there; Good and Epic reserved for people (human forecasts or observations) or a model calibrated on user reports. Previous: Poor 0, Fair 22, Good 42, Excellent 70, Epic 92. Surfline's 7 ratings mapped onto the same score: Very poor below 5, Poor 5, Poor to fair 8, Fair 28, Fair to good 42 (fitted), then Good 70 and Epic 92 (set to match ours). In the capped version, as on Surfline, the model stops at Fair to good and the top two are reserved for observed reports. <i>Ours 7</i> uses Surfline's steps but tops out at Excellent instead of Epic.</p>
+          <p>Anything entered in the rating columns of locations.csv overrides these values. Tide is not part of the hourly score yet.</p>
         </div>
-      </div>
+      </details>
     </div>
-  </div>
-  <div class="method">
-    <div class="label">How the orientation was derived</div>
-    <p><b>Facing</b> is the CDIP MOP shore normal at the transect the nearshore forecast already uses for the spot, averaged with its neighbours over about ±200 m of coast (closer transects weigh more). The ±500 m and ±1 km averages are only a stability check.</p>
-    <p><b>Offshore wind</b> comes from facing + 180°. <b>Swell window</b> is the open water within ±90° of facing, from rays every 2° over the Salix elevation grids. Only land within 30 km blocks a ray, and gaps up to 8° (a small island's shadow) are bridged. Channel Islands shadowing is not modelled, and swell that wraps around a point from outside the window is not seen: point breaks need a hand-set window.</p>
-    <p>Anything entered in the rating columns of locations.csv overrides these values. Tide is not part of the hourly score yet, so its factor is always 1.00.</p>
   </div>
 </div>
 
@@ -165,20 +187,57 @@ __ENGINE__
 const DATA = __DATA__;
 const FLAG_TEXT = {
   coast_turns: ['Coast turns', 'The 200 m, 500 m and 1 km averages differ by more than 20°. Probably a point or cove: check that the facing matches where the wave breaks.'],
-  facing_blocked: ['Facing blocked', 'Land within 30 km lies straight out from the break, so the swell window is centred on the open water instead of the facing direction.'],
+  facing_blocked: ['Facing blocked', 'Land within 30 km lies straight out from the break, so the swell window is centred on the open water instead.'],
   split_window: ['Split window', 'Nearby land splits the open water into several arcs. The arc the break faces is used.'],
   no_transect: ['No MOP transect', 'No transect within 2 km. Facing is the centre of the open water around the pin.'],
   no_normal: ['No shore normal', 'The transect has no CDIP shore normal. Facing is the centre of the open water around the pin.'],
+  armoured_shore: ['Armoured shoreline', 'Mostly riprap or seawall. A harbour or jetty can fake a headland, so check whether this is really a point.'],
+  no_shoreline: ['No mapped shoreline', 'No classified shoreline within 250 m. Around Seal Beach these are jetty-made "points": check the bottom type.'],
 };
-const FILTERS = [['all', 'All'], ['flagged', 'Needs check'], ['coast_turns', 'Coast turns'], ['facing_blocked', 'Facing blocked'], ['split_window', 'Split window'], ['no_transect', 'No transect']];
+const FILTERS = [['all', 'All'], ['flagged', 'Needs check'], ['b:point', 'Points'], ['b:reef', 'Reefs'], ['b:beach', 'Beaches'], ['shorecheck', 'Shoreline check'],
+  ['coast_turns', 'Coast turns'], ['facing_blocked', 'Facing blocked'], ['no_transect', 'No transect']];
+const BOTTOM_TEXT = { point: 'Point', reef: 'Reef', beach: 'Beach' };
+// The same 0-100 score read on three label scales. `from` = inclusive lower bound.
+// Adopted scale = the app's engine (RATING_BUCKETS), capped at Fair to good.
+// FTG_OPTIONS lets the page try other Fair-to-good floors; `exact` = hours
+// matching Surfline's label exactly (of 24, Old Man's, engine of 2026-10-08;
+// every option is within one label on all 24).
+const ENGINE_FTG = (RATING_BUCKETS.find(b => b.name === 'Fair to good') || {}).floor;
+const FTG_OPTIONS = [{ from: 42, exact: 20 }, { from: 45, exact: 19 }, { from: 48, exact: 18 }, { from: 50, exact: 16 }];
+let ftgFrom = ENGINE_FTG;
+const adoptedBands = () => RATING_BUCKETS.slice().reverse().map(b =>
+  ({ name: b.name, color: b.color, from: b.name === 'Fair to good' ? ftgFrom : b.floor }));
+const ADOPTED = adoptedBands();
+const PREVIOUS = [
+  { name: 'Poor', color: '#ef4444', from: 0 }, { name: 'Fair', color: '#eab308', from: 22 },
+  { name: 'Good', color: '#22c55e', from: 42 }, { name: 'Excellent', color: '#15803d', from: 70 },
+  { name: 'Epic', color: '#a855f7', from: 92 }];
+const SURF = [
+  { name: 'Very poor', color: '#f1496a', from: 0 }, { name: 'Poor', color: '#fd9500', from: 5 },
+  { name: 'Poor to fair', color: '#ffce1c', from: 8 }, { name: 'Fair', color: '#09d572', from: 28 },
+  { name: 'Fair to good', color: '#009371', from: 42 }, { name: 'Good', color: '#6751f4', from: 70 },
+  { name: 'Epic', color: '#631ec7', from: 92 }];
+const SCALES = [
+  { key: 'adopted', name: 'Adopted', sub: 'capped, our greens', bands: ADOPTED,
+    reserved: RATING_RESERVED || [], adjustable: true },
+  { key: 'previous', name: 'Previous', sub: '5 labels, until Oct 8', bands: PREVIOUS },
+  { key: 'surfA', name: 'Surfline 7', sub: 'all reachable', bands: SURF },
+  { key: 'ours7', name: 'Ours 7', sub: 'Surfline steps, Excellent on top', bands: [...SURF.slice(0, 6), { name: 'Excellent', color: '#631ec7', from: 92 }] },
+];
 const KM = 111.32, rad = d => d * Math.PI / 180, mod = a => ((a % 360) + 360) % 360;
 const fmt = v => v == null ? '–' : Math.round(v) + '°';
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const card = b => COMPASS[Math.round(mod(b) / 22.5) % 16];
+const bandOf = (bands, v) => bands.reduce((hit, b) => v >= b.from ? b : hit, bands[0]);
 let filter = 'all', query = '', sel = null, prof = null;
 const cond = { h: 1.5, p: 14, sd: 270, ws: 5, wd: 90 };
 try { filter = localStorage.getItem('orient-filter') || 'all'; } catch (e) {}
+try { const o = JSON.parse(localStorage.getItem('orient-open') || '{}'); for (const id in o) { const d = document.getElementById(id); if (d) d.open = o[id]; } } catch (e) {}
+document.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => {
+  try { const o = JSON.parse(localStorage.getItem('orient-open') || '{}'); o[d.id] = d.open; localStorage.setItem('orient-open', JSON.stringify(o)); } catch (e) {}
+  if (d.id === 'd-dir' && d.open) renderCurves();
+}));
 
 const coastLines = (() => {
   const lines = []; let cur = [];
@@ -196,14 +255,18 @@ const coastLines = (() => {
 const S = DATA.spots;
 const count = f => S.filter(s => s.flags.includes(f)).length;
 document.getElementById('stats').innerHTML =
-  `<span><b>${S.length}</b> spots</span><span><b>${S.filter(s => s.src === 'mop').length}</b> from MOP transects</span>` +
-  `<span><b>${S.filter(s => s.flags.length).length}</b> need a check</span><span><b>${count('coast_turns')}</b> coast turns</span>` +
-  `<span><b>${count('facing_blocked')}</b> facing blocked</span><span><b>${count('no_transect')}</b> no transect</span>`;
+  `<span><b>${S.length}</b> spots</span><span><b>${S.filter(s => s.bottom === 'point').length}</b> points · <b>${S.filter(s => s.bottom === 'reef').length}</b> reefs · <b>${S.filter(s => s.bottom === 'beach').length}</b> beaches</span>` +
+  `<span><b>${S.filter(s => s.flags.length || (s.bflags || []).length).length}</b> need a check</span>`;
 
+function needsCheck(s) { return s.flags.length || (s.bflags || []).length; }
 function visible() {
   const q = query.toLowerCase();
-  return S.filter(s => (filter === 'all' || (filter === 'flagged' ? s.flags.length : s.flags.includes(filter)))
-    && (!q || s.name.toLowerCase().includes(q) || s.region.toLowerCase().includes(q)));
+  const match = s => filter === 'all' ? true
+    : filter === 'flagged' ? needsCheck(s)
+    : filter.startsWith('b:') ? s.bottom === filter.slice(2)
+    : filter === 'shorecheck' ? (s.bflags || []).length
+    : s.flags.includes(filter);
+  return S.filter(s => match(s) && (!q || s.name.toLowerCase().includes(q) || s.region.toLowerCase().includes(q)));
 }
 function renderFilters() {
   document.getElementById('filters').innerHTML = FILTERS.map(([k, l]) =>
@@ -219,25 +282,28 @@ document.getElementById('q').addEventListener('input', e => { query = e.target.v
 function renderList() {
   document.getElementById('list').innerHTML = visible().map(s =>
     `<button class="row${sel && sel.slug === s.slug ? ' sel' : ''}" type="button" data-s="${s.slug}">
-      <span class="nm"><span class="dot${s.flags.length ? ' flag' : ''}"></span>${s.name}</span>
-      <span class="deg">faces ${fmt(s.facing)}</span>
-      <span class="rg">${s.region}</span>
-      <span class="deg">offshore ${fmt(s.off)}</span>
-    </button>`).join('') || '<p style="padding:12px;color:var(--muted)">No spots match.</p>';
+      <span class="nm"><span class="dot${needsCheck(s) ? ' flag' : ''}"></span>${s.name}</span>
+      <span class="deg">${fmt(s.facing)}</span>
+      <span class="rg">${s.region}${s.bottom ? ' · ' + BOTTOM_TEXT[s.bottom] : ''}</span>
+      <span class="deg">off ${fmt(s.off)}</span>
+    </button>`).join('') || '<p style="padding:10px;color:var(--muted)">No spots match.</p>';
 }
 document.getElementById('list').addEventListener('click', e => { const b = e.target.closest('[data-s]'); if (b) select(b.dataset.s); });
 
 function renderOverview() {
-  const W = 360, H = 400, lat0 = 32.3, lat1 = 42.2, lon0 = -124.6, lon1 = -116.9, k = Math.cos(rad(37));
-  const sc = Math.min(W / ((lon1 - lon0) * k), H / (lat1 - lat0));
-  const X = lon => (lon - lon0) * k * sc + (W - (lon1 - lon0) * k * sc) / 2, Y = lat => (lat1 - lat) * sc;
+  const W = 290, H = 190, lat0 = 32.3, lat1 = 42.2, lon0 = -124.6, lon1 = -116.9, k = Math.cos(rad(37));
+  // Coast runs NW-SE: rotate so it fills the short panel (screen x along the coast).
+  const pts = (lat, lon) => [(lon - lon0) * k, (lat1 - lat)];
+  const sc = Math.min(W / ((lon1 - lon0) * k), H / (lat1 - lat0)) * 0.98;
+  const ox = (W - (lon1 - lon0) * k * sc) / 2;
+  const X = lon => ox + (lon - lon0) * k * sc, Y = lat => (lat1 - lat) * sc;
   const vis = new Set(visible().map(s => s.slug));
-  let h = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="California coast with spot positions">`;
-  coastLines.forEach(l => { h += `<polyline fill="none" stroke="${css('--coast')}" stroke-width="1" points="${l.filter((_, i) => i % 3 === 0 || i === l.length - 1).map(p => X(p[1]).toFixed(1) + ',' + Y(p[0]).toFixed(1)).join(' ')}"/>`; });
+  let h = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="California coast with spot positions">`;
+  coastLines.forEach(l => { h += `<polyline fill="none" stroke="${css('--coast')}" stroke-width="1" points="${l.filter((_, i) => i % 4 === 0 || i === l.length - 1).map(p => X(p[1]).toFixed(1) + ',' + Y(p[0]).toFixed(1)).join(' ')}"/>`; });
   S.forEach(s => {
     if (!vis.has(s.slug)) return;
     const on = sel && sel.slug === s.slug;
-    h += `<circle data-s="${s.slug}" cx="${X(s.lon).toFixed(1)}" cy="${Y(s.lat).toFixed(1)}" r="${on ? 6 : 3.5}" fill="${s.flags.length ? css('--flag') : css('--ok')}" stroke="${on ? css('--sel') : css('--surface')}" stroke-width="${on ? 2 : 1}" style="cursor:pointer"><title>${s.name}</title></circle>`;
+    h += `<circle data-s="${s.slug}" cx="${X(s.lon).toFixed(1)}" cy="${Y(s.lat).toFixed(1)}" r="${on ? 5 : 2.6}" fill="${needsCheck(s) ? css('--flag') : css('--ok')}" stroke="${on ? css('--sel') : css('--surface')}" stroke-width="${on ? 2 : 0.8}" style="cursor:pointer"><title>${s.name}</title></circle>`;
   });
   document.getElementById('overview').innerHTML = h + '</svg>';
 }
@@ -254,9 +320,8 @@ function arrow(x0, y0, x1, y1, color, w, dash) {
   return `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${color}" stroke-width="${w}" stroke-linecap="round"${dash ? ' stroke-dasharray="5 4"' : ''}/>` +
     `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${h1[0].toFixed(1)},${h1[1].toFixed(1)} ${h2[0].toFixed(1)},${h2[1].toFixed(1)}" fill="${color}"/>`;
 }
-
 function renderMap() {
-  const s = sel, R = 4, W = 420, c = W / 2, px = W / (2 * R);
+  const s = sel, R = 4, W = 300, c = W / 2, px = W / (2 * R);
   const lat0 = s.plat ?? s.lat, lon0 = s.plon ?? s.lon, k = Math.cos(rad(lat0));
   const X = lon => c + (lon - lon0) * KM * k * px, Y = lat => c - (lat - lat0) * KM * px;
   const at = (b, km) => [c + km * px * Math.sin(rad(b)), c - km * px * Math.cos(rad(b))];
@@ -269,41 +334,42 @@ function renderMap() {
   { const [ix, iy] = at(prof.swell_ideal, 3.7); g += `<line x1="${c}" y1="${c}" x2="${ix.toFixed(1)}" y2="${iy.toFixed(1)}" stroke="${css('--swell')}" stroke-opacity=".6" stroke-dasharray="2 4" stroke-width="1.5"/>`; }
   { const [fx, fy] = at(s.facing ?? prof.swell_ideal, 2.3); g += arrow(c, c, fx, fy, css('--facing'), 3); }
   { const [ox, oy] = at(prof.offshore_dir, 2.3); g += arrow(ox, oy, c + (ox - c) * 0.18, c + (oy - c) * 0.18, css('--wind'), 1.8, true); }
-  // Current conditions: arrows travel toward the spot from where they come from.
-  { const [sx, sy] = at(cond.sd, 3.9), [ex, ey] = at(cond.sd, 0.5); g += arrow(sx, sy, ex, ey, css('--swell'), 4.5); }
-  { const [sx, sy] = at(cond.wd, 3.3), [ex, ey] = at(cond.wd, 0.9); g += arrow(sx, sy, ex, ey, css('--wind'), 3.5); }
-  g += `<circle cx="${X(s.lon).toFixed(1)}" cy="${Y(s.lat).toFixed(1)}" r="5" fill="${css('--surface')}" stroke="${css('--fg')}" stroke-width="2"><title>Spot pin</title></circle>`;
+  { const [sx, sy] = at(cond.sd, 3.9), [ex, ey] = at(cond.sd, 0.5); g += arrow(sx, sy, ex, ey, css('--swell'), 4); }
+  { const [sx, sy] = at(cond.wd, 3.3), [ex, ey] = at(cond.wd, 0.9); g += arrow(sx, sy, ex, ey, css('--wind'), 3); }
+  g += `<circle cx="${X(s.lon).toFixed(1)}" cy="${Y(s.lat).toFixed(1)}" r="4.5" fill="${css('--surface')}" stroke="${css('--fg')}" stroke-width="2"><title>Spot pin</title></circle>`;
   if (s.plat != null) g += `<rect x="${c - 3}" y="${c - 3}" width="6" height="6" fill="${css('--fg')}"><title>MOP prediction site ${s.tr}</title></rect>`;
-  g += `<g fill="${css('--muted')}" font-family="IBM Plex Mono, monospace" font-size="12"><text x="${c}" y="16" text-anchor="middle">N</text>` +
-       `<line x1="16" y1="${W - 16}" x2="${16 + px}" y2="${W - 16}" stroke="${css('--muted')}" stroke-width="2"/><text x="16" y="${W - 22}">1 km</text></g></svg>`;
+  g += `<g fill="${css('--muted')}" font-family="IBM Plex Mono, monospace" font-size="11"><text x="${c}" y="13" text-anchor="middle">N</text>` +
+       `<line x1="12" y1="${W - 12}" x2="${12 + px}" y2="${W - 12}" stroke="${css('--muted')}" stroke-width="2"/><text x="12" y="${W - 17}">1 km</text></g></svg>`;
   document.getElementById('map').innerHTML = g;
 }
 
 function renderHead() {
   const s = sel, hand = Object.keys(s.hand || {});
+  const allFlags = [...s.flags, ...(s.bflags || [])];
   document.getElementById('head').innerHTML = `<h2>${s.name}</h2>
-    <div class="sub">${s.region} · ${s.tr ? 'MOP ' + s.tr : 'no MOP transect'} · facing from ${s.src === 'mop' ? 'shore normals' : 'open water'}${hand.length ? ' · hand-set: ' + hand.join(', ') : ''}</div>`;
-  const flags = s.flags.length
-    ? s.flags.map(f => `<div class="flagnote"><b>${FLAG_TEXT[f][0]}.</b> ${FLAG_TEXT[f][1]}</div>`).join('')
-    : '<div class="flagnote okn"><b>No flags.</b> The three averages agree and the break faces open water.</div>';
+    <span class="sub">${s.region} · ${s.bottom ? BOTTOM_TEXT[s.bottom] + (s.bottom_hand ? ' (by hand)' : '') : 'bottom unknown'} · faces ${fmt(s.facing)} ${s.facing != null ? card(s.facing) : ''} · offshore ${fmt(prof.offshore_dir)} · window ${fmt(prof.swell_min)}–${fmt(prof.swell_max)} · size ${prof.size_min}/${prof.size_ideal}/${prof.size_max} m${hand.length ? ' · hand-set: ' + hand.join(', ') : ''}</span>`;
+  document.getElementById('d-spot-sum').textContent = allFlags.length ? `${allFlags.length} flag${allFlags.length > 1 ? 's' : ''} to check` : 'no flags';
   document.getElementById('facts').innerHTML = `<dl>
-      <dt>Facing</dt><dd>${fmt(s.facing)} ${s.facing != null ? card(s.facing) : ''}</dd>
-      <dt>Offshore wind from</dt><dd>${fmt(prof.offshore_dir)} ${card(prof.offshore_dir)}</dd>
-      <dt>Fully offshore within</dt><dd>±${Math.round(prof.offshore_width)}°, fading to ±${Math.round(prof.offshore_width + WIND_FADE_DEG)}°</dd>
-      <dt>Average over 500 m / 1 km</dt><dd>${fmt(s.f500)} / ${fmt(s.f1k)}</dd>
-      <dt>Spread of the averages</dt><dd>${fmt(s.spread)}</dd>
-      <dt>Swell window</dt><dd>${fmt(prof.swell_min)} – ${fmt(prof.swell_max)}</dd>
-      <dt>Ideal swell from</dt><dd>${fmt(prof.swell_ideal)} ${card(prof.swell_ideal)}</dd>
-      <dt>Working size (Hs)</dt><dd>${prof.size_min}–${prof.size_ideal}–${prof.size_max} m</dd>
-      <dt>Open water within ±90°</dt><dd>${s.arcs ? s.arcs.split(';').map(a => a.replace('-', '–') + '°').join(', ') : 'none'}</dd>
-    </dl><div class="flags">${flags}</div>`;
+      <dt>Facing</dt><dd>${fmt(s.facing)} ${s.facing != null ? card(s.facing) : ''} (500 m ${fmt(s.f500)}, 1 km ${fmt(s.f1k)}, spread ${fmt(s.spread)})</dd>
+      <dt>Offshore wind from</dt><dd>${fmt(prof.offshore_dir)} ${card(prof.offshore_dir)}; fully offshore within ±${Math.round(prof.offshore_width)}°</dd>
+      <dt>Swell window</dt><dd>${fmt(prof.swell_min)} – ${fmt(prof.swell_max)}, ideal ${fmt(prof.swell_ideal)}</dd>
+      <dt>Open water ±90°</dt><dd>${s.arcs ? s.arcs.split(';').map(a => a.replace('-', '–') + '°').join(', ') : 'none'}</dd>
+      <dt>Bottom type</dt><dd>${s.bottom ? BOTTOM_TEXT[s.bottom] + (s.bottom_hand ? ' (set by hand)' : ' (' + s.bwhy + ')') : '–'}</dd>
+      <dt>Hard seabed</dt><dd>${s.hard == null ? '–' : Math.round(s.hard * 100) + '%'} of ${s.bcov == null ? '–' : Math.round(s.bcov * 100) + '% mapped'}</dd>
+      <dt>Shoreline 250 m</dt><dd>${s.shore && s.shore.sand != null ? ['rock', 'gravel', 'sand', 'armoured'].filter(g => s.shore[g] > 0.04).map(g => g + ' ' + Math.round(s.shore[g] * 100) + '%').join(', ') : 'not mapped'}</dd>
+      <dt>Coast bend</dt><dd>${s.bend == null ? '–' : (s.bend > 0 ? '+' : '') + Math.round(s.bend) + '° (+ = headland)'}</dd>
+      <dt>Working size (Hs)</dt><dd>${prof.size_min} / ${prof.size_ideal} / ${prof.size_max} m (too small / ideal / closes out)</dd>
+    </dl>`;
+  document.getElementById('flags').innerHTML = allFlags.length
+    ? allFlags.map(f => `<div class="flagnote"><b>${FLAG_TEXT[f][0]}.</b> ${FLAG_TEXT[f][1]}</div>`).join('')
+    : '<div class="flagnote okn"><b>No flags.</b> The averages agree and the break faces open water.</div>';
 }
 
 const CTRLS = [
-  ['h', 'Wave height', 0, 5, 0.1, v => v.toFixed(1) + ' m'],
+  ['h', 'Height', 0, 5, 0.1, v => v.toFixed(1) + ' m'],
   ['p', 'Period', 4, 20, 1, v => v + ' s'],
   ['sd', 'Swell from', 0, 359, 1, v => v + '° ' + card(v)],
-  ['ws', 'Wind speed', 0, 30, 1, v => v + ' kt'],
+  ['ws', 'Wind', 0, 30, 1, v => v + ' kt'],
   ['wd', 'Wind from', 0, 359, 1, v => v + '° ' + card(v)],
 ];
 document.getElementById('ctrls').innerHTML = CTRLS.map(([k, l, a, b, st]) =>
@@ -316,14 +382,15 @@ CTRLS.forEach(([k, , , , , f]) => document.getElementById('c-' + k).addEventList
 function syncCtrls() { CTRLS.forEach(([k, , , , , f]) => { document.getElementById('c-' + k).value = cond[k]; document.getElementById('o-' + k).textContent = f(cond[k]); }); }
 
 function presets() {
-  const i = prof.swell_ideal, o = prof.offshore_dir;
+  const i = Math.round(prof.swell_ideal), o = Math.round(prof.offshore_dir);
   return [
-    ['Clean groundswell, light offshore', { h: 1.5, p: 14, sd: Math.round(i), ws: 6, wd: Math.round(o) }],
-    ['Same swell, W from outside the window', { h: 1.5, p: 14, sd: 280, ws: 6, wd: Math.round(o) }],
-    ['Afternoon onshore', { h: 1.2, p: 11, sd: Math.round(i), ws: 13, wd: Math.round(mod(o + 180)) }],
-    ['Cross-shore breeze', { h: 1.2, p: 12, sd: Math.round(i), ws: 10, wd: Math.round(mod(o + 85)) }],
-    ['Storm: big, short, windy', { h: 3.4, p: 9, sd: Math.round(i), ws: 20, wd: Math.round(o) }],
-    ['Small wind swell', { h: 0.7, p: 6, sd: Math.round(i), ws: 8, wd: Math.round(mod(o + 160)) }],
+    ['Clean groundswell', { h: 1.5, p: 14, sd: i, ws: 6, wd: o }],
+    ['Big clean day', { h: 3.2, p: 15, sd: i, ws: 5, wd: o }],
+    ['W swell, outside window', { h: 1.5, p: 14, sd: 280, ws: 6, wd: o }],
+    ['Afternoon onshore', { h: 1.2, p: 11, sd: i, ws: 13, wd: Math.round(mod(o + 180)) }],
+    ['Cross-shore', { h: 1.2, p: 12, sd: i, ws: 10, wd: Math.round(mod(o + 85)) }],
+    ['Storm', { h: 3.4, p: 9, sd: i, ws: 20, wd: o }],
+    ['Small wind swell', { h: 0.7, p: 6, sd: i, ws: 8, wd: Math.round(mod(o + 160)) }],
   ];
 }
 function renderPresets() {
@@ -334,51 +401,69 @@ document.getElementById('presets').addEventListener('click', e => {
   Object.assign(cond, presets()[+b.dataset.p][1]); syncCtrls(); renderScore(); renderMap(); renderCurves();
 });
 
-// --- explanations (the numbers all come from the engine in js/rating.js) ---
 function whyEnergy() {
   const h = cond.h, p = prof;
-  const size = h <= p.size_min ? `below ${p.size_min} m, too small to break`
-    : h < p.size_ideal ? `building toward the ${p.size_ideal} m sweet spot`
-    : h <= p.size_max ? `at or past the ${p.size_ideal} m sweet spot, below close-out (${p.size_max} m)`
-    : `beyond close-out size (${p.size_max} m)`;
-  const per = cond.p <= 6 ? 'short wind swell' : cond.p >= 14 ? 'long groundswell' : 'mid-period swell';
-  return `${h.toFixed(1)} m is ${size}; ${cond.p} s is ${per}.`;
+  const size = h <= p.size_min ? `below ${p.size_min} m, too small`
+    : h < p.size_ideal ? `building to ${p.size_ideal} m ideal`
+    : h <= p.size_max ? `past ideal, closes out ${p.size_max} m`
+    : `beyond close-out (${p.size_max} m)`;
+  const per = cond.p <= 6 ? 'wind swell' : cond.p >= 14 ? 'groundswell' : 'mid period';
+  return `${size}; ${per}`;
 }
 function whyDir() {
   const off = Math.round(_angDiff(cond.sd, prof.swell_ideal));
   const edge = _signedDiff(cond.sd, prof.swell_ideal) >= 0 ? prof.swell_max : prof.swell_min;
   const half = Math.round(_angDiff(prof.swell_ideal, edge));
-  const inside = off <= half;
-  return `${off}° off the ideal ${fmt(prof.swell_ideal)}; this side of the window ends ${half}° out, so the swell is ${inside ? 'inside' : 'outside'} the window.`;
+  return `${off}° off ideal; window edge ${half}° out (${off <= half ? 'inside' : 'outside'})`;
 }
 function whyWind() {
-  if (cond.ws < 3) return 'Under 3 kt: glassy, no effect from direction.';
+  if (cond.ws < 3) return 'under 3 kt: glassy';
   const off = Math.round(_angDiff(cond.wd, prof.offshore_dir)), w = prof.offshore_width;
-  const zone = off <= w ? 'offshore' : off <= w + WIND_FADE_DEG ? 'offshore, fading toward cross-shore'
-    : off <= WIND_CROSS_END_DEG ? 'cross-shore' : 'onshore';
-  let t = `${off}° off straight offshore: ${zone}.`;
-  if (off <= w + WIND_FADE_DEG) t += cond.ws <= WIND_BOOST_PEAK_KT ? ' Light offshore grooms the face.' : cond.ws < WIND_BOOST_END_KT ? ' Grooming fades as it strengthens.' : ' Too strong to groom.';
-  if (cond.ws > STRONG_WIND_KT) t += ` Over ${STRONG_WIND_KT} kt: strong-wind penalty in any direction.`;
-  return t;
+  const zone = off <= w ? 'offshore' : off <= w + WIND_FADE_DEG ? 'offshore, fading' : off <= WIND_CROSS_END_DEG ? 'cross-shore' : 'onshore';
+  return `${off}° off offshore: ${zone}${cond.ws > STRONG_WIND_KT ? `; over ${STRONG_WIND_KT} kt penalty` : ''}`;
 }
 function whySea() {
   const st = cond.h / (1.56 * Math.max(cond.p, 1) ** 2);
-  return `Steepness ${st.toFixed(4)} (height ÷ wavelength). ${st <= STORM_STEEPNESS ? `Organised swell, under ${STORM_STEEPNESS}.` : 'Steep storm sea: closes out and breaks disorganised.'}`;
+  return `steepness ${st.toFixed(4)}: ${st <= STORM_STEEPNESS ? 'organised swell' : 'storm sea'}`;
 }
-
 function textOn(hex) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
   const L = x => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
-  return 0.2126 * L(r) + 0.7152 * L(g) + 0.0722 * L(b) > 0.35 ? '#13222c' : '#ffffff';
+  return 0.2126 * L(r) + 0.7152 * L(g) + 0.0722 * L(b) > 0.3 ? '#13222c' : '#ffffff';
 }
+
+function scaleBar(sc, score) {
+  const W = 400, H = 29, x = v => 6 + v / 100 * (W - 12);
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${sc.name}: score ${Math.round(score)} reads ${bandOf(sc.bands, score).name}">`;
+  sc.bands.forEach((b, n) => {
+    const x0 = x(b.from), x1 = x(n + 1 < sc.bands.length ? sc.bands[n + 1].from : 100), cur = bandOf(sc.bands, score) === b;
+    g += `<rect x="${(x0 + 1).toFixed(1)}" y="8" width="${Math.max(1, x1 - x0 - 2).toFixed(1)}" height="9" rx="2" fill="${b.color}" opacity="${cur ? 1 : 0.55}"><title>${b.name}: ${b.from}+</title></rect>`;
+  });
+  const sx = x(Math.min(score, 100));
+  g += `<polygon points="${sx - 5},0 ${sx + 5},0 ${sx},7" fill="${css('--fg')}"/>`;
+  [0, 25, 50, 75, 100].forEach(v => { g += `<text x="${x(v)}" y="${H}" font-size="8" fill="${css('--muted')}" text-anchor="${v === 0 ? 'start' : v === 100 ? 'end' : 'middle'}" font-family="IBM Plex Mono, monospace">${v}</text>`; });
+  return g + '</svg>';
+}
+
+function renderFtg() {
+  document.getElementById('ftg').innerHTML = 'Fair to good from ' + FTG_OPTIONS.map(o =>
+    `<button type="button" data-ftg="${o.from}" aria-pressed="${o.from === ftgFrom}">${o.from}${o.from === ENGINE_FTG ? ' (app)' : ''} <small>${o.exact}/24</small></button>`).join('') +
+    '<span>· exact Surfline matches</span>';
+}
+document.getElementById('ftg').addEventListener('click', e => {
+  const b = e.target.closest('[data-ftg]'); if (!b) return;
+  ftgFrom = +b.dataset.ftg;
+  SCALES[0].bands = adoptedBands();
+  renderFtg(); renderScore(); renderShare();
+});
 
 function renderScore() {
   const f = [
     ['Energy', _energyFactor(cond.h, cond.p, prof), whyEnergy()],
-    ['Swell direction', _directionFactor(cond.sd, prof), whyDir()],
+    ['Direction', _directionFactor(cond.sd, prof), whyDir()],
     ['Wind', _windFactor(cond.ws, cond.wd, prof), whyWind()],
     ['Sea state', _seaStateFactor(cond.h, cond.p), whySea()],
-    ['Tide', _tideFactor(null, prof), 'Not used in the hourly score yet.'],
+    ['Tide', _tideFactor(null, prof), 'not used yet'],
   ];
   const MAX = 1.2;
   document.getElementById('factors').innerHTML = f.map(([n, v, why]) => `<div class="factor">
@@ -386,62 +471,79 @@ function renderScore() {
       <div class="bar" role="img" aria-label="${n} ${v.toFixed(2)}"><span style="width:${Math.min(v, MAX) / MAX * 100}%"></span><i class="one" style="left:${100 / MAX}%"></i></div>
       <span class="fv">${v.toFixed(2)}</span>
       <span class="why">${why}</span></div>`).join('');
-  const score = scoreConditions(cond.h, cond.p, cond.sd, cond.ws, cond.wd, null, prof);
-  const b = bucketForScore(score);
-  document.getElementById('chain').textContent = f.map(x => x[1].toFixed(2)).join(' × ') + ` = ${(score / 100).toFixed(2)} → score ${Math.round(score)}`;
-  document.getElementById('result').innerHTML = `<span class="score">${Math.round(score)}</span><span class="pill" style="background:${b.color};color:${textOn(b.color)}">${b.rating}</span>`;
-  // Score bands, 0-100, with the current score marked.
-  const W = 400, H = 44, x = v => 4 + v / 100 * (W - 8);
-  const bands = RATING_BUCKETS.slice().reverse();
-  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Score bands with the current score ${Math.round(score)}">`;
-  bands.forEach((bb, n) => {
-    const x0 = x(bb.floor), x1 = x(n + 1 < bands.length ? bands[n + 1].floor : 100);
-    g += `<rect x="${(x0 + 1).toFixed(1)}" y="8" width="${(x1 - x0 - 2).toFixed(1)}" height="10" rx="2" fill="${bb.color}"/>` +
-         `<text x="${((x0 + x1) / 2).toFixed(1)}" y="34" text-anchor="middle" font-size="11" fill="${css('--muted')}" font-family="Source Sans 3, sans-serif">${bb.name} ${bb.floor}+</text>`;
-  });
-  g += `<polygon points="${x(score) - 6},0 ${x(score) + 6},0 ${x(score)},8" fill="${css('--fg')}"/></svg>`;
-  document.getElementById('scale').innerHTML = g;
+  // The app labels the rounded score (builders.py rounds, then buckets).
+  const score = Math.round(scoreConditions(cond.h, cond.p, cond.sd, cond.ws, cond.wd, null, prof));
+  document.getElementById('chain').textContent = f.map(x => x[1].toFixed(2)).join(' × ') + ` = ${(score / 100).toFixed(2)}`;
+  document.getElementById('score').textContent = score;
+  document.getElementById('scales').innerHTML = SCALES.map(sc => {
+    const b = bandOf(sc.bands, score);
+    const sub = sc.adjustable && ftgFrom !== ENGINE_FTG ? `${sc.sub}, Fair to good from ${ftgFrom} (trial)` : sc.sub;
+    return `<div class="scale"><div class="top"><span class="nm">${sc.name} <small>${sub}</small></span>
+      <span class="pill" style="background:${b.color};color:${textOn(b.color)}">${b.name}</span></div>
+      ${scaleBar(sc, score)}
+      ${sc.reserved ? `<div class="reserved">Reserved for observed reports: ${sc.reserved.map(r => `<span class="pill" style="background:${r.color};color:${textOn(r.color)};font-size:.7rem;padding:0 6px">${r.name}</span>`).join(' ')}</div>` : ''}</div>`;
+  }).join('');
 }
 
-function curve(el, title, sub, fn, band, cur, color, bandColor, bandLabel) {
-  const W = 400, H = 170, L = 34, R = 8, T = 12, B = 26, YMAX = 1.2;
+// Today's daily scores across all spots, read on each scale.
+function renderShare() {
+  const hist = DATA.hist || [], n = hist.reduce((a, b) => a + b, 0);
+  if (DATA.hist_label) document.getElementById('share-label').textContent = DATA.hist_label;
+  if (!n) { document.getElementById('share').innerHTML = '<p class="note">No forecast scores embedded.</p>'; return; }
+  const W = 400, row = 22, H = SCALES.length * row + 2;
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of today's daily labels on each scale">`;
+  SCALES.forEach((sc, i) => {
+    const counts = sc.bands.map(() => 0);
+    hist.forEach((c, v) => { const b = bandOf(sc.bands, v); counts[sc.bands.indexOf(b)] += c; });
+    let x = 92;
+    g += `<text x="0" y="${i * row + 14}" font-size="10" fill="${css('--fg')}" font-family="Source Sans 3, sans-serif">${sc.name}</text>`;
+    counts.forEach((c, k) => {
+      if (!c) return;
+      const w = c / n * (W - 94);
+      g += `<rect x="${x.toFixed(1)}" y="${i * row + 4}" width="${Math.max(0.5, w - 1.5).toFixed(1)}" height="13" fill="${sc.bands[k].color}"><title>${sc.bands[k].name}: ${(c / n * 100).toFixed(1)}%</title></rect>`;
+      if (w > 26) g += `<text x="${(x + w / 2).toFixed(1)}" y="${i * row + 14}" font-size="9" text-anchor="middle" fill="${textOn(sc.bands[k].color)}" font-family="IBM Plex Mono, monospace">${Math.round(c / n * 100)}%</text>`;
+      x += w;
+    });
+  });
+  document.getElementById('share').innerHTML = g + '</svg>';
+}
+
+function curve(el, title, sub, fn, band, cur, color, bandLabel) {
+  const W = 400, H = 150, L = 30, R = 8, T = 10, B = 22, YMAX = 1.2;
   const x = b => L + b / 360 * (W - L - R), y = v => T + (1 - v / YMAX) * (H - T - B);
   let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
-  // band (possibly wrapping past 360)
   const span = mod(band[1] - band[0]);
   const segs = band[0] + span <= 360 ? [[band[0], band[0] + span]] : [[band[0], 360], [0, band[0] + span - 360]];
-  segs.forEach(([a, b]) => { g += `<rect x="${x(a).toFixed(1)}" y="${T}" width="${(x(b) - x(a)).toFixed(1)}" height="${H - T - B}" fill="${bandColor}" fill-opacity="0.12"/>`; });
-  [0, 0.5, 1].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${css('--grid')}" stroke-width="1"${v === 1 ? '' : ''}/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="${css('--muted')}" font-family="IBM Plex Mono, monospace">${v.toFixed(1)}</text>`; });
-  [0, 90, 180, 270, 360].forEach(b => { g += `<text x="${x(b)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="${css('--muted')}" font-family="IBM Plex Mono, monospace">${b === 360 ? 'N' : ['N', 'E', 'S', 'W'][b / 90]}</text>`; });
+  segs.forEach(([a, b]) => { g += `<rect x="${x(a).toFixed(1)}" y="${T}" width="${(x(b) - x(a)).toFixed(1)}" height="${H - T - B}" fill="${color}" fill-opacity="0.12"/>`; });
+  [0, 0.5, 1].forEach(v => { g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${css('--grid')}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end" font-size="9" fill="${css('--muted')}" font-family="IBM Plex Mono, monospace">${v.toFixed(1)}</text>`; });
+  [0, 90, 180, 270, 360].forEach(b => { g += `<text x="${x(b)}" y="${H - 6}" text-anchor="middle" font-size="9" fill="${css('--muted')}" font-family="IBM Plex Mono, monospace">${['N', 'E', 'S', 'W', 'N'][b / 90]}</text>`; });
   const pts = []; for (let b = 0; b <= 360; b += 2) pts.push(x(b).toFixed(1) + ',' + y(fn(b)).toFixed(1));
   g += `<polyline fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" points="${pts.join(' ')}"/>`;
-  g += `<line x1="${x(cur)}" x2="${x(cur)}" y1="${T}" y2="${H - B}" stroke="${css('--fg')}" stroke-width="1" stroke-dasharray="3 3"/>`;
-  g += `<circle cx="${x(cur)}" cy="${y(fn(cur))}" r="5" fill="${color}" stroke="${css('--surface')}" stroke-width="2"/>`;
-  g += `<g class="hov" visibility="hidden"><line class="hl" y1="${T}" y2="${H - B}" stroke="${css('--muted')}" stroke-width="1"/><circle class="hc" r="4" fill="${color}" stroke="${css('--surface')}" stroke-width="2"/></g>`;
+  g += `<line x1="${x(cur)}" x2="${x(cur)}" y1="${T}" y2="${H - B}" stroke="${css('--fg')}" stroke-dasharray="3 3"/>`;
+  g += `<circle cx="${x(cur)}" cy="${y(fn(cur))}" r="4.5" fill="${color}" stroke="${css('--surface')}" stroke-width="2"/>`;
+  g += `<g class="hov" visibility="hidden"><line class="hl" y1="${T}" y2="${H - B}" stroke="${css('--muted')}"/><circle class="hc" r="4" fill="${color}" stroke="${css('--surface')}" stroke-width="2"/></g>`;
   g += `<rect class="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/></svg>`;
-  el.innerHTML = `<h4>${title}</h4><p>${sub} <span style="color:var(--fg)">Shaded: ${bandLabel}.</span></p>${g}<div class="tip" hidden></div>`;
+  el.innerHTML = `<h4>${title}</h4><p>${sub} Shaded: ${bandLabel}.</p>${g}<div class="tip" hidden></div>`;
   const svg = el.querySelector('svg'), tip = el.querySelector('.tip'), hov = el.querySelector('.hov');
-  const move = e => {
+  svg.querySelector('.hit').addEventListener('pointermove', e => {
     const r = svg.getBoundingClientRect(), sx = (e.clientX - r.left) / r.width * W;
-    const b = Math.max(0, Math.min(359, Math.round((sx - L) / (W - L - R) * 360)));
-    const v = fn(b);
+    const b = Math.max(0, Math.min(359, Math.round((sx - L) / (W - L - R) * 360))), v = fn(b);
     hov.setAttribute('visibility', 'visible');
     hov.querySelector('.hl').setAttribute('x1', x(b)); hov.querySelector('.hl').setAttribute('x2', x(b));
     hov.querySelector('.hc').setAttribute('cx', x(b)); hov.querySelector('.hc').setAttribute('cy', y(v));
     tip.hidden = false; tip.textContent = `${b}° ${card(b)} · ${v.toFixed(2)}`;
-    const left = x(b) / W * r.width; tip.style.left = Math.min(Math.max(left - 50, 0), r.width - 120) + 'px';
-    tip.style.top = (y(v) / H * r.height + svg.offsetTop - 34) + 'px';
-  };
-  svg.querySelector('.hit').addEventListener('pointermove', move);
+    tip.style.left = Math.min(Math.max(x(b) / W * r.width - 50, 0), r.width - 120) + 'px';
+    tip.style.top = (y(v) / H * r.height + svg.offsetTop - 30) + 'px';
+  });
   svg.querySelector('.hit').addEventListener('pointerleave', () => { hov.setAttribute('visibility', 'hidden'); tip.hidden = true; });
 }
-
 function renderCurves() {
+  if (!document.getElementById('d-dir').open) return;
   curve(document.getElementById('dircurve'), 'Swell direction factor', 'By the direction the swell comes from.',
-    b => _directionFactor(b, prof), [prof.swell_min, prof.swell_max], cond.sd, css('--swell'), css('--swell'), 'swell window');
+    b => _directionFactor(b, prof), [prof.swell_min, prof.swell_max], cond.sd, css('--swell'), 'swell window');
   const w = prof.offshore_width;
   curve(document.getElementById('windcurve'), `Wind factor at ${cond.ws} kt`, 'By the direction the wind comes from.',
-    b => _windFactor(cond.ws, b, prof), [mod(prof.offshore_dir - w), mod(prof.offshore_dir + w)], cond.wd, css('--wind'), css('--wind'), 'fully offshore');
+    b => _windFactor(cond.ws, b, prof), [mod(prof.offshore_dir - w), mod(prof.offshore_dir + w)], cond.wd, css('--wind'), 'fully offshore');
 }
 
 function select(slug) {
@@ -453,8 +555,10 @@ function select(slug) {
   if (row) row.scrollIntoView({ block: 'nearest' });
 }
 renderFilters();
+renderFtg();
+renderShare();
 select(location.hash.slice(1) || 'ventura-point');
-const redraw = () => { renderOverview(); renderMap(); renderScore(); renderCurves(); };
+const redraw = () => { renderOverview(); renderMap(); renderScore(); renderShare(); renderCurves(); };
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
 new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 </script>

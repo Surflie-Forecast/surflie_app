@@ -6,7 +6,7 @@
 // (energy x direction x wind x tide x sea state), bucketed into five labels/colors.
 // See backend/rating_config.py for the full model description.
 
-const RATING_BUCKETS = [{"name": "Epic", "color": "#a855f7", "floor": 92}, {"name": "Excellent", "color": "#15803d", "floor": 70}, {"name": "Good", "color": "#22c55e", "floor": 42}, {"name": "Fair", "color": "#eab308", "floor": 22}, {"name": "Poor", "color": "#ef4444", "floor": 0}];
+const RATING_BUCKETS = [{"name": "Fair to good", "color": "#15803d", "floor": 48}, {"name": "Fair", "color": "#22c55e", "floor": 28}, {"name": "Poor to fair", "color": "#ffce1c", "floor": 8}, {"name": "Poor", "color": "#fd9500", "floor": 5}, {"name": "Very poor", "color": "#f1496a", "floor": 0}];
 const RATING_DEFAULT_PROFILE = {"swell_min": 180.0, "swell_ideal": 270.0, "swell_max": 360.0, "offshore_dir": 0.0, "offshore_width": 30.0, "size_min": 0.5, "size_ideal": 1.8, "size_max": 4.0, "tide_min": null, "tide_max": null};
 const WIND_FADE_DEG = 30.0;
 const WIND_CROSS_END_DEG = 120.0;
@@ -20,6 +20,7 @@ const STRONG_WIND_SPAN_KT = 8.0;
 const STRONG_WIND_FLOOR = 0.2;
 const STORM_STEEPNESS = 0.013;
 const STORM_FLOOR = 0.5;
+const RATING_RESERVED = [{"name": "Epic", "color": "#631ec7"}, {"name": "Good", "color": "#6751f4"}];
 
 function _spotProfile(meta) {
     const p = Object.assign({}, RATING_DEFAULT_PROFILE);
@@ -128,7 +129,18 @@ function bucketForScore(score) {
     for (const b of RATING_BUCKETS) {
         if (score >= b.floor) return { rating: b.name, color: b.color };
     }
-    return { rating: 'Poor', color: '#ef4444' };
+    const last = RATING_BUCKETS[RATING_BUCKETS.length - 1];
+    return { rating: last.name, color: last.color };
+}
+
+// Dark or white text for a label pill, by the fill's luminance (yellow and
+// light greens need dark text).
+function ratingTextColor(hex) {
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (isNaN(n)) return '#ffffff';
+    const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+    const L = 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255);
+    return L > 0.3 ? '#13222c' : '#ffffff';
 }
 
 // Back-compatible entry point. Existing callers pass (height, period, windSpeed);
@@ -149,5 +161,5 @@ function getRatingAndColor(swellHeight, swellPeriod, windSpeed = 0,
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { getRatingAndColor, scoreConditions, bucketForScore };
+    module.exports = { getRatingAndColor, scoreConditions, bucketForScore, ratingTextColor };
 }

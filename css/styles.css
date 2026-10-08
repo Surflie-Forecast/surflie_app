@@ -643,7 +643,7 @@ input:checked+.slider:before {
   letter-spacing: 0.02em;
 }
 
-/* Long rating names ("Excellent") get a slightly smaller font so the pill
+/* Long rating names ("Fair to good") get a slightly smaller font so the pill
    stays in proportion with its card-header neighbours; line-height matches
    the short labels' text box so all pills stay the same height. */
 .quality-label--long {

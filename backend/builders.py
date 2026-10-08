@@ -205,7 +205,8 @@ def _daily_rating(hourly_entries):
     scores = [e['score'] for e in hourly_entries
               if RATING_HOURS[0] <= int(e['datetime'][11:13]) <= RATING_HOURS[1]]
     if not scores:
-        return 'Poor', '#ef4444', 0
+        rating, color = bucket_for_score(0)
+        return rating, color, 0
     day_score = round(mean(scores))
     rating, color = bucket_for_score(day_score)
     return rating, color, day_score

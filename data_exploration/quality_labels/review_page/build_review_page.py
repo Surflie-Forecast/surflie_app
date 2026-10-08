@@ -21,6 +21,7 @@ a new one, pass its URL (you need edit access):
 """
 import argparse
 import csv
+import glob
 import json
 import os
 import sys
@@ -39,12 +40,22 @@ def num(x):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('-o', '--out', default=os.path.join(HERE, 'spot-orientation.html'))
+    ap.add_argument('--forecast-label', default='Forecast, all spots (daily labels)',
+                    help='heading for the label-share bars, e.g. naming the run date')
+    ap.add_argument('--forecast-dir', default=os.path.join(ROOT, 'api', 'forecast'),
+                    help='forecast/*.json from a pipeline run; their daily scores feed '
+                         "the page's label-share bars (default: the local api/forecast)")
     args = ap.parse_args()
 
     with open(os.path.join(ROOT, 'data', 'spot_orientation.csv'), newline='') as f:
         orient = {r['slug']: r for r in csv.DictReader(f)}
     table = mt._load_table()
     idx = {r[0]: i for i, r in enumerate(table)}
+    bottom = {}
+    bpath = os.path.join(ROOT, 'data', 'spot_bottom.csv')
+    if os.path.exists(bpath):
+        with open(bpath, newline='') as f:
+            bottom = {r['slug']: r for r in csv.DictReader(f)}
 
     spots = []
     for s in load_spots(os.path.join(ROOT, 'data', 'locations.csv')):
@@ -65,17 +76,38 @@ def main():
             'src': r['facing_source'], 'off': num(r['offshore_dir']),
             'arcs': r['open_arcs'],
             'flags': [x for x in r['flags'].split(';') if x],
+            'bottom': s.bottom_type,                    # effective (override wins)
+            'bottom_hand': bool(s.bottom_override),
+            'hard': num((bottom.get(s.slug) or {}).get('hard_share', '')),
+            'bcov': num((bottom.get(s.slug) or {}).get('coverage', '')),
+            'bend': num((bottom.get(s.slug) or {}).get('convexity', '')),
+            'bwhy': (bottom.get(s.slug) or {}).get('reason'),
+            'shore': {g: num((bottom.get(s.slug) or {}).get(f'shore_{g}', ''))
+                      for g in ('rock', 'armoured', 'gravel', 'sand', 'flat')},
+            'bflags': [x for x in ((bottom.get(s.slug) or {}).get('flags') or '').split(';') if x],
             'meta': s.profile_meta,      # what the app scores with
             'hand': s.rating_meta,       # hand-entered overrides only
         })
     coast = [[r[0], round(r[1], 5), round(r[2], 5)] for r in table]
+
+    # Histogram of daily scores (0-100) from the given forecast build.
+    hist = [0] * 101
+    for path in glob.glob(os.path.join(args.forecast_dir, '*.json')):
+        with open(path) as f:
+            for day in json.load(f).get('forecast', []):
+                if isinstance(day.get('score'), (int, float)):
+                    hist[min(100, max(0, round(day['score'])))] += 1
+    if not sum(hist):
+        print(f'  ! no daily scores in {args.forecast_dir}; label-share bars will be empty')
 
     with open(os.path.join(HERE, 'template.html')) as f:
         page = f.read()
     with open(os.path.join(ROOT, 'js', 'rating.js')) as f:
         engine = f.read()
     page = page.replace('__ENGINE__', engine).replace(
-        '__DATA__', json.dumps({'spots': spots, 'coast': coast}, separators=(',', ':')))
+        '__DATA__', json.dumps({'spots': spots, 'coast': coast, 'hist': hist,
+                                'hist_label': args.forecast_label},
+                               separators=(',', ':')))
     with open(args.out, 'w') as f:
         f.write(page)
     print(f'Wrote {os.path.relpath(args.out)} ({len(spots)} spots, {len(page) // 1024} KB)')

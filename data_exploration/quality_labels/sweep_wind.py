@@ -55,7 +55,8 @@ CURRENT = dict(full=30, ramp=30, cross_end=120, cross_pen=0.15, peak_kt=8,
 # Reference hour: 1.5 m, 14 s from the ideal direction (energy x dir = 0.85).
 REF = 0.85
 # (description, wind kt, deg off straight offshore, min score, max score)
-# Score bands: Poor <22, Fair 22-41, Good 42-69, Excellent 70-91, Epic 92+.
+# Score bands used by the guards (labels as of 2026-10-07): Poor <22, Fair 22-41,
+# Good 42-69, Excellent 70-91, Epic 92+. The guards are score thresholds and still hold.
 GUARDS = [
     ('light offshore 6 kt -> Excellent+',   6,   0, 70, 101),
     ('glassy 2 kt -> Excellent+',           2,  90, 70, 101),

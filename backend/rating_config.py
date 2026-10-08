@@ -56,19 +56,34 @@ import math
 
 
 # ---------------------------------------------------------------------------
-# Buckets: the continuous 0-100 score maps to these five labels/colors.
-# `floor` is the inclusive lower bound of the score band. Order high -> low.
-# Epic is kept for near-perfect hours (all factors close to their best); the
-# 2026-10-07 recalibration moved its floor 80 -> 92 and widened Good (42-70)
-# and Excellent (70-92). On that day's 276-spot forecast: Epic 0.2% of days
-# (was 1.4%), Excellent 3.9%, Good 18.5%.
+# Buckets: the continuous 0-100 score maps to these labels/colors. `floor` is
+# the inclusive lower bound of the score band. Order high -> low.
+#
+# Surfline-style steps, capped like Surfline's model: the model's top label
+# is "Fair to good"; Good and Epic (RESERVED_BUCKETS) need a person - a human
+# forecaster's forecast or observation - or, later, a model calibrated on
+# user session reports. Floors fitted on Surfline's own ratings for Old Man's
+# (data_exploration/quality_labels: all 24 hours within one label); Very
+# poor's floor is a guess (the sample has none). Fair to good was fitted at
+# 42 and deliberately raised to 48 so the model's top label stays rare given
+# the uncertainty (18/24 exact instead of 20; Fair to good on ~18% of days
+# instead of ~25%). Colors follow Surfline's
+# red -> orange -> yellow progression with our greens for Fair / Fair to good.
+# Replaced 2026-10-08: Poor 0 / Fair 22 / Good 42 / Excellent 70 / Epic 92.
 # ---------------------------------------------------------------------------
 BUCKETS = [
-    {'name': 'Epic',      'color': '#a855f7', 'floor': 92},   # Purple
-    {'name': 'Excellent', 'color': '#15803d', 'floor': 70},   # Dark Green
-    {'name': 'Good',      'color': '#22c55e', 'floor': 42},   # Green
-    {'name': 'Fair',      'color': '#eab308', 'floor': 22},   # Yellow
-    {'name': 'Poor',      'color': '#ef4444', 'floor': 0},    # Red
+    {'name': 'Fair to good', 'color': '#15803d', 'floor': 48},   # Dark green
+    {'name': 'Fair',         'color': '#22c55e', 'floor': 28},   # Green
+    {'name': 'Poor to fair', 'color': '#ffce1c', 'floor': 8},    # Yellow
+    {'name': 'Poor',         'color': '#fd9500', 'floor': 5},    # Orange
+    {'name': 'Very poor',    'color': '#f1496a', 'floor': 0},    # Red
+]
+
+# Not assigned by the model. Kept so the UI can show them for human-rated or,
+# once calibrated, user-report-backed hours.
+RESERVED_BUCKETS = [
+    {'name': 'Epic', 'color': '#631ec7'},   # Purple
+    {'name': 'Good', 'color': '#6751f4'},   # Indigo
 ]
 
 
@@ -102,6 +117,39 @@ class SpotProfile:
     def __init__(self, **kw):
         for k, v in DEFAULT_PROFILE.items():
             setattr(self, k, kw.get(k, v))
+
+
+# ---------------------------------------------------------------------------
+# Working size range by bottom type (see size_range()).
+# ---------------------------------------------------------------------------
+BEACH_SLOPE_REF = 1 / 50.0      # beaches steeper than this close out sooner
+BEACH_SLOPE_EXP = 0.4
+BEACH_MIN_SCALE = 0.6           # the steepest beach closes out at 60% of size_max
+GRAVEL_SHARE = 0.5              # gravel/coarse-sand shoreline at least this...
+GRAVEL_SCALE = 0.85             # ...closes out a further 15% sooner
+
+
+def size_range(bottom_type, slope=None, gravel_share=None):
+    """(size_min, size_ideal, size_max) Hs in m for a spot's bottom type.
+
+    Every spot keeps the shared size_min and size_ideal, so normal-size days
+    score the same everywhere. Only the close-out size moves, and only for
+    beaches: a steep beach (nearshore slope above BEACH_SLOPE_REF) dumps and
+    closes out sooner, and a gravel / coarse-sand beach face is steeper
+    still. Reefs, points and gentle beaches keep the shared size_max.
+    Shrinking the whole range instead was rejected: it raised steep beaches
+    on small days (a smaller sweet spot) while barely touching big ones.
+    Checked against Surfline only at Old Man's (a reef, so unchanged); the
+    beach scaling rests on surf sense until user ratings can calibrate it.
+    """
+    base = (DEFAULT_PROFILE['size_min'], DEFAULT_PROFILE['size_ideal'],
+            DEFAULT_PROFILE['size_max'])
+    if bottom_type != 'beach' or not slope:
+        return base
+    scale = min(1.0, max(BEACH_MIN_SCALE, (BEACH_SLOPE_REF / slope) ** BEACH_SLOPE_EXP))
+    if gravel_share is not None and gravel_share >= GRAVEL_SHARE:
+        scale *= GRAVEL_SCALE
+    return base[0], base[1], round(base[2] * scale, 2)
 
 
 def build_profile(meta=None, coast_normal=None):
@@ -307,7 +355,7 @@ def bucket_for_score(score):
     for b in BUCKETS:
         if score >= b['floor']:
             return b['name'], b['color']
-    return 'Poor', '#ef4444'
+    return BUCKETS[-1]['name'], BUCKETS[-1]['color']
 
 
 class RatingConfig:
@@ -349,6 +397,7 @@ class RatingConfig:
         consts = {k: v for k, v in globals().items()
                   if k.startswith(('WIND_', 'STRONG_WIND_', 'STORM_'))}
         consts_js = '\n'.join(f'const {k} = {json.dumps(v)};' for k, v in consts.items())
+        consts_js += f'\nconst RATING_RESERVED = {json.dumps(RESERVED_BUCKETS)};'
         return _JS_TEMPLATE.format(buckets=buckets_js, default=default_js,
                                    consts=consts_js)
 
@@ -476,7 +525,18 @@ function bucketForScore(score) {{
     for (const b of RATING_BUCKETS) {{
         if (score >= b.floor) return {{ rating: b.name, color: b.color }};
     }}
-    return {{ rating: 'Poor', color: '#ef4444' }};
+    const last = RATING_BUCKETS[RATING_BUCKETS.length - 1];
+    return {{ rating: last.name, color: last.color }};
+}}
+
+// Dark or white text for a label pill, by the fill's luminance (yellow and
+// light greens need dark text).
+function ratingTextColor(hex) {{
+    const n = parseInt(String(hex || '').replace('#', ''), 16);
+    if (isNaN(n)) return '#ffffff';
+    const lin = c => {{ c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }};
+    const L = 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255);
+    return L > 0.3 ? '#13222c' : '#ffffff';
 }}
 
 // Back-compatible entry point. Existing callers pass (height, period, windSpeed);
@@ -497,7 +557,7 @@ function getRatingAndColor(swellHeight, swellPeriod, windSpeed = 0,
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {{
-    module.exports = {{ getRatingAndColor, scoreConditions, bucketForScore }};
+    module.exports = {{ getRatingAndColor, scoreConditions, bucketForScore, ratingTextColor }};
 }}
 """
 
