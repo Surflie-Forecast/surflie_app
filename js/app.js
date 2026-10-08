@@ -1222,9 +1222,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // chart.js calls this after switching modes: the plot's vertical extent
     // changes (bars vs overlay lines), and the box is measured from it.
-    window.updateChartHighlight = () => updateChartHighlight();
+    // Re-measure only: a view switch must leave the chart wherever the user
+    // scrolled it, not snap it back onto the forecast cards' days.
+    window.updateChartHighlight = () => updateChartHighlight({ scroll: false });
 
-    function updateChartHighlight() {
+    function updateChartHighlight({ scroll = true } = {}) {
         const cards = forecastContainer.querySelectorAll('.forecast-card');
         const containerRect = forecastContainer.getBoundingClientRect();
 
@@ -1399,10 +1401,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Since this is called on scroll, direct assignment is better for 1:1 feel, but smooth is nicer for "catch up".
             // Let's try direct 'scrollTo' with smooth behavior first.
 
-            container.scrollTo({
-                left: targetScroll,
-                behavior: 'smooth'
-            });
+            if (scroll) {
+                container.scrollTo({
+                    left: targetScroll,
+                    behavior: 'smooth'
+                });
+            }
         } else {
             overlay.style.display = 'none';
         }
