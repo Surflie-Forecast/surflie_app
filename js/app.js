@@ -713,7 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 2px;">
                             <div style="font-size: 0.7rem; font-weight: 500; color: #555; width: 40px; flex-shrink: 0; text-align: left; line-height: 1;">${dateStr}</div>
                             ${plotHtml}
-                            <span class="quality-label" style="background-color: ${day.color}; color: ${ratingTextColor(day.color)}; font-size: 0.55rem; padding: 1px 5px; min-width: 45px; text-align: center; border-radius: 4px; line-height: 1.4;">${day.rating}</span>
+                            <span class="quality-label" style="background-color: ${day.color}; font-size: 0.55rem; padding: 1px 5px; min-width: 45px; text-align: center; border-radius: 4px; line-height: 1.4;">${ratingDisplayName(day.rating)}</span>
                         </div>
                     `;
                 });
@@ -1576,7 +1576,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="day-label">${dayLabel}</span>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             ${miniPlotHtml}
-                            <span class="quality-label${day.rating.length > 4 ? ' quality-label--long' : ''}" style="background-color: ${day.color}; color: ${ratingTextColor(day.color)};">${day.rating}</span>
+                            <span class="quality-label${ratingDisplayName(day.rating).length > 4 ? ' quality-label--long' : ''}" style="background-color: ${day.color};">${ratingDisplayName(day.rating)}</span>
                         </div>
                         <div style="display: flex; align-items: center; gap: 4px;">
                             <span class="date-label">${day.date}</span>

@@ -133,14 +133,10 @@ function bucketForScore(score) {
     return { rating: last.name, color: last.color };
 }
 
-// Dark or white text for a label pill, by the fill's luminance (yellow and
-// light greens need dark text).
-function ratingTextColor(hex) {
-    const n = parseInt(String(hex || '').replace('#', ''), 16);
-    if (isNaN(n)) return '#ffffff';
-    const lin = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-    const L = 0.2126 * lin(n >> 16 & 255) + 0.7152 * lin(n >> 8 & 255) + 0.0722 * lin(n & 255);
-    return L > 0.3 ? '#13222c' : '#ffffff';
+// Compact form of a label for pills: "Poor to fair" -> "Poor/fair",
+// "Fair to good" -> "Fair/good". Display only; the API keeps the full name.
+function ratingDisplayName(name) {
+    return String(name || '').replace(' to ', '/');
 }
 
 // Back-compatible entry point. Existing callers pass (height, period, windSpeed);
@@ -161,5 +157,5 @@ function getRatingAndColor(swellHeight, swellPeriod, windSpeed = 0,
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { getRatingAndColor, scoreConditions, bucketForScore, ratingTextColor };
+    module.exports = { getRatingAndColor, scoreConditions, bucketForScore, ratingDisplayName };
 }

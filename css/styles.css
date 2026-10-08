@@ -623,6 +623,7 @@ input:checked+.slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--glass-border);
   padding-bottom: 0.75rem;
@@ -631,29 +632,39 @@ input:checked+.slider:before {
 .day-label {
   font-size: 1.25rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .quality-label {
+  display: inline-block;
+  min-width: 4.2rem;
+  text-align: center;
+  white-space: nowrap;
   font-size: 0.65rem;
   font-weight: 600;
+  line-height: 0.85rem;
   color: white;
-  padding: 0.25rem 0.5rem;
+  /* Keeps white text legible on the lighter fills (yellow, orange, green). */
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.35);
+  /* 1px moved from bottom to top: the labels are all caps, so the font's
+     descender space left the text sitting ~2px high. */
+  padding: calc(0.25rem + 1px) 0.5rem calc(0.25rem - 1px);
   border-radius: 6px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
-/* Long rating names ("Fair to good") get a slightly smaller font so the pill
-   stays in proportion with its card-header neighbours; line-height matches
-   the short labels' text box so all pills stay the same height. */
+/* Long rating names ("Very poor", "Poor/fair", "Fair/good") get a slightly
+   smaller font; the shared line-height and min-width keep every pill the
+   same size so card headers line up. */
 .quality-label--long {
   font-size: 0.55rem;
-  line-height: 0.78rem;
 }
 
 .date-label {
   color: var(--text-secondary);
   font-size: 0.9rem;
+  white-space: nowrap;
 }
 
 .metric-grid {
@@ -694,9 +705,14 @@ input:checked+.slider:before {
   display: flex;
   align-items: flex-end;
   gap: 1px;
-  height: 24px;
+  /* Shorter than the label pill (22px) so the bars, growing from the
+     bottom, sit centred on the pill and day name instead of low. */
+  height: 16px;
   width: 60px;
-  /* Fixed width for consistency */
+  /* 60px when there's room; gives way first on narrow card headers so the
+     day, label pill and date stay on one line. */
+  min-width: 36px;
+  flex-shrink: 1;
 }
 
 .mini-bar {
