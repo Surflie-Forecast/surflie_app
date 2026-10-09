@@ -150,8 +150,9 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile,
 
     Displayed height is combined Hs and displayed period/direction the
     combined mean pair (disp_p/disp_d, falling back to the primary swell
-    where a source has no mean); the SCORE still judges the primary swell
-    partition (swell_p/swell_d). trains is the display model's swell-train
+    where a source has no mean); the SCORE judges swell_p/swell_d - the
+    nearshore peak pair where it exists, else the primary swell
+    partition. trains is the display model's swell-train
     breakdown ((h, p, d) series per train, primary first, wind sea
     excluded); hours where at least one train is complete gain a `swells`
     list for the card's expandable row.
@@ -242,25 +243,32 @@ def build_spot(store, spot, out_dir):
     # Displayed period/direction: the combined MEAN pair, matching the
     # combined height — the summary describes the whole sea; individual
     # trains live in the per-hour `swells` breakdown. Sources without a
-    # mean fall back to the dominant train. The RATING keeps judging the
-    # primary swell (swell_p/swell_d): mean period would double-penalize
-    # choppy days, since wind is already a scoring factor.
+    # mean fall back to the dominant train. The RATING never uses the mean
+    # (swell_p/swell_d instead): mean period would double-penalize choppy
+    # days, since wind is already a scoring factor.
     disp_p = (_local_series(store, spot.slug, 'wave_period', tz, source=wave_src)
               or swell_p)
     disp_d = (_local_series(store, spot.slug, 'wave_direction', tz, source=wave_src)
               or swell_d)
     # Surf headline: the nearshore source's height and peak pair override
-    # the display model hour by hour where it has data. The rating keeps the
-    # display model's primary swell period/direction (swell_p/swell_d) but
-    # scores the headline height, so rating and bar agree on size.
+    # the display model hour by hour where it has data, for both the row and
+    # the rating, so the score judges the swell the card shows. A peak
+    # period isn't a mean, so the double-penalty concern above doesn't apply.
+    # Where the nearshore source has no data (spots without a transect, the
+    # tail past its horizon) the rating falls back to the display model's
+    # primary swell (swell_p/swell_d).
     model_h = wave_h
     surf_h, surf_p, surf_d = _surf_series(store, spot.slug, tz)
     surf_h = {dt: v for dt, v in surf_h.items() if dt in wave_h}
     head_src = SURF_SOURCE if surf_h else wave_src
     if surf_h and wave_src != SURF_SOURCE:
         wave_h = {dt: surf_h.get(dt, v) for dt, v in wave_h.items()}
-        disp_p = {**disp_p, **{dt: surf_p[dt] for dt in surf_h if dt in surf_p}}
-        disp_d = {**disp_d, **{dt: surf_d[dt] for dt in surf_h if dt in surf_d}}
+        surf_pd_p = {dt: surf_p[dt] for dt in surf_h if dt in surf_p}
+        surf_pd_d = {dt: surf_d[dt] for dt in surf_h if dt in surf_d}
+        disp_p = {**disp_p, **surf_pd_p}
+        disp_d = {**disp_d, **surf_pd_d}
+        swell_p = {**swell_p, **surf_pd_p}
+        swell_d = {**swell_d, **surf_pd_d}
     wind_s = _local_series(store, spot.slug, 'wind_speed', tz)
     wind_d = _local_series(store, spot.slug, 'wind_direction', tz)
     tide_raw = _local_series(store, spot.slug, 'tide_height', tz)
