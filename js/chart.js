@@ -1407,7 +1407,10 @@ function drawBuoyChart(data) {
 
     // Enter buoy mode (taller chart, forecast cards hidden) and open the side
     // gutters BEFORE measuring — both reflow the container, and the chart's
-    // new height must be in effect so the lines fill it.
+    // new height must be in effect so the lines fill it. Unfolded cards are
+    // folded first so the hero isn't left compact over the buoy view (and
+    // the forecast comes back folded when it's closed).
+    if (window.foldForecastCards) window.foldForecastCards();
     document.body.classList.add('buoys-mode');
     // Stacked view (the spot's closest stations): one band per station, all
     // on one shared time axis, each with its own height scale and a header

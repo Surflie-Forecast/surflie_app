@@ -681,6 +681,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 450); // just past the 0.4s hero transition
     }
 
+    // Back to the default folded state: every card closed and the hero full
+    // size. Called when the view changes (another spot, the buoy view) so
+    // the new view never opens under a compact hero left over from
+    // unfolded cards.
+    function foldForecastCards() {
+        document.querySelectorAll('.forecast-card.expanded').forEach(c => {
+            c.classList.remove('expanded');
+            const details = c.querySelector('.hourly-details');
+            if (details) details.style.display = 'none';
+        });
+        const hero = document.querySelector('.hero');
+        if (hero && hero.classList.contains('compact')) {
+            hero.classList.remove('compact');
+            refreshHeroMapFraming();
+        }
+    }
+    window.foldForecastCards = foldForecastCards;
+
     // Coordinates of the buoy currently owning the hero backdrop, if any.
     function focusedHeroBuoyView() {
         const b = availableBuoys.find(x => x.id === heroBuoyFocusedId);
@@ -1706,6 +1724,10 @@ document.addEventListener('DOMContentLoaded', () => {
     async function renderForecast(spotName) {
         // Increment render ID to invalidate previous running renders
         const renderId = ++currentRenderId;
+
+        // The new spot's cards render folded: drop any compact hero left
+        // over from the previous spot's unfolded cards.
+        foldForecastCards();
 
         // Update Title
         spotNameTitle.textContent = "Loading...";
