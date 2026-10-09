@@ -45,6 +45,11 @@ def main():
     ap.add_argument('--forecast-dir', default=os.path.join(ROOT, 'api', 'forecast'),
                     help='forecast/*.json from a pipeline run; their daily scores feed '
                          "the page's label-share bars (default: the local api/forecast)")
+    ap.add_argument('--now-engine', default=None,
+                    help="optional rating.js to compare against ('now'), e.g. a "
+                         'copy from main while previewing a rating change')
+    ap.add_argument('--now-forecast-dir', default=None,
+                    help="forecast/*.json built with the 'now' engine, for its share row")
     args = ap.parse_args()
 
     with open(os.path.join(ROOT, 'data', 'spot_orientation.csv'), newline='') as f:
@@ -97,6 +102,12 @@ def main():
             for day in json.load(f).get('forecast', []):
                 if isinstance(day.get('score'), (int, float)):
                     hist[min(100, max(0, round(day['score'])))] += 1
+    hist_now = [0] * 101
+    for path in glob.glob(os.path.join(args.now_forecast_dir or args.forecast_dir, '*.json')):
+        with open(path) as f:
+            for day in json.load(f).get('forecast', []):
+                if isinstance(day.get('score'), (int, float)):
+                    hist_now[min(100, max(0, round(day['score'])))] += 1
     if not sum(hist):
         print(f'  ! no daily scores in {args.forecast_dir}; label-share bars will be empty')
 
@@ -104,8 +115,14 @@ def main():
         page = f.read()
     with open(os.path.join(ROOT, 'js', 'rating.js')) as f:
         engine = f.read()
+    now_engine = 'null'
+    if args.now_engine:
+        with open(args.now_engine) as f:
+            now_engine = ('(() => {\n' + f.read() + '\n  return { scoreConditions, _energyFactor, '
+                          '_seaStateFactor, bucketForScore, RATING_BUCKETS };\n})()')
+    page = page.replace('__NOW_ENGINE__', now_engine)
     page = page.replace('__ENGINE__', engine).replace(
-        '__DATA__', json.dumps({'spots': spots, 'coast': coast, 'hist': hist,
+        '__DATA__', json.dumps({'spots': spots, 'coast': coast, 'hist': hist, 'hist_now': hist_now,
                                 'hist_label': args.forecast_label},
                                separators=(',', ':')))
     with open(args.out, 'w') as f:

@@ -81,6 +81,12 @@ header h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em }
 .scorebox { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px }
 .score { font: 600 2rem/1 var(--font-mono); font-variant-numeric: tabular-nums }
 .scorebox .of { color: var(--muted); font-size: 0.8rem }
+.cmp { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 0.85rem }
+.cmp .side { display: flex; align-items: baseline; gap: 6px }
+.cmp .k { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: .04em }
+.cmp .v { font: 600 1.25rem/1 var(--font-mono); font-variant-numeric: tabular-nums }
+.cmp .arrow { color: var(--muted) }
+.factor .why b { color: var(--fg); font-weight: 600 }
 .scale { margin-bottom: 7px }
 .scale .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 3px }
 .scale .nm { font-weight: 600; font-size: 0.82rem }
@@ -150,6 +156,7 @@ dd { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; font-variant-
           <div class="chain" id="chain"></div>
         </div>
         <div class="scales">
+          <div class="cmp" id="cmp" aria-live="polite"></div>
           <div class="scorebox"><span class="score" id="score"></span><span class="of">/ 100 · same score on each scale; the first is what the app shows</span></div>
           <div class="ftg" id="ftg" role="group" aria-label="Where Fair to good starts"></div>
           <div id="scales"></div>
@@ -184,6 +191,11 @@ dd { margin: 0; font-family: var(--font-mono); font-size: 0.78rem; font-variant-
 __ENGINE__
 </script>
 <script>
+// Optional second engine (build with --now-engine) to compare against,
+// isolated in its own scope; null when the page shows one engine only.
+const NOW = __NOW_ENGINE__;
+</script>
+<script>
 const DATA = __DATA__;
 const FLAG_TEXT = {
   coast_turns: ['Coast turns', 'The 200 m, 500 m and 1 km averages differ by more than 20°. Probably a point or cove: check that the facing matches where the wave breaks.'],
@@ -203,7 +215,8 @@ const BOTTOM_TEXT = { point: 'Point', reef: 'Reef', beach: 'Beach' };
 // matching Surfline's label exactly (of 24, Old Man's, engine of 2026-10-08;
 // every option is within one label on all 24).
 const ENGINE_FTG = (RATING_BUCKETS.find(b => b.name === 'Fair to good') || {}).floor;
-const FTG_OPTIONS = [{ from: 42, exact: 20 }, { from: 45, exact: 19 }, { from: 48, exact: 18 }, { from: 50, exact: 16 }];
+// Proposal engine of 2026-10-09: exact matches per floor (main: 48 -> 18/24).
+const FTG_OPTIONS = [{ from: 42, exact: 19 }, { from: 48, exact: 15 }, { from: 55, exact: 13 }, { from: 60, exact: 13 }];
 let ftgFrom = ENGINE_FTG;
 const adoptedBands = () => RATING_BUCKETS.slice().reverse().map(b =>
   ({ name: b.name, color: b.color, from: b.name === 'Fair to good' ? ftgFrom : b.floor }));
@@ -391,6 +404,9 @@ function presets() {
     ['Cross-shore', { h: 1.2, p: 12, sd: i, ws: 10, wd: Math.round(mod(o + 85)) }],
     ['Storm', { h: 3.4, p: 9, sd: i, ws: 20, wd: o }],
     ['Small wind swell', { h: 0.7, p: 6, sd: i, ws: 8, wd: Math.round(mod(o + 160)) }],
+    ['Small long-period (Ventura Tue 6am)', { h: 0.71, p: 17, sd: 228, ws: 4, wd: 337 }],
+    ['Short period 7 s', { h: 1.5, p: 7, sd: i, ws: 6, wd: o }],
+    ['Short period 8 s', { h: 1.5, p: 8, sd: i, ws: 6, wd: o }],
   ];
 }
 function renderPresets() {
@@ -402,13 +418,15 @@ document.getElementById('presets').addEventListener('click', e => {
 });
 
 function whyEnergy() {
-  const h = cond.h, p = prof;
+  const boost = Math.pow(Math.max(cond.p, PERIOD_SIZE_REF_S) / PERIOD_SIZE_REF_S, PERIOD_SIZE_EXP);
+  const h = cond.h * boost, p = prof;
   const size = h <= p.size_min ? `below ${p.size_min} m, too small`
     : h < p.size_ideal ? `building to ${p.size_ideal} m ideal`
     : h <= p.size_max ? `past ideal, closes out ${p.size_max} m`
     : `beyond close-out (${p.size_max} m)`;
   const per = cond.p <= 6 ? 'wind swell' : cond.p >= 14 ? 'groundswell' : 'mid period';
-  return `${size}; ${per}`;
+  const eff = boost > 1.001 ? `${cond.h.toFixed(2)} m at ${cond.p} s counts as ${h.toFixed(2)} m (+${Math.round((boost - 1) * 100)}%); ` : '';
+  return `${eff}${size}; ${per}`;
 }
 function whyDir() {
   const off = Math.round(_angDiff(cond.sd, prof.swell_ideal));
@@ -423,8 +441,9 @@ function whyWind() {
   return `${off}° off offshore: ${zone}${cond.ws > STRONG_WIND_KT ? `; over ${STRONG_WIND_KT} kt penalty` : ''}`;
 }
 function whySea() {
-  const st = cond.h / (1.56 * Math.max(cond.p, 1) ** 2);
-  return `steepness ${st.toFixed(4)}: ${st <= STORM_STEEPNESS ? 'organised swell' : 'storm sea'}`;
+  const tOn = Math.sqrt(cond.h / (1.56 * STORM_STEEPNESS)), tEnd = tOn / STORM_END_RATIO;
+  return cond.p >= tOn ? `organised swell: storm penalty only below ${tOn.toFixed(1)} s at this height`
+    : `storm sea: penalty grows evenly from ${tOn.toFixed(1)} s to full at ${tEnd.toFixed(1)} s`;
 }
 function textOn(hex) {
   const n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
@@ -458,11 +477,15 @@ document.getElementById('ftg').addEventListener('click', e => {
 });
 
 function renderScore() {
+  const nowE = NOW ? NOW._energyFactor(cond.h, cond.p, prof) : null;
+  const nowS = NOW ? NOW._seaStateFactor(cond.h, cond.p) : null;
+  const was = (v, now) => now != null && Math.abs(v - now) >= 0.005 ? `<b>now ${now.toFixed(2)}</b> · ` : '';
+  const eP = _energyFactor(cond.h, cond.p, prof), sP = _seaStateFactor(cond.h, cond.p);
   const f = [
-    ['Energy', _energyFactor(cond.h, cond.p, prof), whyEnergy()],
+    ['Energy', eP, was(eP, nowE) + whyEnergy()],
     ['Direction', _directionFactor(cond.sd, prof), whyDir()],
     ['Wind', _windFactor(cond.ws, cond.wd, prof), whyWind()],
-    ['Sea state', _seaStateFactor(cond.h, cond.p), whySea()],
+    ['Sea state', sP, was(sP, nowS) + whySea()],
     ['Tide', _tideFactor(null, prof), 'not used yet'],
   ];
   const MAX = 1.2;
@@ -475,6 +498,17 @@ function renderScore() {
   const score = Math.round(scoreConditions(cond.h, cond.p, cond.sd, cond.ws, cond.wd, null, prof));
   document.getElementById('chain').textContent = f.map(x => x[1].toFixed(2)).join(' × ') + ` = ${(score / 100).toFixed(2)}`;
   document.getElementById('score').textContent = score;
+  const cmp = document.getElementById('cmp');
+  cmp.hidden = !NOW;
+  if (NOW) {
+  const nowScore = Math.round(NOW.scoreConditions(cond.h, cond.p, cond.sd, cond.ws, cond.wd, null, prof));
+  const nb = NOW.bucketForScore(nowScore), pb = bandOf(SCALES[0].bands, score);
+  const pill = (name, color) => `<span class="pill" style="background:${color};color:${textOn(color)}">${name}</span>`;
+  cmp.innerHTML =
+    `<span class="side"><span class="k">Now (main)</span><span class="v">${nowScore}</span>${pill(nb.rating, nb.color)}</span>` +
+    `<span class="arrow">→</span>` +
+    `<span class="side"><span class="k">Proposed</span><span class="v">${score}</span>${pill(pb.name, pb.color)}</span>`;
+  }
   document.getElementById('scales').innerHTML = SCALES.map(sc => {
     const b = bandOf(sc.bands, score);
     const sub = sc.adjustable && ftgFrom !== ENGINE_FTG ? `${sc.sub}, Fair to good from ${ftgFrom} (trial)` : sc.sub;
@@ -488,20 +522,27 @@ function renderScore() {
 // Today's daily scores across all spots, read on each scale.
 function renderShare() {
   const hist = DATA.hist || [], n = hist.reduce((a, b) => a + b, 0);
+  // With a comparison engine: its labels vs this engine's. Otherwise the
+  // same scores read on each label scale.
+  const ROWS = NOW ? [
+    { name: 'Now', bands: NOW.RATING_BUCKETS.slice().reverse().map(b => ({ name: b.name, color: b.color, from: b.floor })), hist: DATA.hist_now || [] },
+    { name: 'Proposed', bands: SCALES[0].bands, hist },
+  ] : SCALES.map(sc => ({ name: sc.name, bands: sc.bands, hist }));
   if (DATA.hist_label) document.getElementById('share-label').textContent = DATA.hist_label;
   if (!n) { document.getElementById('share').innerHTML = '<p class="note">No forecast scores embedded.</p>'; return; }
-  const W = 400, row = 22, H = SCALES.length * row + 2;
-  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of today's daily labels on each scale">`;
-  SCALES.forEach((sc, i) => {
+  const W = 400, row = 22, H = ROWS.length * row + 2;
+  let g = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Share of daily labels across all spots, now vs proposed">`;
+  ROWS.forEach((sc, i) => {
     const counts = sc.bands.map(() => 0);
-    hist.forEach((c, v) => { const b = bandOf(sc.bands, v); counts[sc.bands.indexOf(b)] += c; });
+    const rn = sc.hist.reduce((a, b) => a + b, 0) || 1;
+    sc.hist.forEach((c, v) => { const b = bandOf(sc.bands, v); counts[sc.bands.indexOf(b)] += c; });
     let x = 92;
     g += `<text x="0" y="${i * row + 14}" font-size="10" fill="${css('--fg')}" font-family="Source Sans 3, sans-serif">${sc.name}</text>`;
     counts.forEach((c, k) => {
       if (!c) return;
-      const w = c / n * (W - 94);
-      g += `<rect x="${x.toFixed(1)}" y="${i * row + 4}" width="${Math.max(0.5, w - 1.5).toFixed(1)}" height="13" fill="${sc.bands[k].color}"><title>${sc.bands[k].name}: ${(c / n * 100).toFixed(1)}%</title></rect>`;
-      if (w > 26) g += `<text x="${(x + w / 2).toFixed(1)}" y="${i * row + 14}" font-size="9" text-anchor="middle" fill="${textOn(sc.bands[k].color)}" font-family="IBM Plex Mono, monospace">${Math.round(c / n * 100)}%</text>`;
+      const w = c / rn * (W - 94);
+      g += `<rect x="${x.toFixed(1)}" y="${i * row + 4}" width="${Math.max(0.5, w - 1.5).toFixed(1)}" height="13" fill="${sc.bands[k].color}"><title>${sc.bands[k].name}: ${(c / rn * 100).toFixed(1)}%</title></rect>`;
+      if (w > 26) g += `<text x="${(x + w / 2).toFixed(1)}" y="${i * row + 14}" font-size="9" text-anchor="middle" fill="${textOn(sc.bands[k].color)}" font-family="IBM Plex Mono, monospace">${Math.round(c / rn * 100)}%</text>`;
       x += w;
     });
   });

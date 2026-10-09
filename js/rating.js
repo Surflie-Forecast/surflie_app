@@ -6,7 +6,7 @@
 // (energy x direction x wind x tide x sea state), bucketed into five labels/colors.
 // See backend/rating_config.py for the full model description.
 
-const RATING_BUCKETS = [{"name": "Fair to good", "color": "#15803d", "floor": 48}, {"name": "Fair", "color": "#22c55e", "floor": 28}, {"name": "Poor to fair", "color": "#ffce1c", "floor": 8}, {"name": "Poor", "color": "#fd9500", "floor": 5}, {"name": "Very poor", "color": "#f1496a", "floor": 0}];
+const RATING_BUCKETS = [{"name": "Fair to good", "color": "#15803d", "floor": 55}, {"name": "Fair", "color": "#22c55e", "floor": 28}, {"name": "Poor to fair", "color": "#ffce1c", "floor": 8}, {"name": "Poor", "color": "#fd9500", "floor": 5}, {"name": "Very poor", "color": "#f1496a", "floor": 0}];
 const RATING_DEFAULT_PROFILE = {"swell_min": 180.0, "swell_ideal": 270.0, "swell_max": 360.0, "offshore_dir": 0.0, "offshore_width": 30.0, "size_min": 0.5, "size_ideal": 1.8, "size_max": 4.0, "tide_min": null, "tide_max": null};
 const WIND_FADE_DEG = 30.0;
 const WIND_CROSS_END_DEG = 120.0;
@@ -20,6 +20,10 @@ const STRONG_WIND_SPAN_KT = 8.0;
 const STRONG_WIND_FLOOR = 0.2;
 const STORM_STEEPNESS = 0.013;
 const STORM_FLOOR = 0.5;
+const PERIOD_SIZE_REF_S = 12.0;
+const PERIOD_SIZE_EXP = 0.4;
+const PERIOD_WEIGHT = 0.8;
+const STORM_END_RATIO = 3.0;
 const RATING_RESERVED = [{"name": "Epic", "color": "#631ec7"}, {"name": "Good", "color": "#6751f4"}];
 
 function _spotProfile(meta) {
@@ -43,6 +47,7 @@ function _signedDiff(a, b) {
 }
 
 function _energyFactor(height, period, p) {
+    height = height * Math.pow(Math.max(period, PERIOD_SIZE_REF_S) / PERIOD_SIZE_REF_S, PERIOD_SIZE_EXP);
     let size;
     if (height <= p.size_min) {
         size = 0;
@@ -61,7 +66,7 @@ function _energyFactor(height, period, p) {
     else if (period >= 14) per = 1;
     else per = 0.35 + 0.65 * (period - 6) / 8;
 
-    const combined = Math.pow(size, 0.6) * Math.pow(per, 0.4);
+    const combined = Math.pow(size, 0.6) * Math.pow(per, PERIOD_WEIGHT);
     return Math.max(0, Math.min(1, combined));
 }
 
@@ -102,9 +107,9 @@ function _windFactor(speed, direction, p) {
 }
 
 function _seaStateFactor(height, period) {
-    const steep = height / (1.56 * Math.pow(Math.max(period, 1), 2));
-    if (steep <= STORM_STEEPNESS) return 1;
-    return Math.max(STORM_FLOOR, 1 - (1 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS);
+    const tOn = Math.sqrt(Math.max(height, 0) / (1.56 * STORM_STEEPNESS));
+    if (period >= tOn) return 1;
+    return 1 - (1 - STORM_FLOOR) * Math.min(1, (tOn - period) / (tOn - tOn / STORM_END_RATIO));
 }
 
 function _tideFactor(tide, p) {

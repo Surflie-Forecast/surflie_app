@@ -35,7 +35,14 @@ labels/colors the UI has always used (Poor -> Epic).
     tide       optional per-spot preferred band; 1.0 (no effect) when a spot
                has no tide preference, so untuned spots are never penalized.
     sea_state  steep, short-period storm seas (Hs / deep-water wavelength
-               above STORM_STEEPNESS) close out and break disorganised.
+               above STORM_STEEPNESS) close out and break disorganised; the
+               penalty grows evenly per second of period below the onset.
+
+Period enters energy twice, on purpose and on separate ranges: as quality
+(PERIOD_WEIGHT, ramping 6 -> 14 s) and, above PERIOD_SIZE_REF_S, as size
+(long-period swell shoals more and breaks bigger, Komar-Gaughan Hb ~ T^0.4).
+Retuned 2026-10-09 so no single 1 s step jumps the score: the old
+steepness-linear storm ramp moved 1.5 m clean swell 49 -> 65 from 7 to 8 s.
 
 The wind and sea-state constants were tuned against Surfline's own model
 ratings for Old Man's at Tourmaline (data_exploration/quality_labels/
@@ -66,13 +73,15 @@ import math
 # (data_exploration/quality_labels: all 24 hours within one label); Very
 # poor's floor is a guess (the sample has none). Fair to good was fitted at
 # 42 and deliberately raised to 48 so the model's top label stays rare given
-# the uncertainty (18/24 exact instead of 20; Fair to good on ~18% of days
-# instead of ~25%). Colors follow Surfline's
+# the uncertainty. Raised again to 55 on 2026-10-09 with the period retune
+# (period boost, gradual period quality, even storm ramp): Fair to good on
+# ~23% of spot-days instead of ~34% at 48, at the cost of Surfline exact
+# matches (13/24, was 18/24 with the old engine at 48). Colors follow Surfline's
 # red -> orange -> yellow progression with our greens for Fair / Fair to good.
 # Replaced 2026-10-08: Poor 0 / Fair 22 / Good 42 / Excellent 70 / Epic 92.
 # ---------------------------------------------------------------------------
 BUCKETS = [
-    {'name': 'Fair to good', 'color': '#15803d', 'floor': 48},   # Dark green
+    {'name': 'Fair to good', 'color': '#15803d', 'floor': 55},   # Dark green
     {'name': 'Fair',         'color': '#22c55e', 'floor': 28},   # Green
     {'name': 'Poor to fair', 'color': '#ffce1c', 'floor': 8},    # Yellow
     {'name': 'Poor',         'color': '#fd9500', 'floor': 5},    # Orange
@@ -197,6 +206,11 @@ STRONG_WIND_SPAN_KT = 8.0   # ...reaching the floor this many kt later
 STRONG_WIND_FLOOR = 0.2
 STORM_STEEPNESS = 0.013     # Hs / L0 where the storm penalty starts
 STORM_FLOOR = 0.5           # reached at twice that steepness
+PERIOD_SIZE_REF_S = 12.0    # longer periods count as bigger surf...
+PERIOD_SIZE_EXP = 0.4       # ...by (T / ref) ** exp (Komar-Gaughan Hb ~ T^0.4)
+PERIOD_WEIGHT = 0.8         # exponent on the period-quality term (was 0.4):
+                            # short periods lose quality gradually, 6 -> 14 s
+STORM_END_RATIO = 3.0       # storm penalty is full at T_on / this (see below)
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +233,9 @@ def _signed_diff(a, b):
 # ---------------------------------------------------------------------------
 def _energy_factor(height, period, p):
     """Wave energy from HEIGHT (shaped by working size range) and PERIOD."""
+    # Long-period swell shoals more and breaks bigger than its Hs: scale the
+    # height by (T / ref) ** exp above ref (Komar-Gaughan Hb ~ T^0.4).
+    height = height * (max(period, PERIOD_SIZE_REF_S) / PERIOD_SIZE_REF_S) ** PERIOD_SIZE_EXP
     # --- size term: ramps 0->1 across [size_min, size_ideal], holds near 1 to
     #     size_max, then falls off as it closes out. ---
     if height <= p.size_min:
@@ -246,7 +263,7 @@ def _energy_factor(height, period, p):
     # Combine size and period as a weighted geometric mean rather than a raw
     # product, so a clean-but-modest day (good period, sub-ideal size) isn't
     # crushed the way multiplying two middling factors would. Size still leads.
-    combined = (size ** 0.6) * (per ** 0.4)
+    combined = (size ** 0.6) * (per ** PERIOD_WEIGHT)
     return max(0.0, min(1.0, combined))
 
 
@@ -311,13 +328,21 @@ def _wind_factor(speed, direction, p):
 
 
 def _sea_state_factor(height, period):
-    """Storm / close-out penalty from deep-water steepness Hs / L0
-    (L0 = 1.56 T^2 m): 1.0 for organised swell, falling to STORM_FLOOR as
-    short-period storm seas steepen."""
-    steep = height / (1.56 * max(period, 1.0) ** 2)
-    if steep <= STORM_STEEPNESS:
+    """Storm penalty for steep, short-period seas: 1.0 for organised swell,
+    falling to STORM_FLOOR as short-period storm seas steepen.
+
+    The onset is deep-water steepness Hs / L0 = STORM_STEEPNESS
+    (L0 = 1.56 T^2 m), i.e. the period T_on = sqrt(Hs / (1.56 * onset)).
+    Below T_on the penalty grows LINEARLY IN PERIOD, reaching the floor at
+    T_on / STORM_END_RATIO, so each second costs about the same. A ramp
+    linear in steepness (1 / T^2) packed most of the drop into one or two
+    seconds (1.5 m: 7 s -> 8 s moved the score 49 -> 65).
+    """
+    t_on = math.sqrt(max(height, 0.0) / (1.56 * STORM_STEEPNESS))
+    if period >= t_on:
         return 1.0
-    return max(STORM_FLOOR, 1.0 - (1.0 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS)
+    x = (t_on - period) / (t_on - t_on / STORM_END_RATIO)
+    return 1.0 - (1.0 - STORM_FLOOR) * min(1.0, x)
 
 
 def _tide_factor(tide, p):
@@ -395,7 +420,7 @@ class RatingConfig:
         buckets_js = json.dumps(BUCKETS)
         default_js = json.dumps(DEFAULT_PROFILE)
         consts = {k: v for k, v in globals().items()
-                  if k.startswith(('WIND_', 'STRONG_WIND_', 'STORM_'))}
+                  if k.startswith(('WIND_', 'STRONG_WIND_', 'STORM_', 'PERIOD_'))}
         consts_js = '\n'.join(f'const {k} = {json.dumps(v)};' for k, v in consts.items())
         consts_js += f'\nconst RATING_RESERVED = {json.dumps(RESERVED_BUCKETS)};'
         return _JS_TEMPLATE.format(buckets=buckets_js, default=default_js,
@@ -439,6 +464,7 @@ function _signedDiff(a, b) {{
 }}
 
 function _energyFactor(height, period, p) {{
+    height = height * Math.pow(Math.max(period, PERIOD_SIZE_REF_S) / PERIOD_SIZE_REF_S, PERIOD_SIZE_EXP);
     let size;
     if (height <= p.size_min) {{
         size = 0;
@@ -457,7 +483,7 @@ function _energyFactor(height, period, p) {{
     else if (period >= 14) per = 1;
     else per = 0.35 + 0.65 * (period - 6) / 8;
 
-    const combined = Math.pow(size, 0.6) * Math.pow(per, 0.4);
+    const combined = Math.pow(size, 0.6) * Math.pow(per, PERIOD_WEIGHT);
     return Math.max(0, Math.min(1, combined));
 }}
 
@@ -498,9 +524,9 @@ function _windFactor(speed, direction, p) {{
 }}
 
 function _seaStateFactor(height, period) {{
-    const steep = height / (1.56 * Math.pow(Math.max(period, 1), 2));
-    if (steep <= STORM_STEEPNESS) return 1;
-    return Math.max(STORM_FLOOR, 1 - (1 - STORM_FLOOR) * (steep - STORM_STEEPNESS) / STORM_STEEPNESS);
+    const tOn = Math.sqrt(Math.max(height, 0) / (1.56 * STORM_STEEPNESS));
+    if (period >= tOn) return 1;
+    return 1 - (1 - STORM_FLOOR) * Math.min(1, (tOn - period) / (tOn - tOn / STORM_END_RATIO));
 }}
 
 function _tideFactor(tide, p) {{

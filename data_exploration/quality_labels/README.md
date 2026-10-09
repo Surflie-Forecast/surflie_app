@@ -191,6 +191,38 @@ each factor builds the label, using the app's own `js/rating.js`.
 The page is a snapshot: rebuild it after changing `rating_config.py` (regenerate
 `js/rating.js` first) or `data/spot_orientation.csv`, then republish to the same URL.
 
+To preview a rating change against the current engine, pass the old engine and its
+forecast build: `--now-engine old/rating.js --now-forecast-dir old/api/forecast`. The
+page then shows "Now → Proposed" scores, the factor values that changed, and both
+label shares (used for the 2026-10-09 retune:
+https://claude.ai/artifact/HmQg5QJKDVUWSf1HRxkAah).
+
+## Period retune (2026-10-09)
+
+A 1 s change could swing the score by 20+ points (1.5 m clean swell: 7 s -> 8 s
+moved 49 -> 65) because the storm penalty was linear in steepness Hs / (1.56 T^2),
+so most of its drop landed in one or two seconds. And a small 17 s swell scored
+like a 12 s one (Ventura Point 0.71 m / 17 s: 27, Poor to fair). Changes, chosen
+with a sweep against smoothness guards (worst 1 s jump, 6 s wind swell stays low,
+storm hours stay low, Spearman >= 0.90):
+
+- Storm penalty grows linearly in PERIOD below the onset period T_on, full at
+  T_on / 3 (`STORM_END_RATIO`). Onset and floor unchanged.
+- Period-quality exponent 0.4 -> 0.8 (`PERIOD_WEIGHT`): short periods lose quality
+  gradually from 14 s down to 6 s, instead of via a storm cliff.
+- Long periods count as bigger surf: Hs x (T / 12 s)^0.4 above 12 s
+  (`PERIOD_SIZE_*`; the T^0.4 is Komar-Gaughan's breaking-height dependence, the
+  12 s reference is a calibration choice that leaves <= 12 s days unchanged).
+  Earlier "ruled out" breaking-height test applied the full transform on top of
+  the period term, and the Surfline sample (6-15 s, one storm) can't separate it.
+- Fair to good floor 48 -> 55.
+
+Result: worst 1 s jump 21 -> ~12 points; 1.5 m at 6/7/8/9/10 s scores
+31/40/51/60/67 (was 30/49/65/74/78); Spearman +0.91 (was +0.92); exact Surfline
+labels 13/24 (was 18/24). Daily labels across 276 spots x 14 days: Fair to good
+23% (30% before, 34% if the floor stayed 48), Fair 44%, Poor to fair 24%. Still
+open: the size curve is steep just above size_min (2 cm moved a 0.7 m hour 5%).
+
 ## Bottom type (2026-10-08, branch explore/quality-labels-2)
 
 `backend/build_spot_bottom.py` writes `data/spot_bottom.csv` (needs network and
