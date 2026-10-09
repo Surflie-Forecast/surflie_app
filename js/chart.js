@@ -1432,7 +1432,7 @@ function drawBuoyChart(data) {
     // to wherever its own horizon ends (GFS Wave ~16 d, MFWAM ~10, MOP ~8).
     const series = stations.map(st => ({
         st,
-        obs: (st.observed || []).map(p => ({ t: parseT(p.t), v: p.v })),
+        obs: (st.observed || []).map(p => ({ t: parseT(p.t), v: p.v, p: p.p, d: p.d })),
         // Keep period/direction: the tooltip reports them like the spot view.
         modelPts: (st.models || []).map(model => ({
             model,
@@ -1797,7 +1797,7 @@ function drawBuoyChart(data) {
         });
 
         // Observed Hs on top: ink dots, the ground truth
-        const obsPts = obs.map(p => ({ x: xFor(p.t), y: yFor(p.v), v: p.v, t: new Date(p.t) }));
+        const obsPts = obs.map(p => ({ x: xFor(p.t), y: yFor(p.v), v: p.v, p: p.p, d: p.d, t: new Date(p.t) }));
         const ref = refFor('observed');
         obsPts.forEach(p => {
             const c = document.createElementNS(ns, 'circle');

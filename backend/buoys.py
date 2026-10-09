@@ -242,7 +242,7 @@ def refresh_roster(path=ROSTER_FILE):
 # Batched live fetches
 
 def _fetch_observations(station_ids, start_utc):
-    """{sid: {'observed': [(ts, hs)], 'latest': {...}}} for every roster
+    """{sid: {'observed': [(ts, {'v','p','d'})], 'latest': {...}}} for every roster
     station, from ONE ERDDAP request covering Hs/Tp/Dp. 'latest' is the
     newest reading — the values CDIP's station page headlines (SST is merged
     in separately by _fetch_latest_sst)."""
@@ -260,18 +260,18 @@ def _fetch_observations(station_ids, start_utc):
         if sid not in wanted or hs is None:
             continue
         ts = _parse_utc(row['time'])
+        tp, dp = _num(row.get('waveTp')), _num(row.get('waveDp'))
         e = out.setdefault(sid, {'observed': [], 'latest': None, '_ts': None})
-        e['observed'].append((ts, hs))
+        e['observed'].append((ts, {'v': hs, 'p': tp, 'd': dp}))
         if e['_ts'] is None or ts > e['_ts']:  # don't trust row order
             latest = {'time': _fmt_local(ts), 'hs': round(hs, 2)}
-            tp, dp = _num(row.get('waveTp')), _num(row.get('waveDp'))
             if tp is not None:
                 latest['tp'] = round(tp, 1)
             if dp is not None:
                 latest['dp'] = round(dp)
             e['latest'], e['_ts'] = latest, ts
     for e in out.values():
-        e['observed'].sort()
+        e['observed'].sort(key=lambda o: o[0])  # dicts don't compare
         del e['_ts']
     return out
 
@@ -322,10 +322,10 @@ def _fetch_ndbc_observations(station_ids, start_utc):
                 continue
             if ts < start_utc:
                 break  # rows are newest-first, so everything below is older
-            observed.append((ts, hs))
+            tp, dp = _ndbc_num(f[9]), _ndbc_num(f[11])
+            observed.append((ts, {'v': hs, 'p': tp, 'd': dp}))
             if latest_ts is None or ts > latest_ts:
                 latest = {'time': _fmt_local(ts), 'hs': round(hs, 2)}
-                tp, dp = _ndbc_num(f[9]), _ndbc_num(f[11])
                 sst = _ndbc_num(f[14])
                 if tp is not None:
                     latest['tp'] = round(tp, 1)
@@ -334,7 +334,7 @@ def _fetch_ndbc_observations(station_ids, start_utc):
                 if sst is not None:
                     latest['sst'] = round(sst, 1)
                 latest_ts = ts
-        observed.sort()
+        observed.sort(key=lambda o: o[0])  # dicts don't compare
         return sid, observed, latest
 
     out = {}
@@ -458,8 +458,8 @@ def _fetch_mop_forecast(sid, start_utc):
 
 
 def _series_json(series):
-    """Points are (ts, float) for plain Hs series (observed, MOP) or
-    (ts, {'v','p','d'}) for model series; points without Hs are dropped
+    """Points are (ts, float) for plain Hs series (MOP) or
+    (ts, {'v','p','d'}) for observed and model series; points without Hs are dropped
     (the chart requires 'v'), period/direction ride along when present."""
     out = []
     for ts, v in series:
