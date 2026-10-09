@@ -22,10 +22,11 @@ from datetime import datetime, timedelta, timezone
 from statistics import mean, median
 from zoneinfo import ZoneInfo
 
-from rating_config import build_profile, bucket_for_score, score_conditions
+from rating_config import BUCKETS, build_profile, bucket_for_score, score_conditions
 
 HOURLY_STEP_H = 3          # cadence of hourly entries (matches the old 3-hourly data)
 RATING_HOURS = (7, 19)     # local hours (inclusive) considered for the daily rating
+DESPECKLE_PTS = 5          # a lone bar this close to its neighbours' band takes their colour
 
 # Wave models present in the store (source tag -> display label). Tags and
 # preference order must match backend/adapters/openmeteo_marine.py; the app
@@ -193,7 +194,27 @@ def _build_hourly(wave_h, swell_p, swell_d, wind_s, wind_d, profile,
         if swells:
             entry['swells'] = swells
         by_date[dt.date()].append(entry)
+    _despeckle([e for d in sorted(by_date) for e in by_date[d]])
     return by_date
+
+
+def _despeckle(entries):
+    """Recolour a lone bar whose two neighbours share a label, when its
+    score is within DESPECKLE_PTS of their band (e.g. 29 / 27 / 30 reads
+    all Fair), so near-threshold blips don't flash a colour. Bigger drops
+    and two-bar runs stay. Only rating/color change; scores, and so the
+    daily rating, are untouched. entries: chronological, all days.
+    The left neighbour is read after its own recolouring, so an
+    alternating 30 / 27 / 30 / 27 run settles on one label.
+    """
+    lo = {b['name']: b['floor'] for b in BUCKETS}
+    hi = {b['name']: BUCKETS[i - 1]['floor'] if i else 101 for i, b in enumerate(BUCKETS)}
+    orig = [e['rating'] for e in entries]
+    for i in range(1, len(entries) - 1):
+        a, color = entries[i - 1]['rating'], entries[i - 1]['color']
+        b, c = orig[i], orig[i + 1]
+        if a == c != b and lo[a] - DESPECKLE_PTS <= entries[i]['score'] < hi[a] + DESPECKLE_PTS:
+            entries[i]['rating'], entries[i]['color'] = a, color
 
 
 def _daily_rating(hourly_entries):
