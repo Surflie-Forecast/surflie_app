@@ -323,11 +323,13 @@ function removeYAxis() {
     section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
 }
 
-function renderYAxisTicks(scaleMax, yScreenFor, withZero = false) {
+function renderYAxisTicks(scaleMax, yScreenFor, withZero = false, append = false) {
     const section = document.getElementById('waveChartSection');
     if (!section) return;
     section.classList.add('models-gutters');
-    section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
+    // append: add another band's ticks (stacked buoy view) instead of
+    // replacing the axis
+    if (!append) section.querySelectorAll('.chart-y-axis').forEach(el => el.remove());
 
     // Ticks at nice values in the display unit (skip 0); pick the step
     // giving 2-3 ticks, preferring fewer but never less than 2
@@ -380,6 +382,10 @@ function renderModelYAxis(svg, scaleMax, yForOffset, withZero = false) {
 document.querySelectorAll('.unit-toggle').forEach(t =>
     t.addEventListener('change', () => setTimeout(() => {
         const container = document.getElementById('waveChartContainer');
+        if (container && container._buoyData && container._buoyData.stack) {
+            drawBuoyChart(container._buoyData); // band headers carry units
+            return;
+        }
         if (container && container._axisRender) container._axisRender();
         if (container && container._buoyData) renderBuoyStats(container._buoyData);
     }, 60)));
@@ -1105,6 +1111,7 @@ function clearBuoyView() {
     // Restore the normal page layout (forecast cards back, chart back to
     // its default height) and hide the latest-observation cards.
     document.body.classList.remove('buoys-mode');
+    document.body.classList.remove('buoys-stack');
     const stats = document.getElementById('buoyStats');
     if (stats) {
         stats.style.display = 'none';
@@ -1232,10 +1239,15 @@ async function openBuoyView(buoyId, viaToggle = false) {
     if (!btn || !container) return;
 
     try {
-        const res = await fetch(`api/buoys/${buoyId}.json`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!data.models || data.models.length === 0) throw new Error('no series');
+        // The button's toggle from a spot: its NEARBY_BUOYS closest stations,
+        // stacked. Falls back to the single preassigned one if none load.
+        let data = viaToggle ? await loadNearbyBuoys(btn.dataset.spot) : null;
+        if (!data) {
+            const res = await fetch(`api/buoys/${buoyId}.json`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            data = await res.json();
+            if (!data.models || data.models.length === 0) throw new Error('no series');
+        }
 
         // Mutually exclusive with the model overlay — but the Models button
         // stays in the strip (body.buoys-mode positions it), one click from
@@ -1271,8 +1283,27 @@ async function openBuoyView(buoyId, viaToggle = false) {
         // a station picked off the map or the search shows no phrase.
         const esc = s => s.replace(/[&<>"]/g, c => (
             { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-        const subText = viaToggle ? `the closest buoy to ${btn.dataset.spot}` : '';
         const titleEl = document.getElementById('spotName');
+        if (data.stack) {
+            // Several stations: the hero stays the spot (title, favorite
+            // star), captioned with what the plots below are, and its map
+            // zooms out onto the stations, tinted red.
+            if (titleEl && titleEl._spotTitleHTML != null) {
+                titleEl.innerHTML = titleEl._spotTitleHTML;
+                titleEl._spotTitleHTML = titleEl._buoyTitleHTML = null;
+                if (window.fitHeroTitle) window.fitHeroTitle();
+            }
+            document.dispatchEvent(new CustomEvent('buoy-exited'));
+            const heroLabel = document.getElementById('buoyHeroLabel');
+            if (heroLabel) heroLabel.textContent =
+                `the ${data.stack.length} closest buoys to ${btn.dataset.spot}`;
+            const ids = data.stack.map(st => String(st.id));
+            if (window.focusHeroBuoys) window.focusHeroBuoys(ids);
+            else if (window.focusHeroBuoy) window.focusHeroBuoy(ids[0]);
+            if (window.updateUrlView) window.updateUrlView({ buoys: true, models: false });
+            return;
+        }
+        const subText = viaToggle ? `the closest buoy to ${btn.dataset.spot}` : '';
         if (titleEl) {
             if (titleEl._spotTitleHTML == null) {
                 titleEl._spotTitleHTML = titleEl.innerHTML;
@@ -1306,6 +1337,66 @@ async function openBuoyView(buoyId, viaToggle = false) {
     }
 }
 
+// The "Closest buoy" toggle shows this many stations, nearest first.
+const NEARBY_BUOYS = 3;
+
+// Great-circle km — ranks stations around a spot.
+function haversineKm(lat1, lon1, lat2, lon2) {
+    const r = Math.PI / 180;
+    const a = Math.sin((lat2 - lat1) * r / 2) ** 2
+        + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin((lon2 - lon1) * r / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(a));
+}
+
+// The spot's NEARBY_BUOYS closest stations that are reporting (a stale one
+// has no observed point to show; they only fill in when fewer are fresh),
+// always including at least one CDIP station — its MOP forecast is the
+// site-exact line the global models are judged against — loaded and sorted
+// by distance -> { stack: [station data + _km] }, or null.
+async function loadNearbyBuoys(spotName) {
+    const ll = window._spotLatLon && window._spotLatLon[spotName];
+    const roster = window._buoyRoster || [];
+    if (!ll || roster.length === 0) return null;
+    const ranked = roster
+        .map(b => ({ id: String(b.id), stale: !!b.stale, source: b.source,
+                     km: haversineKm(ll[0], ll[1], b.latitude, b.longitude) }))
+        .sort((a, b) => a.km - b.km);
+    const byPreference = [...ranked.filter(b => !b.stale), ...ranked.filter(b => b.stale)];
+    const picks = byPreference.slice(0, NEARBY_BUOYS);
+    if (!picks.some(b => b.source === 'cdip')) {
+        // No CDIP among the nearest: the closest one (reporting first) takes
+        // the last slot, then back into distance order.
+        const cdip = byPreference.find(b => b.source === 'cdip');
+        if (cdip) {
+            picks[picks.length - 1] = cdip;
+            picks.sort((a, b) => a.km - b.km);
+        }
+    }
+    const loaded = await Promise.all(picks.map(async b => {
+        try {
+            const res = await fetch(`api/buoys/${b.id}.json`);
+            if (!res.ok) return null;
+            const d = await res.json();
+            if (!d.models || d.models.length === 0) return null;
+            d._km = b.km;
+            return d;
+        } catch (e) {
+            return null;
+        }
+    }));
+    const stack = loaded.filter(Boolean);
+    return stack.length ? { stack } : null;
+}
+
+// "X min / h / d ago" for a station's latest reading
+function buoyAgo(time) {
+    const readAt = new Date(time.replace(' ', 'T'));
+    const agoMin = Math.max(0, Math.round((Date.now() - readAt.getTime()) / 60000));
+    return agoMin < 60 ? `${agoMin} min ago`
+        : agoMin < 1440 ? `${Math.round(agoMin / 60)} h ago`
+            : `${Math.round(agoMin / 1440)} d ago`;
+}
+
 function drawBuoyChart(data) {
     const container = document.getElementById('waveChartContainer');
     const legend = document.getElementById('modelLegend');
@@ -1318,6 +1409,13 @@ function drawBuoyChart(data) {
     // gutters BEFORE measuring — both reflow the container, and the chart's
     // new height must be in effect so the lines fill it.
     document.body.classList.add('buoys-mode');
+    // Stacked view (the spot's closest stations): one band per station, all
+    // on one shared time axis, each with its own height scale and a header
+    // naming it with its latest reading. A single station is a one-band
+    // stack without the header.
+    const stations = data.stack || [data];
+    const stacked = !!data.stack;
+    document.body.classList.toggle('buoys-stack', stacked);
     const section = document.getElementById('waveChartSection');
     if (section) section.classList.add('models-gutters');
 
@@ -1326,29 +1424,32 @@ function drawBuoyChart(data) {
     const PADX = 6;
 
     // No fixed window: span the FULL extent of the data. tMin is the earliest
-    // observation, tMax the latest forecast point across every series — so all
-    // the past observations stay and each model is drawn to wherever its own
-    // horizon ends (they differ: GFS Wave ~16 d, MFWAM ~10, GWAM/MOP ~8).
-    const obs = (data.observed || []).map(p => ({ t: parseT(p.t), v: p.v }));
-    const modelPts = (data.models || []).map(model => ({
-        model,
+    // observation, tMax the latest forecast point across every series (and
+    // station) — so all the past observations stay and each model is drawn
+    // to wherever its own horizon ends (GFS Wave ~16 d, MFWAM ~10, MOP ~8).
+    const series = stations.map(st => ({
+        st,
+        obs: (st.observed || []).map(p => ({ t: parseT(p.t), v: p.v })),
         // Keep period/direction: the tooltip reports them like the spot view.
-        pts: model.series.map(p => ({ t: parseT(p.t), v: p.v, p: p.p, d: p.d })),
+        modelPts: (st.models || []).map(model => ({
+            model,
+            pts: model.series.map(p => ({ t: parseT(p.t), v: p.v, p: p.p, d: p.d })),
+        })),
     }));
-    const allT = [
-        ...obs.map(p => p.t),
-        ...modelPts.flatMap(m => m.pts.map(p => p.t)),
-    ];
-    const tMin = allT.length ? Math.min(...allT) : now - 3 * 86400e3;
-    const tMax = allT.length ? Math.max(...allT) : now + 8 * 86400e3;
+    let tMin = Infinity, tMax = -Infinity;
+    series.forEach(({ obs, modelPts }) => {
+        obs.forEach(p => { tMin = Math.min(tMin, p.t); tMax = Math.max(tMax, p.t); });
+        modelPts.forEach(m => m.pts.forEach(p => {
+            tMin = Math.min(tMin, p.t); tMax = Math.max(tMax, p.t);
+        }));
+    });
+    if (!isFinite(tMin)) { tMin = now - 3 * 86400e3; tMax = now + 8 * 86400e3; }
 
-    // Measure the drawing band and pixels-per-day. buoys-mode grows the chart
-    // via a CSS height transition, so the bar wrappers (still mid-animation)
-    // would read short — suppress the transition for this frame so the
-    // container reports its FINAL height, measure, then restore it. The
-    // timeline always fits the visible width: the whole series — past
-    // observations through each model's last forecast hour — in one view,
-    // no horizontal scroll (day labels thin out when they get tight).
+    // Measure the drawing area. buoys-mode grows the chart via a CSS height
+    // transition, so suppress it for this frame so the container reports its
+    // FINAL height, measure, then restore it. The timeline always fits the
+    // visible width: the whole series in one view, no horizontal scroll (day
+    // labels thin out when they get tight).
     const prevTransition = container.style.transition;
     container.style.transition = 'none';
     // eslint-disable-next-line no-unused-expressions
@@ -1366,26 +1467,46 @@ function drawBuoyChart(data) {
     // Now collapse the bars and switch on the buoy layout
     container.classList.add('buoys-active');
 
-    const projected = modelPts.map(({ model, pts }) => ({
-        model,
-        pts: pts.map(p => ({
-            x: xFor(p.t), v: p.v, t: new Date(p.t), p: p.p, d: p.d,
-        })),
-    }));
-
-    let vMax = 0;
-    obs.forEach(p => { vMax = Math.max(vMax, p.v); });
-    projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
-    const scaleMax = Math.max(vMax, 0.1) * 1.1;
-    const yTop = top + 4;
-    const yBottom = top + barH - 26; // bottom band holds the date labels
-    const yFor = v => yTop + (yBottom - yTop) * (1 - v / scaleMax);
+    // Bands top to bottom, the date row under the last. Stacked bands get a
+    // header row and a gap below.
+    const DATE_ROW = 26;
+    // Narrow (phone): the header's latest reading drops under the name
+    const narrowHead = W < 560;
+    const HEAD = stacked ? (narrowHead ? 34 : 22) : 0;
+    const GAP = stacked ? 10 : 0;
+    const bandH = (barH - DATE_ROW) / stations.length;
+    const bands = series.map(({ st, obs, modelPts }, i) => {
+        const bTop = top + i * bandH;
+        const yTop = bTop + 4 + HEAD;
+        const yBottom = bTop + bandH - GAP;
+        const projected = modelPts.map(({ model, pts }) => ({
+            model,
+            pts: pts.map(p => ({ x: xFor(p.t), v: p.v, t: new Date(p.t), p: p.p, d: p.d })),
+        }));
+        let vMax = 0;
+        obs.forEach(p => { vMax = Math.max(vMax, p.v); });
+        projected.forEach(({ pts }) => pts.forEach(p => { vMax = Math.max(vMax, p.v); }));
+        const scaleMax = Math.max(vMax, 0.1) * 1.1;
+        const yFor = v => yTop + (yBottom - yTop) * (1 - v / scaleMax);
+        return { st, obs, projected, bTop, yTop, yBottom, scaleMax, yFor };
+    });
+    const plotTop = bands[0].yTop;
+    const plotBottom = bands[bands.length - 1].yBottom;
 
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('class', 'model-overlay-svg buoy-overlay-svg');
     svg.setAttribute('width', W);
     svg.setAttribute('height', top + barH);
+    const svgText = (x, y, text, attrs) => {
+        const el = document.createElementNS(ns, 'text');
+        el.textContent = text;
+        el.setAttribute('x', x);
+        el.setAttribute('y', y);
+        Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v));
+        svg.appendChild(el);
+        return el;
+    };
 
     // Day separators + date labels: the whole series fits the width, so
     // label every Nth day — as few as keep a "12 Mon" label (~46px) clear
@@ -1399,60 +1520,116 @@ function drawBuoyChart(data) {
     let dayIdx = 0;
     for (let d = new Date(dayStart); d.getTime() <= tMax; d.setDate(d.getDate() + 1), dayIdx++) {
         const x = xFor(d.getTime());
-        const line = document.createElementNS(ns, 'line');
-        line.setAttribute('x1', x.toFixed(1));
-        line.setAttribute('x2', x.toFixed(1));
-        line.setAttribute('y1', yTop);
-        line.setAttribute('y2', yBottom + 6);
-        line.setAttribute('stroke', 'rgba(0,0,0,0.09)');
-        line.setAttribute('stroke-dasharray', '2 3');
-        svg.appendChild(line);
+        bands.forEach(bd => {
+            const line = document.createElementNS(ns, 'line');
+            line.setAttribute('x1', x.toFixed(1));
+            line.setAttribute('x2', x.toFixed(1));
+            line.setAttribute('y1', bd.yTop);
+            line.setAttribute('y2', bd === bands[bands.length - 1] ? bd.yBottom + 6 : bd.yBottom);
+            line.setAttribute('stroke', 'rgba(0,0,0,0.09)');
+            line.setAttribute('stroke-dasharray', '2 3');
+            svg.appendChild(line);
+        });
         if (dayIdx % labelEvery === 0) {
-            const label = document.createElementNS(ns, 'text');
-            label.textContent = d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' });
-            label.setAttribute('x', (x + 4).toFixed(1));
-            label.setAttribute('y', top + barH - 8);
-            label.setAttribute('font-size', '11');
-            label.setAttribute('font-weight', '600');
-            label.setAttribute('fill', '#475569');
-            svg.appendChild(label);
+            svgText((x + 4).toFixed(1), top + barH - 8,
+                d.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }),
+                { 'font-size': '11', 'font-weight': '600', fill: '#475569' });
         }
     }
 
-    // "Now" line: everything to its left is checkable against the dots
-    const nowLine = document.createElementNS(ns, 'line');
-    nowLine.setAttribute('x1', xFor(now).toFixed(1));
-    nowLine.setAttribute('x2', xFor(now).toFixed(1));
-    nowLine.setAttribute('y1', yTop - 2);
-    nowLine.setAttribute('y2', yBottom);
-    nowLine.setAttribute('stroke', '#52514e');
-    nowLine.setAttribute('stroke-dasharray', '5 4');
-    nowLine.setAttribute('opacity', '0.6');
-    svg.appendChild(nowLine);
+    // Station headers (stacked): name + distance on the left, its latest
+    // reading on the right — the updated observed point, in words.
+    if (stacked) {
+        const hsUnit = getHeightUnit(currentUnit);
+        bands.forEach((bd, i) => {
+            const y = bd.bTop + 15;
+            const fs = narrowHead ? '11' : '12';
+            // "1. " + station name + " · 18 km": only the name is a link (to
+            // that station's own view), growing a touch on hover
+            const head = svgText(PADX, y, `${i + 1}. `,
+                { 'font-size': fs, 'font-weight': '700', fill: '#131929' });
+            const name = document.createElementNS(ns, 'tspan');
+            name.textContent = bd.st.label;
+            name.classList.add('buoy-band-name');
+            name.style.pointerEvents = 'all'; // the svg itself is click-through
+            const tip = document.createElementNS(ns, 'title');
+            tip.textContent = `Open ${bd.st.label}`;
+            name.appendChild(tip);
+            name.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openBuoyView(String(bd.st.id));
+            });
+            head.appendChild(name);
+            const dist = document.createElementNS(ns, 'tspan');
+            dist.textContent = bd.st._km != null ? ` · ${Math.round(bd.st._km)} km` : '';
+            dist.setAttribute('font-weight', '500');
+            dist.setAttribute('fill', '#64748b');
+            head.appendChild(dist);
+            const o = bd.st.latest;
+            const latest = o
+                ? `Latest ${formatHeight(o.hs, currentUnit)}${hsUnit}` +
+                  (o.tp != null ? ` · ${o.tp}s` : '') +
+                  (o.dp != null ? ` · ${o.dp}°` : '') +
+                  ` · ${buoyAgo(o.time)}`
+                : 'No recent observations';
+            svgText(narrowHead ? PADX : W - PADX, narrowHead ? y + 14 : y, latest, {
+                'font-size': fs, 'font-weight': '600', fill: '#475569',
+                'text-anchor': narrowHead ? 'start' : 'end',
+            });
+            // Hairline under each band but the last (the date row follows)
+            if (i < bands.length - 1) {
+                const sep = document.createElementNS(ns, 'line');
+                sep.setAttribute('x1', 0);
+                sep.setAttribute('x2', W);
+                sep.setAttribute('y1', (bd.bTop + bandH - GAP / 2).toFixed(1));
+                sep.setAttribute('y2', (bd.bTop + bandH - GAP / 2).toFixed(1));
+                sep.setAttribute('stroke', 'rgba(0,0,0,0.08)');
+                svg.appendChild(sep);
+            }
+        });
+    }
+
+    // "Now" line, through every band: everything to its left is checkable
+    // against the dots
+    bands.forEach(bd => {
+        const nowLine = document.createElementNS(ns, 'line');
+        nowLine.setAttribute('x1', xFor(now).toFixed(1));
+        nowLine.setAttribute('x2', xFor(now).toFixed(1));
+        nowLine.setAttribute('y1', bd.yTop - 2);
+        nowLine.setAttribute('y2', bd.yBottom);
+        nowLine.setAttribute('stroke', '#52514e');
+        nowLine.setAttribute('stroke-dasharray', '5 4');
+        nowLine.setAttribute('opacity', '0.6');
+        svg.appendChild(nowLine);
+    });
 
     const tooltip = document.getElementById('globalChartTooltip');
     const toPathD = pts =>
         pts.map((p, i) => (i ? 'L ' : 'M ') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
 
     // Two-way hover link between series and legend chips, plus click-to-pin —
-    // the same interaction the models overlay uses, so both views behave
-    // identically at every screen size.
+    // the same interaction the models overlay uses. A series id spans every
+    // band, so highlighting a model lights its line at all three stations.
     const refs = {};
+    const refFor = (id) => refs[id] || (refs[id] =
+        { paths: [], areas: [], hits: [], dots: [], baseWidth: 1.5, baseOpacity: '0.85' });
     let pinned = null;
     const setHot = (id, on) => {
-        if (pinned) { id = pinned; on = true; }
+        // Hovering another chip still previews it over a pin; leaving it
+        // falls back to the pinned one.
+        if (pinned && !on) { id = pinned; on = true; }
         Object.entries(refs).forEach(([oid, ref]) => {
             const hot = on && oid === id;
-            (ref.paths || []).forEach(p => {
+            ref.paths.forEach(p => {
                 p.setAttribute('stroke-width', ref.baseWidth + (hot ? 1.5 : 0));
                 p.setAttribute('opacity', on && !hot ? '0.25' : ref.baseOpacity);
             });
-            (ref.dots || []).forEach(c => {
+            ref.dots.forEach(c => {
                 c.setAttribute('opacity', on && !hot ? '0.2' : '0.75');
                 c.setAttribute('r', hot ? 3.2 : 2.5);
             });
             // Wash under the highlighted series only
-            if (ref.area) ref.area.style.opacity = hot ? '1' : '0';
+            ref.areas.forEach(a => { a.style.opacity = hot ? '1' : '0'; });
             if (ref.chip) ref.chip.classList.toggle('legend-chip--hot', hot);
         });
     };
@@ -1462,12 +1639,9 @@ function drawBuoyChart(data) {
             // Mobile keeps the plot inert whatever the pin state: the legend
             // chips are the only handle on a series there.
             const mute = isMobileView() || (pinned && oid !== pinned);
-            if (ref.hit) ref.hit.style.pointerEvents = mute ? 'none' : 'stroke';
-            (ref.dots || []).forEach(c => {
-                c.style.pointerEvents = mute ? 'none' : 'all';
-            });
-            if (ref.chip) ref.chip.classList.toggle('legend-chip--pinned',
-                pinned === oid);
+            ref.hits.forEach(h => { h.style.pointerEvents = mute ? 'none' : 'stroke'; });
+            ref.dots.forEach(c => { c.style.pointerEvents = mute ? 'none' : 'all'; });
+            if (ref.chip) ref.chip.classList.toggle('legend-chip--pinned', pinned === oid);
         });
         setHot(pinned, !!pinned);
         publishLegendHeight();  // the revealed name can rewrap the legend
@@ -1558,93 +1732,108 @@ function drawBuoyChart(data) {
         container.addEventListener('mouseleave', container._buoyCrossHide);
     }
 
-    // Forecast lines: MOP keeps its reserved red and reads heavier — it is
-    // the site-exact forecast the others are being judged against
-    projected.forEach(({ model, pts }) => {
-        pts.forEach(p => { p.y = yFor(p.v); });
-        if (pts.length < 2) return;
+    bands.forEach(({ obs, projected, yFor, yBottom }) => {
+        // Forecast lines: MOP keeps its reserved red and reads heavier — it
+        // is the site-exact forecast the others are being judged against
+        projected.forEach(({ model, pts }) => {
+            pts.forEach(p => { p.y = yFor(p.v); });
+            if (pts.length < 2) return;
 
-        const color = BUOY_MODEL_COLORS[model.id] || '#64748b';
-        const isMop = model.id === 'mop';
-        const baseWidth = isMop ? 2.2 : 1.5;
-        const baseOpacity = isMop ? '1' : '0.85';
+            const color = BUOY_MODEL_COLORS[model.id] || '#64748b';
+            const isMop = model.id === 'mop';
+            const ref = refFor(model.id);
+            ref.baseWidth = isMop ? 2.2 : 1.5;
+            ref.baseOpacity = isMop ? '1' : '0.85';
 
-        // The final 24 h of every line is drawn dashed — the forecast is
-        // running out — exactly like the site's models view. (Here all lines
-        // end inside the plot, so all get a dashed tail.)
-        const cutoff = pts[pts.length - 1].t.getTime() - 24 * 3600 * 1000;
-        const solidPts = pts.filter(p => p.t.getTime() <= cutoff);
-        const dashPts = pts.filter(p => p.t.getTime() >= cutoff);
-        if (solidPts.length) dashPts.unshift(solidPts[solidPts.length - 1]);
+            // The final 24 h of every line is drawn dashed — the forecast is
+            // running out — exactly like the site's models view.
+            const cutoff = pts[pts.length - 1].t.getTime() - 24 * 3600 * 1000;
+            const solidPts = pts.filter(p => p.t.getTime() <= cutoff);
+            const dashPts = pts.filter(p => p.t.getTime() >= cutoff);
+            if (solidPts.length) dashPts.unshift(solidPts[solidPts.length - 1]);
 
-        const paths = [];
-        [[solidPts, false], [dashPts, true]].forEach(([segment, dashed]) => {
-            if (segment.length < 2) return;
-            const path = document.createElementNS(ns, 'path');
-            path.setAttribute('d', toPathD(segment));
-            path.setAttribute('fill', 'none');
-            path.setAttribute('stroke', color);
-            path.setAttribute('stroke-width', baseWidth);
-            path.setAttribute('stroke-linejoin', 'round');
-            path.setAttribute('opacity', baseOpacity);
-            if (dashed) path.setAttribute('stroke-dasharray', '5 4');
-            svg.appendChild(path);
-            paths.push(path);
+            [[solidPts, false], [dashPts, true]].forEach(([segment, dashed]) => {
+                if (segment.length < 2) return;
+                const path = document.createElementNS(ns, 'path');
+                path.setAttribute('d', toPathD(segment));
+                path.setAttribute('fill', 'none');
+                path.setAttribute('stroke', color);
+                path.setAttribute('stroke-width', ref.baseWidth);
+                path.setAttribute('stroke-linejoin', 'round');
+                path.setAttribute('opacity', ref.baseOpacity);
+                if (dashed) path.setAttribute('stroke-dasharray', '5 4');
+                svg.appendChild(path);
+                ref.paths.push(path);
+            });
+            // Fade the wash out across the dashed tail (every buoy line has one).
+            const dashStartX = dashPts.length >= 2 ? dashPts[0].x : null;
+            const area = addSeriesArea(svg, ns, pts, color, yBottom, dashStartX);
+            if (area) ref.areas.push(area);
+
+            // Invisible wide twin of the whole line as the hover hit area
+            const hit = document.createElementNS(ns, 'path');
+            hit.setAttribute('d', toPathD(pts));
+            hit.setAttribute('fill', 'none');
+            hit.setAttribute('stroke', 'transparent');
+            hit.setAttribute('stroke-width', 12);
+            // Inert on mobile — nothing hovers, highlights, or steals the tap.
+            hit.style.pointerEvents = isMobileView() ? 'none' : 'stroke';
+            hit.style.cursor = 'pointer';
+            hit.addEventListener('mousemove', e => showTooltip(e.clientX, pts, color, model.id));
+            hit.addEventListener('touchstart', e => {
+                if (e.touches.length) showTooltip(e.touches[0].clientX, pts, color, model.id);
+            }, { passive: true });
+            hit.addEventListener('mouseleave', () => hideTooltip(model.id));
+            hit.addEventListener('click', e => {
+                if (isMobileView()) return;   // legend chips own pinning on mobile
+                e.stopPropagation();
+                togglePin(model.id);
+            });
+            svg.appendChild(hit);
+            ref.hits.push(hit);
         });
-        if (paths.length === 0) return;
-        // Fade the wash out across the dashed tail (every buoy line has one).
-        const dashStartX = dashPts.length >= 2 ? dashPts[0].x : null;
-        const area = addSeriesArea(svg, ns, pts, color, yBottom, dashStartX);
-        refs[model.id] = { paths, baseWidth, baseOpacity, area };
 
-        // Invisible wide twin of the whole line as the hover hit area
-        const hit = document.createElementNS(ns, 'path');
-        hit.setAttribute('d', toPathD(pts));
-        hit.setAttribute('fill', 'none');
-        hit.setAttribute('stroke', 'transparent');
-        hit.setAttribute('stroke-width', 12);
-        // Inert on mobile — nothing hovers, highlights, or steals the tap.
-        hit.style.pointerEvents = isMobileView() ? 'none' : 'stroke';
-        hit.style.cursor = 'pointer';
-        hit.addEventListener('mousemove', e => showTooltip(e.clientX, pts, color, model.id));
-        hit.addEventListener('touchstart', e => {
-            if (e.touches.length) showTooltip(e.touches[0].clientX, pts, color, model.id);
-        }, { passive: true });
-        hit.addEventListener('mouseleave', () => hideTooltip(model.id));
-        hit.addEventListener('click', e => {
-            if (isMobileView()) return;   // legend chips own pinning on mobile
-            e.stopPropagation();
-            togglePin(model.id);
+        // Observed Hs on top: ink dots, the ground truth
+        const obsPts = obs.map(p => ({ x: xFor(p.t), y: yFor(p.v), v: p.v, t: new Date(p.t) }));
+        const ref = refFor('observed');
+        obsPts.forEach(p => {
+            const c = document.createElementNS(ns, 'circle');
+            c.setAttribute('cx', p.x.toFixed(1));
+            c.setAttribute('cy', p.y.toFixed(1));
+            c.setAttribute('r', 2.5);
+            c.setAttribute('fill', BUOY_INK);
+            c.setAttribute('opacity', '0.75');
+            c.style.pointerEvents = isMobileView() ? 'none' : 'all';
+            c.style.cursor = 'pointer';
+            c.addEventListener('mousemove', e => showTooltip(e.clientX, obsPts, BUOY_INK, 'observed'));
+            c.addEventListener('touchstart', e => {
+                if (e.touches.length) showTooltip(e.touches[0].clientX, obsPts, BUOY_INK, 'observed');
+            }, { passive: true });
+            c.addEventListener('mouseleave', () => hideTooltip('observed'));
+            c.addEventListener('click', e => {
+                if (isMobileView()) return;
+                e.stopPropagation();
+                togglePin('observed');
+            });
+            svg.appendChild(c);
+            ref.dots.push(c);
         });
-        svg.appendChild(hit);
-        refs[model.id].hit = hit;
+        // The latest observation, ringed: where the truth stops and the
+        // forecasts carry on alone
+        if (obsPts.length) {
+            const last = obsPts[obsPts.length - 1];
+            const ring = document.createElementNS(ns, 'circle');
+            ring.setAttribute('cx', last.x.toFixed(1));
+            ring.setAttribute('cy', last.y.toFixed(1));
+            ring.setAttribute('r', 5);
+            ring.setAttribute('fill', 'none');
+            ring.setAttribute('stroke', BUOY_INK);
+            ring.setAttribute('stroke-width', 1.5);
+            ring.style.pointerEvents = 'none';
+            svg.appendChild(ring);
+        }
     });
-
-    // Observed Hs on top: ink dots, the ground truth
-    const obsPts = obs.map(p => ({ x: xFor(p.t), y: yFor(p.v), v: p.v, t: new Date(p.t) }));
-    const dots = obsPts.map(p => {
-        const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', p.x.toFixed(1));
-        c.setAttribute('cy', p.y.toFixed(1));
-        c.setAttribute('r', 2.5);
-        c.setAttribute('fill', BUOY_INK);
-        c.setAttribute('opacity', '0.75');
-        c.style.pointerEvents = isMobileView() ? 'none' : 'all';
-        c.style.cursor = 'pointer';
-        c.addEventListener('mousemove', e => showTooltip(e.clientX, obsPts, BUOY_INK, 'observed'));
-        c.addEventListener('touchstart', e => {
-            if (e.touches.length) showTooltip(e.touches[0].clientX, obsPts, BUOY_INK, 'observed');
-        }, { passive: true });
-        c.addEventListener('mouseleave', () => hideTooltip('observed'));
-        c.addEventListener('click', e => {
-            if (isMobileView()) return;
-            e.stopPropagation();
-            togglePin('observed');
-        });
-        svg.appendChild(c);
-        return c;
-    });
-    if (dots.length) refs.observed = { dots };
+    if (refs.observed && refs.observed.dots.length === 0) delete refs.observed;
 
     // Fade in over the bars fading out (shared CSS transition). The timeline
     // fits the view, so there's nothing to scroll — pin it at the left edge.
@@ -1655,18 +1844,25 @@ function drawBuoyChart(data) {
         svg.style.opacity = '1';
     }));
 
-    renderModelYAxis(svg, scaleMax, yFor);
-    container._axisRender = () => renderModelYAxis(svg, scaleMax, yFor);
+    // One y-axis per band, each on its own station's scale
+    const axisRender = () => bands.forEach((bd, i) => renderYAxisTicks(bd.scaleMax,
+        v => svg.getBoundingClientRect().top + bd.yFor(v), false, i > 0));
+    axisRender();
+    container._axisRender = axisRender;
 
     if (legend) {
-        // No title chip: the hero caption ("CDIP {id}, the closest buoy
-        // to {spot}") already names the station.
+        // No title chip: the hero caption names the station(s). Every model
+        // any station carries, first-seen order.
+        const models = [];
+        stations.forEach(st => (st.models || []).forEach(m => {
+            if (!models.some(x => x.id === m.id)) models.push(m);
+        }));
         const chips = [
             // Dot series, so the swatch is a dot — matches how it's plotted.
             `<span class="legend-chip legend-chip--dot" data-series-id="observed">` +
             `<i style="background:${BUOY_INK};width:6px;height:6px;border-radius:50%"></i>` +
             `<span class="legend-chip-name">observed Hs</span></span>`,
-            ...data.models.map(m =>
+            ...models.map(m =>
                 `<span class="legend-chip" data-series-id="${m.id}">` +
                 `<i style="background:${BUOY_MODEL_COLORS[m.id] || '#64748b'}"></i>` +
                 `<span class="legend-chip-name">${m.label}</span></span>`),
@@ -1700,19 +1896,15 @@ function drawBuoyChart(data) {
 function renderBuoyStats(data) {
     const el = document.getElementById('buoyStats');
     if (!el) return;
-    const o = data.latest;
+    // Stacked view: each band's header carries its station's latest reading
+    const o = data.stack ? null : data.latest;
     if (!o) {
         el.style.display = 'none';
         el.innerHTML = '';
         return;
     }
 
-    // "X min/hours ago" from the reading's local timestamp
-    const readAt = new Date(o.time.replace(' ', 'T'));
-    const agoMin = Math.max(0, Math.round((Date.now() - readAt.getTime()) / 60000));
-    const ago = agoMin < 60 ? `${agoMin} min ago`
-        : agoMin < 1440 ? `${Math.round(agoMin / 60)} h ago`
-            : `${Math.round(agoMin / 1440)} d ago`;
+    const ago = buoyAgo(o.time);
 
     const hsVal = formatHeight(o.hs, currentUnit);
     const hsUnit = getHeightUnit(currentUnit);

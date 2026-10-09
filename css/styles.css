@@ -1591,6 +1591,17 @@ input:checked+.slider:before {
   transition: opacity 0.4s ease;
 }
 
+/* Stacked buoys view: each band's station name links to its own view —
+   it grows a touch on hover (the number and distance stay put) */
+.buoy-band-name {
+  cursor: pointer;
+  transition: font-size 0.15s ease;
+}
+
+.buoy-band-name:hover {
+  font-size: 1.12em;
+}
+
 /* Discrete y-axis (model view only): height labels + short ticks hanging
    OUTSIDE the plot on both sides — in the app container's side padding,
    touching the plot edges. The plot keeps its full width; the section just
@@ -1979,6 +1990,13 @@ body.buoys-mode .buoy-hero-label {
   display: block;
 }
 
+/* Stacked nearby-buoys view: the hero is a map of the spot and its
+   stations — the big spot title steps aside (its space kept, so the search
+   box doesn't move); the caption names the spot. */
+body.buoys-stack #spotName {
+  visibility: hidden;
+}
+
 /* In-title variant of the sub line: small-screen only */
 .buoy-hero-sub {
   display: none;
@@ -1993,6 +2011,24 @@ body.buoys-mode .buoy-hero-label {
 @media (max-width: 768px) {
   body.buoys-mode .buoy-hero-label {
     display: none;
+  }
+
+  /* ...except the stacked view, whose title is gone: the caption takes
+     its place at the top, and the hero grows so the map between caption
+     and search box can show the spot and its stations */
+  body.buoys-stack .buoy-hero-label {
+    display: block;
+    top: 16px;
+    bottom: auto;
+  }
+
+  body.buoys-stack #spotName {
+    display: none;
+  }
+
+  body.buoys-stack .hero {
+    min-height: 230px;
+    justify-content: flex-end;
   }
 
   .buoy-hero-sub {
@@ -2043,6 +2079,12 @@ body.buoys-mode .forecast-days-counter {
 body.buoys-mode .chart-container {
   height: 320px;
   transition: height 0.4s ease;
+}
+
+/* Stacked nearby-buoys view: three station bands, each about as tall as the
+   models view's plot, plus the shared date row */
+body.buoys-mode.buoys-stack .chart-container {
+  height: 520px;
 }
 
 /* Latest-observation cards (CDIP station-page style) */
@@ -2133,6 +2175,10 @@ body.buoys-mode .chart-container {
 
   body.buoys-mode .chart-container {
     height: 260px;
+  }
+
+  body.buoys-mode.buoys-stack .chart-container {
+    height: 480px;
   }
 }
 

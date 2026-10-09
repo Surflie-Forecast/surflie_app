@@ -10,6 +10,10 @@ window.apiSpotId = (name) => window._spotSlugs[name] || encodeURIComponent(name)
 // Spot name -> preassigned closest CDIP buoy id (also from spots.json);
 // the Buoys view opens this station's comparison file.
 window._spotBuoys = {};
+// Spot name -> [lat, lon] and the buoy roster (api/buoys.json): the Closest
+// buoy toggle stacks the spot's nearest stations, ranked in chart.js.
+window._spotLatLon = {};
+window._buoyRoster = [];
 
 window.toFeet = (meters) => (meters * 3.28084).toFixed(1);
 window.toMeters = (feet) => (feet / 3.28084).toFixed(2);
@@ -211,6 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .catch(() => [])
         .then(buoys => {
             availableBuoys = buoys;
+            window._buoyRoster = buoys;
             addHeroBuoyMarkers(); // covers buoys arriving after the map
             return buoys;
         });
@@ -248,6 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.focusHeroBuoy = (buoyId) => {
         const b = availableBuoys.find(x => x.id === buoyId);
         if (!b || !heroMap) return;
+        // Leaving a stacked view for one station: un-tint the others
+        heroStackIds.filter(id => id !== buoyId).forEach(resetHeroBuoyStyle);
+        heroStackIds = [];
         // Switching stations: put the previous one back to normal
         if (heroBuoyFocusedId && heroBuoyFocusedId !== buoyId) {
             resetHeroBuoyStyle(heroBuoyFocusedId);
@@ -268,7 +276,58 @@ document.addEventListener('DOMContentLoaded', () => {
             setHeroView(b.latitude, b.longitude, HERO_BUOY_ZOOM);
         }, 100);
     };
+    // Stacked view (the spot's closest stations): the plotted buoys turn red,
+    // every other buoy stays a plain dot, and the map frames the spot plus
+    // those stations — in the hero's left half on desktop (the search box
+    // holds the right; the spot title is hidden in this view), below the
+    // caption and above the search box on a phone.
+    let heroStackIds = [];
+    function fitHeroStack() {
+        if (!heroMap || heroStackIds.length === 0) return;
+        const pts = heroStackIds
+            .map(id => availableBuoys.find(x => String(x.id) === id))
+            .filter(Boolean)
+            .map(b => [b.latitude, b.longitude]);
+        if (lastHeroView) pts.push([lastHeroView.lat, lastHeroView.lon]);
+        if (pts.length === 0) return;
+        heroMap.invalidateSize({ animate: false });
+        const size = heroMap.getSize();
+        const PAD = 36;
+        const desktop = window.innerWidth > 768;
+        heroMap.fitBounds(L.latLngBounds(pts), {
+            animate: false,
+            maxZoom: 10,
+            paddingTopLeft: desktop ? [PAD, PAD] : [24, 48],
+            paddingBottomRight: desktop
+                ? [Math.round(size.x / 2) + PAD, PAD + 16] // left half; caption below
+                : [24, 76],                                 // search box below
+        });
+    }
+    window.focusHeroBuoys = (ids) => {
+        if (!heroMap) return;
+        heroStackIds.forEach(resetHeroBuoyStyle);
+        if (heroBuoyFocusedId) resetHeroBuoyStyle(heroBuoyFocusedId);
+        heroStackIds = ids.slice();
+        // Owns the backdrop like a focused buoy: updateHeroMap stands down
+        heroBuoyFocusedId = ids[0];
+        ids.forEach(id => {
+            const m = heroBuoyMarkers[id];
+            if (m) {
+                m.setStyle({ fillColor: '#e34948', weight: 2 });
+                m.setRadius(7);
+                m.bringToFront();
+            }
+        });
+        if (heroSpotMarker) heroSpotMarker.bringToFront();
+        // Let the hero settle (title hidden, caption shown) before framing
+        setTimeout(() => {
+            if (heroStackIds[0] !== ids[0]) return; // superseded meanwhile
+            fitHeroStack();
+        }, 100);
+    };
     window.blurHeroBuoy = () => {
+        heroStackIds.forEach(resetHeroBuoyStyle);
+        heroStackIds = [];
         if (heroBuoyFocusedId == null) return;
         resetHeroBuoyStyle(heroBuoyFocusedId);
         heroBuoyFocusedId = null;
@@ -611,8 +670,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!heroMap) return;
         setTimeout(() => {
             heroMap.invalidateSize({ animate: false });
-            // A focused buoy owns the framing, but it re-anchors just like a
-            // spot does; otherwise fall back to the latest spot view.
+            // The stacked view refits its stations; a focused buoy owns the
+            // framing, but it re-anchors just like a spot does; otherwise fall
+            // back to the latest spot view.
+            if (heroStackIds.length) { fitHeroStack(); return; }
             const view = heroBuoyFocusedId != null
                 ? focusedHeroBuoyView()
                 : lastHeroView;
@@ -1160,6 +1221,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 availableSpots.forEach(s => {
                     if (s.slug) window._spotSlugs[s.name] = s.slug;
                     if (s.closest_buoy) window._spotBuoys[s.name] = s.closest_buoy;
+                    // chart.js ranks the stations around a spot from these
+                    if (s.latitude && s.longitude) window._spotLatLon[s.name] = [s.latitude, s.longitude];
                 });
             } else {
                 console.error("Failed to fetch spots list");
